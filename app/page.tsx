@@ -177,6 +177,7 @@ const useCases = [
 ];
 
 const changelog = [
+  { version: "v3.1", desc: "Guide de connexion multi-client (Claude Desktop via mcp-remote, Claude Code natif, curl). Refonte section connexion." },
   { version: "v3.0", desc: "Audit complet. js-yaml, path validation, timing-safe auth, fetch timeouts, pagination, SHA passthrough, Jina size limit, optimised vault_move" },
   { version: "v2.0", desc: "vault_delete, vault_move, save_article, structured logging, dashboard auth, rate limiting, health check" },
   { version: "v1.0", desc: "vault_write, vault_read, vault_search, vault_list, my_context — initial release" },
@@ -200,7 +201,7 @@ export default function AdminPage() {
             Live
           </span>
           <span className="badge badge-blue">8 tools</span>
-          <span className="badge badge-purple">v3.0</span>
+          <span className="badge badge-purple">v3.1</span>
           <span className="badge badge-dim">Streamable HTTP</span>
         </div>
       </header>
@@ -225,18 +226,125 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Connection */}
+      {/* Connection Guide */}
       <section className="section">
-        <h2 className="section-title">Connexion MCP</h2>
-        <div className="connection-block">
-          <pre>{`{
-  `}<span className="key">{`"name"`}</span>{`: `}<span className="string">{`"YassMCP"`}</span>{`,
-  `}<span className="key">{`"type"`}</span>{`: `}<span className="string">{`"url"`}</span>{`,
-  `}<span className="key">{`"url"`}</span>{`: `}<span className="string">{`"https://mcp-yass.vercel.app/api/mcp"`}</span>{`,
-  `}<span className="key">{`"headers"`}</span>{`: {
-    `}<span className="key">{`"Authorization"`}</span>{`: `}<span className="string">{`"Bearer <MCP_AUTH_TOKEN>"`}</span>{`
+        <h2 className="section-title">Connexion</h2>
+
+        {/* Claude Desktop */}
+        <div className="connect-method">
+          <div className="connect-header">
+            <span className="connect-icon">&#9654;</span>
+            <div>
+              <h3 className="connect-title">Claude Desktop</h3>
+              <p className="connect-subtitle">Via mcp-remote bridge — traduit HTTP distant en stdio local</p>
+            </div>
+            <span className="badge badge-green">Recommandé</span>
+          </div>
+          <div className="connect-steps">
+            <div className="connect-step">
+              <span className="step-number">1</span>
+              <div>
+                <p className="step-text">Ouvrir le fichier de configuration Claude Desktop :</p>
+                <div className="connection-block">
+                  <pre><span className="key">Windows</span>{` : %APPDATA%\\Claude\\claude_desktop_config.json`}{"\n"}<span className="key">macOS</span>{`   : ~/Library/Application Support/Claude/claude_desktop_config.json`}</pre>
+                </div>
+              </div>
+            </div>
+            <div className="connect-step">
+              <span className="step-number">2</span>
+              <div>
+                <p className="step-text">Ajouter cette config dans le fichier :</p>
+                <div className="connection-block">
+                  <pre>{`{
+  `}<span className="key">{`"mcpServers"`}</span>{`: {
+    `}<span className="key">{`"YassMCP"`}</span>{`: {
+      `}<span className="key">{`"command"`}</span>{`: `}<span className="string">{`"npx"`}</span>{`,
+      `}<span className="key">{`"args"`}</span>{`: [`}<span className="string">{`"-y"`}</span>{`, `}<span className="string">{`"mcp-remote"`}</span>{`, `}<span className="string">{`"https://mcp-yass.vercel.app/api/mcp?token=<MCP_AUTH_TOKEN>"`}</span>{`]
+    }
   }
 }`}</pre>
+                </div>
+              </div>
+            </div>
+            <div className="connect-step">
+              <span className="step-number">3</span>
+              <p className="step-text">Redémarrer Claude Desktop. Les 8 tools apparaissent automatiquement.</p>
+            </div>
+          </div>
+          <div className="connect-note">
+            <strong>Note :</strong> <code>mcp-remote</code> est un bridge npm officiel qui convertit le transport Streamable HTTP en stdio. Nécessite Node.js installé. Se met à jour automatiquement via <code>npx -y</code>.
+          </div>
+        </div>
+
+        {/* Claude Code */}
+        <div className="connect-method">
+          <div className="connect-header">
+            <span className="connect-icon">&#9654;</span>
+            <div>
+              <h3 className="connect-title">Claude Code</h3>
+              <p className="connect-subtitle">Connexion HTTP directe avec Bearer token — natif, pas de bridge</p>
+            </div>
+            <span className="badge badge-blue">Natif</span>
+          </div>
+          <div className="connect-steps">
+            <div className="connect-step">
+              <span className="step-number">1</span>
+              <div>
+                <p className="step-text">Ajouter dans les settings Claude Code (<code>~/.claude/settings.json</code> ou projet) :</p>
+                <div className="connection-block">
+                  <pre>{`{
+  `}<span className="key">{`"mcpServers"`}</span>{`: {
+    `}<span className="key">{`"YassMCP"`}</span>{`: {
+      `}<span className="key">{`"type"`}</span>{`: `}<span className="string">{`"http"`}</span>{`,
+      `}<span className="key">{`"url"`}</span>{`: `}<span className="string">{`"https://mcp-yass.vercel.app/api/mcp"`}</span>{`,
+      `}<span className="key">{`"headers"`}</span>{`: {
+        `}<span className="key">{`"Authorization"`}</span>{`: `}<span className="string">{`"Bearer <MCP_AUTH_TOKEN>"`}</span>{`
+      }
+    }
+  }
+}`}</pre>
+                </div>
+              </div>
+            </div>
+            <div className="connect-step">
+              <span className="step-number">2</span>
+              <p className="step-text">Relancer Claude Code. Les tools sont disponibles immédiatement.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Claude.ai */}
+        <div className="connect-method">
+          <div className="connect-header">
+            <span className="connect-icon">&#9654;</span>
+            <div>
+              <h3 className="connect-title">Claude.ai (web)</h3>
+              <p className="connect-subtitle">Nécessite OAuth 2.1 — pas encore supporté</p>
+            </div>
+            <span className="badge badge-dim">Bientôt</span>
+          </div>
+          <div className="connect-note">
+            Claude.ai exige un flow OAuth 2.1 complet (discovery + PKCE + token exchange). Pas encore implémenté. En attendant, utiliser Claude Desktop ou Claude Code.
+          </div>
+        </div>
+
+        {/* curl */}
+        <div className="connect-method">
+          <div className="connect-header">
+            <span className="connect-icon">&#9654;</span>
+            <div>
+              <h3 className="connect-title">curl / API directe</h3>
+              <p className="connect-subtitle">Pour tester ou intégrer dans un script</p>
+            </div>
+            <span className="badge badge-dim">Debug</span>
+          </div>
+          <div className="connection-block">
+            <pre>{`curl -X POST https://mcp-yass.vercel.app/api/mcp \\
+  -H `}<span className="string">{`"Authorization: Bearer <MCP_AUTH_TOKEN>"`}</span>{` \\
+  -H `}<span className="string">{`"Content-Type: application/json"`}</span>{` \\
+  -H `}<span className="string">{`"Accept: application/json, text/event-stream"`}</span>{` \\
+  -d '`}<span className="key">{`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`}</span>{`'`}</pre>
+          </div>
         </div>
       </section>
 
@@ -364,7 +472,7 @@ export default function AdminPage() {
             <tbody>
               <tr>
                 <td><span className="param-name">/api/mcp</span></td>
-                <td><span className="badge badge-green">Bearer</span></td>
+                <td><span className="badge badge-green">Bearer / ?token=</span></td>
                 <td style={{ color: "var(--text-dim)" }}>MCP Streamable HTTP endpoint</td>
               </tr>
               <tr>
@@ -383,7 +491,7 @@ export default function AdminPage() {
       </section>
 
       <footer className="footer">
-        YassMCP v3.0.0 — Built by Yassine × Claude
+        YassMCP v3.1.0 — Built by Yassine × Claude
       </footer>
     </div>
   );
