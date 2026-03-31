@@ -2,20 +2,21 @@ const tools = [
   {
     name: "vault_write",
     description:
-      "Créer ou mettre à jour une note dans le vault Obsidian. Gère automatiquement l'encodage base64, la résolution SHA pour les updates, et le frontmatter YAML optionnel.",
+      "Créer ou mettre à jour une note. Gère base64, résolution SHA, frontmatter YAML (js-yaml). Passer le SHA d'un vault_read pour skip l'appel GET.",
     params: [
-      { name: "path", type: "string", required: true, desc: 'Chemin dans le vault, ex: "Veille/mon-article.md"' },
-      { name: "content", type: "string", required: true, desc: "Contenu markdown de la note" },
-      { name: "message", type: "string", required: false, desc: 'Commit message (défaut: "Update via YassMCP")' },
-      { name: "frontmatter", type: "object", required: false, desc: "Objet YAML à injecter en frontmatter" },
+      { name: "path", type: "string", required: true, desc: 'Chemin, ex: "Veille/article.md"' },
+      { name: "content", type: "string", required: true, desc: "Contenu markdown" },
+      { name: "message", type: "string", required: false, desc: "Commit message" },
+      { name: "frontmatter", type: "object", required: false, desc: "Objet YAML frontmatter" },
+      { name: "sha", type: "string", required: false, desc: "SHA connu (skip le GET)" },
     ],
     example: `vault_write({
   path: "Veille/ai-agents-2026.md",
-  content: "# AI Agents en 2026\\n\\nLes agents autonomes...",
+  content: "# AI Agents\\n\\nContent...",
   frontmatter: {
-    tags: ["ai", "agents", "veille"],
-    source: "https://example.com/article",
-    date: "2026-03-31"
+    tags: ["ai", "agents"],
+    source: "https://example.com",
+    date: "2026-04-01"
   }
 })`,
     category: "vault",
@@ -23,74 +24,45 @@ const tools = [
   {
     name: "vault_read",
     description:
-      "Lire une note du vault. Retourne le body markdown et le frontmatter parsé séparément.",
+      "Lire une note. Retourne body markdown, frontmatter parsé (js-yaml), et le SHA réutilisable pour vault_write.",
     params: [
-      { name: "path", type: "string", required: true, desc: 'Chemin de la note, ex: "Projects/cadens.md"' },
+      { name: "path", type: "string", required: true, desc: 'ex: "Projects/cadens.md"' },
     ],
     example: `vault_read({ path: "Projects/cadens.md" })
-
-// Retourne:
-{
-  "path": "Projects/cadens.md",
-  "name": "cadens.md",
-  "frontmatter": { "status": "MVP", "stack": "TS, Vercel" },
-  "body": "# Cadens\\n\\nPlateforme de..."
-}`,
+// → { path, name, size, sha, frontmatter: {...}, body: "# ..." }`,
     category: "vault",
   },
   {
     name: "vault_search",
     description:
-      "Recherche full-text dans le vault via GitHub Search API. Retourne les notes matchantes avec extraits de texte.",
+      "Recherche full-text via GitHub Search API. Supporte la pagination.",
     params: [
       { name: "query", type: "string", required: true, desc: "Termes de recherche" },
-      { name: "folder", type: "string", required: false, desc: 'Filtrer par dossier, ex: "Veille/"' },
-      { name: "limit", type: "number", required: false, desc: "Nombre max de résultats (défaut: 10)" },
+      { name: "folder", type: "string", required: false, desc: 'Filtrer par dossier' },
+      { name: "limit", type: "number", required: false, desc: "Résultats par page (défaut: 10, max: 100)" },
+      { name: "page", type: "number", required: false, desc: "Page (défaut: 1)" },
     ],
-    example: `vault_search({
-  query: "product-market fit",
-  folder: "Veille/",
-  limit: 5
-})`,
+    example: `vault_search({ query: "product-market fit", folder: "Veille/", limit: 5 })
+// → { totalCount: 23, page: 1, count: 5, results: [...] }`,
     category: "vault",
   },
   {
     name: "vault_list",
     description:
-      "Lister les notes et dossiers d'un répertoire du vault. Utile pour naviguer la structure.",
+      "Lister les notes et dossiers d'un répertoire du vault.",
     params: [
-      { name: "folder", type: "string", required: false, desc: 'Dossier à lister (défaut: racine du vault)' },
+      { name: "folder", type: "string", required: false, desc: 'Dossier (défaut: racine)' },
     ],
-    example: `vault_list({ folder: "Veille/" })
-
-// Retourne:
-{
-  "folder": "Veille/",
-  "count": 12,
-  "entries": [
-    { "name": "ai-agents.md", "type": "file", "size": 2340 },
-    { "name": "SaaS/", "type": "dir" }
-  ]
-}`,
+    example: `vault_list({ folder: "Veille/" })`,
     category: "vault",
-  },
-  {
-    name: "my_context",
-    description:
-      "Retourne le contexte personnel de Yassine (rôle, projets actifs, priorités, stack). Lit depuis System/context.md dans le vault.",
-    params: [],
-    example: `my_context()
-
-// Retourne le contenu de System/context.md`,
-    category: "context",
   },
   {
     name: "vault_delete",
     description:
-      "Supprimer une note du vault Obsidian. Récupère automatiquement le SHA nécessaire avant suppression.",
+      "Supprimer une note. Récupère le SHA automatiquement.",
     params: [
-      { name: "path", type: "string", required: true, desc: 'Chemin de la note à supprimer, ex: "Veille/old-article.md"' },
-      { name: "message", type: "string", required: false, desc: "Commit message pour la suppression" },
+      { name: "path", type: "string", required: true, desc: "Chemin de la note" },
+      { name: "message", type: "string", required: false, desc: "Commit message" },
     ],
     example: `vault_delete({ path: "Inbox/draft-obsolete.md" })`,
     category: "vault",
@@ -98,33 +70,39 @@ const tools = [
   {
     name: "vault_move",
     description:
-      "Déplacer ou renommer une note. Lit la source, écrit à la nouvelle destination, puis supprime l'originale.",
+      "Déplacer/renommer une note. Read → Write → Delete avec gestion d'erreurs partielles. Optimisé (SHA réutilisé).",
     params: [
-      { name: "from", type: "string", required: true, desc: 'Chemin actuel, ex: "Inbox/note.md"' },
-      { name: "to", type: "string", required: true, desc: 'Nouveau chemin, ex: "Veille/note.md"' },
+      { name: "from", type: "string", required: true, desc: "Chemin actuel" },
+      { name: "to", type: "string", required: true, desc: "Nouveau chemin" },
       { name: "message", type: "string", required: false, desc: "Commit message" },
     ],
-    example: `vault_move({
-  from: "Inbox/article-ai.md",
-  to: "Veille/AI/article-ai.md"
-})`,
+    example: `vault_move({ from: "Inbox/note.md", to: "Veille/AI/note.md" })`,
     category: "vault",
   },
   {
     name: "save_article",
     description:
-      "Sauvegarder un article web dans le vault. Fetch l'URL via Jina Reader (extraction markdown), ajoute le frontmatter (titre, source, date, tags), et écrit dans Veille/.",
+      "Sauvegarder un article web. Fetch via Jina Reader → markdown → frontmatter YAML auto → vault. Max 5MB, timeout 15s.",
     params: [
       { name: "url", type: "string", required: true, desc: "URL de l'article" },
       { name: "title", type: "string", required: false, desc: "Titre (auto-extrait si omis)" },
-      { name: "tags", type: "string[]", required: false, desc: "Tags, ex: ['ai', 'strategy']" },
-      { name: "folder", type: "string", required: false, desc: 'Dossier cible (défaut: "Veille/")' },
+      { name: "tags", type: "string[]", required: false, desc: "Tags" },
+      { name: "folder", type: "string", required: false, desc: 'Dossier (défaut: "Veille/")' },
     ],
     example: `save_article({
-  url: "https://example.com/great-article",
-  tags: ["ai", "product"]
+  url: "https://paulgraham.com/writes.html",
+  tags: ["writing", "essays"]
 })`,
     category: "workflow",
+  },
+  {
+    name: "my_context",
+    description:
+      "Contexte personnel depuis System/context.md — rôle, projets, priorités, stack.",
+    params: [],
+    example: `my_context()
+// → Retourne le markdown de System/context.md`,
+    category: "context",
   },
 ];
 
@@ -133,125 +111,150 @@ const useCases = [
     title: "Sauvegarder un article de veille",
     steps: [
       "save_article avec l'URL",
-      "Article auto-extrait en markdown + frontmatter",
-      "Claude peut ensuite analyser/résumer via vault_read",
+      "Article auto-extrait + frontmatter",
+      "vault_read pour analyser/résumer",
     ],
-    tools: ["save_article", "vault_read"],
+    tools: ["save_article"],
   },
   {
-    title: "Retrouver une note existante",
+    title: "Retrouver une note",
     steps: [
-      "vault_search avec les mots-clés",
-      "vault_read sur le résultat pertinent",
+      "vault_search avec mots-clés",
+      "vault_read sur le résultat",
     ],
     tools: ["vault_search", "vault_read"],
   },
   {
-    title: "Explorer la structure du vault",
+    title: "Explorer le vault",
     steps: [
       "vault_list à la racine",
-      "vault_list dans le dossier souhaité",
-      "vault_read sur la note ciblée",
+      "vault_list dans un dossier",
+      "vault_read sur la note",
     ],
     tools: ["vault_list", "vault_read"],
   },
   {
-    title: "Charger le contexte en début de session",
+    title: "Charger le contexte",
     steps: [
-      "my_context pour récupérer rôle, projets, priorités",
-      "Adapter les réponses au contexte actuel",
+      "my_context en début de session",
+      "Adapter les réponses au contexte",
     ],
     tools: ["my_context"],
   },
   {
-    title: "Créer un nouveau projet dans le vault",
+    title: "Créer un projet",
     steps: [
-      "vault_write dans Projects/ avec template structuré",
-      "Ajouter frontmatter (status, stack, date)",
+      "vault_write dans Projects/",
+      "Frontmatter avec status et stack",
     ],
     tools: ["vault_write"],
   },
   {
-    title: "Mettre à jour le contexte personnel",
+    title: "Réorganiser le vault",
     steps: [
-      "vault_read sur System/context.md",
-      "Modifier le contenu",
-      "vault_write pour sauvegarder",
+      "vault_list pour la structure",
+      "vault_move pour déplacer",
+      "vault_delete pour nettoyer",
+    ],
+    tools: ["vault_move", "vault_delete"],
+  },
+  {
+    title: "Mettre à jour une note",
+    steps: [
+      "vault_read pour récupérer SHA",
+      "vault_write avec SHA (skip GET)",
     ],
     tools: ["vault_read", "vault_write"],
   },
   {
-    title: "Réorganiser le vault",
-    steps: [
-      "vault_list pour voir la structure",
-      "vault_move pour déplacer les notes",
-      "vault_delete pour supprimer les obsolètes",
-    ],
-    tools: ["vault_list", "vault_move", "vault_delete"],
-  },
-  {
     title: "Health check",
     steps: [
-      "GET /api/health pour vérifier PAT + vault",
-      "Voir le rate limit GitHub restant",
+      "GET /api/health",
+      "Vérifie PAT + vault + rate limit",
     ],
     tools: [],
   },
 ];
 
+const changelog = [
+  { version: "v3.0", desc: "Audit complet. js-yaml, path validation, timing-safe auth, fetch timeouts, pagination, SHA passthrough, Jina size limit, optimised vault_move" },
+  { version: "v2.0", desc: "vault_delete, vault_move, save_article, structured logging, dashboard auth, rate limiting, health check" },
+  { version: "v1.0", desc: "vault_write, vault_read, vault_search, vault_list, my_context — initial release" },
+];
+
 export default function AdminPage() {
+  const categoryColor = (cat: string) =>
+    cat === "vault" ? "badge-blue" : cat === "workflow" ? "badge-purple" : "badge-yellow";
+
   return (
-    <div style={styles.body}>
-      <header style={styles.header}>
-        <div style={styles.headerInner}>
-          <h1 style={styles.title}>
-            <span style={styles.logo}>&#9881;</span> YassMCP
-          </h1>
-          <p style={styles.subtitle}>Personal MCP Server — Admin Dashboard</p>
+    <div className="container">
+      {/* Header */}
+      <header className="header">
+        <div>
+          <h1 className="header-title">YassMCP</h1>
+          <p className="header-subtitle">Personal MCP Server — Admin Dashboard</p>
         </div>
-        <div style={styles.badges}>
-          <span style={{ ...styles.badge, ...styles.badgeGreen }}>v2.0.0</span>
-          <span style={{ ...styles.badge, ...styles.badgeBlue }}>8 tools</span>
-          <span style={{ ...styles.badge, ...styles.badgePurple }}>
-            Streamable HTTP
+        <div className="header-badges">
+          <span className="badge badge-green">
+            <span className="status-dot live" />
+            Live
           </span>
+          <span className="badge badge-blue">8 tools</span>
+          <span className="badge badge-purple">v3.0</span>
+          <span className="badge badge-dim">Streamable HTTP</span>
         </div>
       </header>
 
+      {/* Stats */}
+      <div className="stats-bar">
+        <div className="stat-card">
+          <span className="stat-value" style={{ color: "var(--accent)" }}>8</span>
+          <span className="stat-label">Tools actifs</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-value" style={{ color: "var(--green)" }}>6</span>
+          <span className="stat-label">Vault operations</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-value" style={{ color: "var(--purple)" }}>1</span>
+          <span className="stat-label">Workflow</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-value" style={{ color: "var(--yellow)" }}>1</span>
+          <span className="stat-label">Context</span>
+        </div>
+      </div>
+
       {/* Connection */}
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Connexion MCP</h2>
-        <div style={styles.codeBlock}>
-          <pre style={styles.pre}>{`{
-  "name": "YassMCP",
-  "type": "url",
-  "url": "https://yass-mcp.vercel.app/api/mcp",
-  "headers": {
-    "Authorization": "Bearer <MCP_AUTH_TOKEN>"
+      <section className="section">
+        <h2 className="section-title">Connexion MCP</h2>
+        <div className="connection-block">
+          <pre>{`{
+  `}<span className="key">{`"name"`}</span>{`: `}<span className="string">{`"YassMCP"`}</span>{`,
+  `}<span className="key">{`"type"`}</span>{`: `}<span className="string">{`"url"`}</span>{`,
+  `}<span className="key">{`"url"`}</span>{`: `}<span className="string">{`"https://mcp-yass.vercel.app/api/mcp"`}</span>{`,
+  `}<span className="key">{`"headers"`}</span>{`: {
+    `}<span className="key">{`"Authorization"`}</span>{`: `}<span className="string">{`"Bearer <MCP_AUTH_TOKEN>"`}</span>{`
   }
 }`}</pre>
         </div>
       </section>
 
       {/* Use Cases */}
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Use Cases</h2>
-        <div style={styles.useCaseGrid}>
+      <section className="section">
+        <h2 className="section-title">Use Cases</h2>
+        <div className="usecase-grid">
           {useCases.map((uc, i) => (
-            <div key={i} style={styles.useCaseCard}>
-              <h3 style={styles.useCaseTitle}>{uc.title}</h3>
-              <ol style={styles.steps}>
+            <div key={i} className="usecase-card">
+              <h3 className="usecase-title">{uc.title}</h3>
+              <ul className="usecase-steps">
                 {uc.steps.map((step, j) => (
-                  <li key={j} style={styles.step}>
-                    {step}
-                  </li>
+                  <li key={j}>{step}</li>
                 ))}
-              </ol>
-              <div style={styles.toolTags}>
+              </ul>
+              <div className="usecase-tags">
                 {uc.tools.map((t) => (
-                  <span key={t} style={styles.toolTag}>
-                    {t}
-                  </span>
+                  <span key={t} className="tool-tag">{t}</span>
                 ))}
               </div>
             </div>
@@ -259,302 +262,129 @@ export default function AdminPage() {
         </div>
       </section>
 
-      {/* Tools Documentation */}
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Documentation des Tools</h2>
+      {/* Tools */}
+      <section className="section">
+        <h2 className="section-title">Tools</h2>
         {tools.map((tool) => (
-          <div key={tool.name} style={styles.toolCard}>
-            <div style={styles.toolHeader}>
-              <code style={styles.toolName}>{tool.name}</code>
-              <span
-                style={{
-                  ...styles.badge,
-                  ...(tool.category === "vault"
-                    ? styles.badgeBlue
-                    : tool.category === "workflow"
-                    ? styles.badgePurple
-                    : styles.badgeYellow),
-                }}
-              >
+          <div key={tool.name} className="tool-card">
+            <div className="tool-header">
+              <span className="tool-name">{tool.name}</span>
+              <span className={`badge ${categoryColor(tool.category)}`}>
                 {tool.category}
               </span>
             </div>
-            <p style={styles.toolDesc}>{tool.description}</p>
+            <p className="tool-desc">{tool.description}</p>
 
             {tool.params.length > 0 && (
-              <table style={styles.table}>
+              <table className="params-table">
                 <thead>
                   <tr>
-                    <th style={styles.th}>Param</th>
-                    <th style={styles.th}>Type</th>
-                    <th style={styles.th}>Requis</th>
-                    <th style={styles.th}>Description</th>
+                    <th>Param</th>
+                    <th>Type</th>
+                    <th>Requis</th>
+                    <th>Description</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tool.params.map((p) => (
                     <tr key={p.name}>
-                      <td style={styles.td}>
-                        <code style={styles.paramCode}>{p.name}</code>
-                      </td>
-                      <td style={styles.td}>
-                        <code style={styles.typeCode}>{p.type}</code>
-                      </td>
-                      <td style={styles.td}>{p.required ? "oui" : "—"}</td>
-                      <td style={styles.td}>{p.desc}</td>
+                      <td><span className="param-name">{p.name}</span></td>
+                      <td><span className="param-type">{p.type}</span></td>
+                      <td><span className="param-req">{p.required ? "oui" : "—"}</span></td>
+                      <td style={{ color: "var(--text-dim)" }}>{p.desc}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
 
-            <details style={styles.details}>
-              <summary style={styles.summary}>Exemple</summary>
-              <pre style={styles.examplePre}>
-                <code>{tool.example}</code>
-              </pre>
+            <details>
+              <summary>
+                <span className="example-toggle">▸ Exemple</span>
+              </summary>
+              <div className="example-code">{tool.example}</div>
             </details>
           </div>
         ))}
       </section>
 
       {/* Architecture */}
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Architecture</h2>
-        <div style={styles.archDiagram}>
-          <div style={styles.archRow}>
-            <span style={styles.archBox}>Claude Chat</span>
-            <span style={styles.archBox}>Claude Code</span>
-            <span style={styles.archBox}>Claude Artifacts</span>
+      <section className="section">
+        <h2 className="section-title">Architecture</h2>
+        <div className="arch-container">
+          <div className="arch-row">
+            <span className="arch-box">Claude Chat</span>
+            <span className="arch-box">Claude Code</span>
+            <span className="arch-box">Claude Artifacts</span>
           </div>
-          <div style={styles.archArrow}>&#8595; MCP Streamable HTTP &#8595;</div>
-          <div style={styles.archRow}>
-            <span style={{ ...styles.archBox, ...styles.archBoxPrimary }}>
-              YassMCP (Vercel)
-            </span>
+          <div className="arch-arrow">↓ MCP Streamable HTTP ↓</div>
+          <div className="arch-row">
+            <span className="arch-box primary">YassMCP (Vercel)</span>
           </div>
-          <div style={styles.archArrow}>&#8595; &#8595; &#8595;</div>
-          <div style={styles.archRow}>
-            <span style={styles.archBox}>
-              GitHub API
-              <br />
-              <small>Obsidian vault</small>
+          <div className="arch-arrow">↓ ↓ ↓</div>
+          <div className="arch-row">
+            <span className="arch-box">
+              GitHub API<br /><small style={{ color: "var(--text-muted)" }}>Obsidian vault</small>
             </span>
-            <span style={{ ...styles.archBox, ...styles.archBoxSecret }}>
-              Env Vars
-              <br />
-              <small>PAT, tokens</small>
+            <span className="arch-box">
+              Jina Reader<br /><small style={{ color: "var(--text-muted)" }}>Article extraction</small>
+            </span>
+            <span className="arch-box secret">
+              Env Vars<br /><small>PAT, tokens</small>
             </span>
           </div>
         </div>
       </section>
 
-      <footer style={styles.footer}>
-        YassMCP v2.0.0 — Built by Yassine &times; Claude
+      {/* Changelog */}
+      <section className="section">
+        <h2 className="section-title">Changelog</h2>
+        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "1rem 1.5rem" }}>
+          {changelog.map((entry) => (
+            <div key={entry.version} className="changelog-item">
+              <span className="changelog-version">{entry.version}</span>
+              <span className="changelog-desc">{entry.desc}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Endpoints */}
+      <section className="section">
+        <h2 className="section-title">Endpoints</h2>
+        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "1rem 1.5rem" }}>
+          <table className="params-table">
+            <thead>
+              <tr>
+                <th>Endpoint</th>
+                <th>Auth</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span className="param-name">/api/mcp</span></td>
+                <td><span className="badge badge-green">Bearer</span></td>
+                <td style={{ color: "var(--text-dim)" }}>MCP Streamable HTTP endpoint</td>
+              </tr>
+              <tr>
+                <td><span className="param-name">/api/health</span></td>
+                <td><span className="badge badge-green">Bearer / ?token=</span></td>
+                <td style={{ color: "var(--text-dim)" }}>Health check (PAT, vault, rate limit GitHub)</td>
+              </tr>
+              <tr>
+                <td><span className="param-name">/</span></td>
+                <td><span className="badge badge-yellow">?token=</span></td>
+                <td style={{ color: "var(--text-dim)" }}>Admin dashboard (cette page)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer className="footer">
+        YassMCP v3.0.0 — Built by Yassine × Claude
       </footer>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  body: {
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    lineHeight: 1.6,
-    color: "#37352f",
-    maxWidth: 960,
-    margin: "0 auto",
-    padding: "2rem",
-    background: "#fafaf9",
-    minHeight: "100vh",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    borderBottom: "2px solid #e8e8e8",
-    paddingBottom: "1.5rem",
-    marginBottom: "2rem",
-  },
-  headerInner: {},
-  title: { fontSize: "2em", fontWeight: 700, margin: 0 },
-  logo: { marginRight: 8 },
-  subtitle: { color: "#9b9a97", fontSize: "0.95em", margin: "0.25rem 0 0" },
-  badges: { display: "flex", gap: 8 },
-  badge: {
-    padding: "2px 10px",
-    borderRadius: 4,
-    fontSize: "0.82em",
-    fontWeight: 500,
-    whiteSpace: "nowrap",
-  },
-  badgeGreen: { background: "#e6f4ea", color: "#0f7b6c" },
-  badgeBlue: { background: "#e8f0fe", color: "#2f80ed" },
-  badgePurple: { background: "#f0e6f6", color: "#6940a5" },
-  badgeYellow: { background: "#fef7e0", color: "#d9730d" },
-
-  section: { marginBottom: "2.5rem" },
-  sectionTitle: {
-    fontSize: "1.4em",
-    fontWeight: 600,
-    borderBottom: "1px solid #e8e8e8",
-    paddingBottom: "0.4rem",
-    marginBottom: "1rem",
-  },
-
-  codeBlock: {
-    background: "#1e1e1e",
-    borderRadius: 8,
-    padding: "1.25rem",
-    overflow: "auto",
-  },
-  pre: {
-    margin: 0,
-    color: "#d4d4d4",
-    fontSize: "0.88em",
-    lineHeight: 1.6,
-    fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
-  },
-
-  // Use cases
-  useCaseGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-    gap: "1rem",
-  },
-  useCaseCard: {
-    background: "white",
-    border: "1px solid #e8e8e8",
-    borderRadius: 8,
-    padding: "1.25rem",
-  },
-  useCaseTitle: { fontSize: "1em", fontWeight: 600, margin: "0 0 0.75rem" },
-  steps: { margin: "0 0 0.75rem", paddingLeft: "1.25rem", fontSize: "0.9em", color: "#555" },
-  step: { marginBottom: 4 },
-  toolTags: { display: "flex", gap: 6, flexWrap: "wrap" as const },
-  toolTag: {
-    background: "#e8f0fe",
-    color: "#2f80ed",
-    padding: "1px 8px",
-    borderRadius: 3,
-    fontSize: "0.78em",
-    fontFamily: "'SF Mono', 'Fira Code', monospace",
-    fontWeight: 500,
-  },
-
-  // Tool cards
-  toolCard: {
-    background: "white",
-    border: "1px solid #e8e8e8",
-    borderLeft: "4px solid #2f80ed",
-    borderRadius: 8,
-    padding: "1.25rem",
-    marginBottom: "1rem",
-  },
-  toolHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 8,
-  },
-  toolName: {
-    fontSize: "1.1em",
-    fontWeight: 700,
-    fontFamily: "'SF Mono', 'Fira Code', monospace",
-    color: "#2f80ed",
-  },
-  toolDesc: { color: "#555", margin: "0 0 1rem", fontSize: "0.93em" },
-
-  table: {
-    width: "100%",
-    borderCollapse: "collapse" as const,
-    fontSize: "0.9em",
-    marginBottom: "0.75rem",
-  },
-  th: {
-    background: "#f7f6f3",
-    textAlign: "left" as const,
-    padding: "0.5rem 0.75rem",
-    fontWeight: 600,
-    borderBottom: "2px solid #e8e8e8",
-  },
-  td: {
-    padding: "0.5rem 0.75rem",
-    borderBottom: "1px solid #f0f0f0",
-    verticalAlign: "top" as const,
-  },
-  paramCode: {
-    background: "#f7f6f3",
-    padding: "1px 5px",
-    borderRadius: 3,
-    fontSize: "0.9em",
-    color: "#eb5757",
-  },
-  typeCode: {
-    color: "#6940a5",
-    fontSize: "0.9em",
-  },
-
-  details: { marginTop: 8 },
-  summary: {
-    cursor: "pointer",
-    fontWeight: 500,
-    fontSize: "0.9em",
-    color: "#9b9a97",
-    padding: "4px 0",
-  },
-  examplePre: {
-    background: "#1e1e1e",
-    color: "#d4d4d4",
-    padding: "1rem",
-    borderRadius: 6,
-    fontSize: "0.84em",
-    lineHeight: 1.5,
-    overflow: "auto",
-    fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
-    marginTop: 8,
-  },
-
-  // Architecture
-  archDiagram: {
-    background: "white",
-    border: "1px solid #e8e8e8",
-    borderRadius: 8,
-    padding: "2rem",
-    textAlign: "center" as const,
-    fontFamily: "'SF Mono', 'Fira Code', monospace",
-    fontSize: "0.85em",
-  },
-  archRow: {
-    display: "flex",
-    justifyContent: "center",
-    gap: 16,
-    margin: "0.5rem 0",
-    flexWrap: "wrap" as const,
-  },
-  archBox: {
-    display: "inline-block",
-    background: "#f7f6f3",
-    border: "1px solid #d8d8d8",
-    borderRadius: 6,
-    padding: "8px 20px",
-  },
-  archBoxPrimary: {
-    background: "#e8f0fe",
-    borderColor: "#2f80ed",
-    color: "#2f80ed",
-    fontWeight: 600,
-  },
-  archBoxSecret: {
-    background: "#fef7e0",
-    borderColor: "#d9730d",
-  },
-  archArrow: { color: "#9b9a97", margin: "0.5rem 0", fontSize: "0.9em" },
-
-  footer: {
-    textAlign: "center" as const,
-    color: "#9b9a97",
-    fontSize: "0.85em",
-    paddingTop: "2rem",
-    borderTop: "1px solid #e8e8e8",
-  },
-};

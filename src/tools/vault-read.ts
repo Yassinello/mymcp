@@ -1,4 +1,5 @@
 import { z } from "zod";
+import yaml from "js-yaml";
 import { vaultRead } from "@/lib/github";
 
 export const vaultReadSchema = {
@@ -8,24 +9,23 @@ export const vaultReadSchema = {
 export async function handleVaultRead(params: { path: string }) {
   const file = await vaultRead(params.path);
 
-  // Parse frontmatter if present
-  let frontmatter: Record<string, string> | null = null;
+  // Parse frontmatter with js-yaml
+  let frontmatter: Record<string, unknown> | null = null;
   let body = file.content;
 
   if (file.content.startsWith("---")) {
-    const endIndex = file.content.indexOf("---", 3);
+    const endIndex = file.content.indexOf("\n---", 3);
     if (endIndex !== -1) {
-      const yamlBlock = file.content.slice(3, endIndex).trim();
-      frontmatter = {};
-      for (const line of yamlBlock.split("\n")) {
-        const colonIndex = line.indexOf(":");
-        if (colonIndex > 0) {
-          const key = line.slice(0, colonIndex).trim();
-          const value = line.slice(colonIndex + 1).trim().replace(/^["']|["']$/g, "");
-          frontmatter[key] = value;
+      const yamlBlock = file.content.slice(4, endIndex);
+      try {
+        const parsed = yaml.load(yamlBlock);
+        if (parsed && typeof parsed === "object") {
+          frontmatter = parsed as Record<string, unknown>;
         }
+      } catch {
+        // Invalid YAML — return raw content without parsed frontmatter
       }
-      body = file.content.slice(endIndex + 3).trimStart();
+      body = file.content.slice(endIndex + 4).trimStart();
     }
   }
 
@@ -34,13 +34,7 @@ export async function handleVaultRead(params: { path: string }) {
       {
         type: "text" as const,
         text: JSON.stringify(
-          {
-            path: file.path,
-            name: file.name,
-            size: file.size,
-            frontmatter,
-            body,
-          },
+          { path: file.path, name: file.name, size: file.size, sha: file.sha, frontmatter, body },
           null,
           2
         ),

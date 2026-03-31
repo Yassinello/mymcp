@@ -1,4 +1,5 @@
 import { z } from "zod";
+import yaml from "js-yaml";
 import { vaultWrite } from "@/lib/github";
 
 export const vaultWriteSchema = {
@@ -12,33 +13,35 @@ export const vaultWriteSchema = {
     .record(z.string(), z.any())
     .optional()
     .describe("YAML frontmatter object to prepend to the note"),
+  sha: z
+    .string()
+    .optional()
+    .describe("Known SHA of existing file (skips extra API call for updates)"),
 };
 
 export async function handleVaultWrite(params: {
   path: string;
   content: string;
   message?: string;
-  frontmatter?: Record<string, any>;
+  frontmatter?: Record<string, unknown>;
+  sha?: string;
 }) {
   let content = params.content;
 
-  // Prepend YAML frontmatter if provided
+  // Prepend YAML frontmatter if provided (using js-yaml for safe serialization)
   if (params.frontmatter && Object.keys(params.frontmatter).length > 0) {
-    const yamlLines = Object.entries(params.frontmatter).map(
-      ([key, value]) => {
-        if (Array.isArray(value)) {
-          return `${key}:\n${value.map((v) => `  - ${v}`).join("\n")}`;
-        }
-        return `${key}: ${typeof value === "string" ? `"${value}"` : value}`;
-      }
-    );
-    const frontmatterBlock = `---\n${yamlLines.join("\n")}\n---\n\n`;
+    const yamlStr = yaml.dump(params.frontmatter, {
+      lineWidth: -1,
+      quotingType: '"',
+      forceQuotes: false,
+    }).trimEnd();
+    const frontmatterBlock = `---\n${yamlStr}\n---\n\n`;
 
     // Replace existing frontmatter or prepend
     if (content.startsWith("---")) {
-      const endIndex = content.indexOf("---", 3);
+      const endIndex = content.indexOf("\n---", 3);
       if (endIndex !== -1) {
-        content = frontmatterBlock + content.slice(endIndex + 3).trimStart();
+        content = frontmatterBlock + content.slice(endIndex + 4).trimStart();
       } else {
         content = frontmatterBlock + content;
       }
@@ -47,7 +50,7 @@ export async function handleVaultWrite(params: {
     }
   }
 
-  const result = await vaultWrite(params.path, content, params.message);
+  const result = await vaultWrite(params.path, content, params.message, params.sha);
 
   return {
     content: [

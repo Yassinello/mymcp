@@ -15,28 +15,47 @@ export async function handleVaultMove(params: {
   to: string;
   message?: string;
 }) {
-  // Read source
-  const source = await vaultRead(params.from);
-
-  // Write to new location
   const commitMsg =
     params.message || `Move ${params.from} → ${params.to} via YassMCP`;
+
+  // Step 1: Read source (gets content + SHA in one call)
+  const source = await vaultRead(params.from);
+
+  // Step 2: Write to new location
   await vaultWrite(params.to, source.content, commitMsg);
 
-  // Delete source
-  await vaultDelete(params.from, commitMsg);
+  // Step 3: Delete source using known SHA (saves one GET call)
+  try {
+    await vaultDelete(params.from, commitMsg, source.sha);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    // Write succeeded but delete failed — note is duplicated
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(
+            {
+              success: false,
+              action: "partial_move",
+              from: params.from,
+              to: params.to,
+              warning: `Note copied to ${params.to} but failed to delete original: ${msg}. Manual cleanup needed.`,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  }
 
   return {
     content: [
       {
         type: "text" as const,
         text: JSON.stringify(
-          {
-            success: true,
-            action: "moved",
-            from: params.from,
-            to: params.to,
-          },
+          { success: true, action: "moved", from: params.from, to: params.to },
           null,
           2
         ),

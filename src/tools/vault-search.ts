@@ -11,20 +11,28 @@ export const vaultSearchSchema = {
     .number()
     .int()
     .min(1)
-    .max(30)
+    .max(100)
     .optional()
-    .describe("Max results (default: 10)"),
+    .describe("Max results per page (default: 10)"),
+  page: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe("Page number for pagination (default: 1)"),
 };
 
 export async function handleVaultSearch(params: {
   query: string;
   folder?: string;
   limit?: number;
+  page?: number;
 }) {
-  const results = await vaultSearch(
+  const { results, totalCount } = await vaultSearch(
     params.query,
     params.folder,
-    params.limit || 10
+    params.limit || 10,
+    params.page || 1
   );
 
   return {
@@ -33,6 +41,8 @@ export async function handleVaultSearch(params: {
         type: "text" as const,
         text: JSON.stringify(
           {
+            totalCount,
+            page: params.page || 1,
             count: results.length,
             results: results.map((r) => ({
               name: r.name,
