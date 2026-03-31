@@ -178,6 +178,86 @@ export async function vaultSearch(
   }));
 }
 
+// --- Delete ---
+
+export async function vaultDelete(
+  path: string,
+  message?: string
+): Promise<{ path: string }> {
+  const { pat, repo } = getConfig();
+  const url = `${GITHUB_API}/repos/${repo}/contents/${encodeURIPath(path)}`;
+
+  // Get SHA (required for delete)
+  const getRes = await fetch(url, { headers: headers(pat) });
+  if (!getRes.ok) {
+    if (getRes.status === 404) throw new Error(`Note not found: ${path}`);
+    throw new Error(`GitHub API error: ${getRes.status} ${getRes.statusText}`);
+  }
+  const existing = await getRes.json();
+
+  const delRes = await fetch(url, {
+    method: "DELETE",
+    headers: headers(pat),
+    body: JSON.stringify({
+      message: message || `Delete ${path} via YassMCP`,
+      sha: existing.sha,
+    }),
+  });
+
+  if (!delRes.ok) {
+    const err = await delRes.text();
+    throw new Error(`GitHub DELETE error: ${delRes.status} — ${err}`);
+  }
+
+  return { path };
+}
+
+// --- Health check ---
+
+export async function checkVaultHealth(): Promise<{
+  ok: boolean;
+  patValid: boolean;
+  repoAccessible: boolean;
+  rateLimit: { remaining: number; limit: number; reset: string };
+  error?: string;
+}> {
+  const { pat, repo } = getConfig();
+
+  // Check PAT + repo access in one call
+  const res = await fetch(`${GITHUB_API}/repos/${repo}`, {
+    headers: headers(pat),
+  });
+
+  const rateLimitRemaining = parseInt(res.headers.get("x-ratelimit-remaining") || "0");
+  const rateLimitTotal = parseInt(res.headers.get("x-ratelimit-limit") || "0");
+  const rateLimitReset = new Date(
+    parseInt(res.headers.get("x-ratelimit-reset") || "0") * 1000
+  ).toISOString();
+
+  const rateLimit = {
+    remaining: rateLimitRemaining,
+    limit: rateLimitTotal,
+    reset: rateLimitReset,
+  };
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      patValid: res.status !== 401,
+      repoAccessible: false,
+      rateLimit,
+      error: `${res.status} ${res.statusText}`,
+    };
+  }
+
+  return {
+    ok: true,
+    patValid: true,
+    repoAccessible: true,
+    rateLimit,
+  };
+}
+
 // --- Helpers ---
 
 function encodeURIPath(path: string): string {

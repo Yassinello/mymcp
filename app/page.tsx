@@ -84,17 +84,59 @@ const tools = [
 // Retourne le contenu de System/context.md`,
     category: "context",
   },
+  {
+    name: "vault_delete",
+    description:
+      "Supprimer une note du vault Obsidian. Récupère automatiquement le SHA nécessaire avant suppression.",
+    params: [
+      { name: "path", type: "string", required: true, desc: 'Chemin de la note à supprimer, ex: "Veille/old-article.md"' },
+      { name: "message", type: "string", required: false, desc: "Commit message pour la suppression" },
+    ],
+    example: `vault_delete({ path: "Inbox/draft-obsolete.md" })`,
+    category: "vault",
+  },
+  {
+    name: "vault_move",
+    description:
+      "Déplacer ou renommer une note. Lit la source, écrit à la nouvelle destination, puis supprime l'originale.",
+    params: [
+      { name: "from", type: "string", required: true, desc: 'Chemin actuel, ex: "Inbox/note.md"' },
+      { name: "to", type: "string", required: true, desc: 'Nouveau chemin, ex: "Veille/note.md"' },
+      { name: "message", type: "string", required: false, desc: "Commit message" },
+    ],
+    example: `vault_move({
+  from: "Inbox/article-ai.md",
+  to: "Veille/AI/article-ai.md"
+})`,
+    category: "vault",
+  },
+  {
+    name: "save_article",
+    description:
+      "Sauvegarder un article web dans le vault. Fetch l'URL via Jina Reader (extraction markdown), ajoute le frontmatter (titre, source, date, tags), et écrit dans Veille/.",
+    params: [
+      { name: "url", type: "string", required: true, desc: "URL de l'article" },
+      { name: "title", type: "string", required: false, desc: "Titre (auto-extrait si omis)" },
+      { name: "tags", type: "string[]", required: false, desc: "Tags, ex: ['ai', 'strategy']" },
+      { name: "folder", type: "string", required: false, desc: 'Dossier cible (défaut: "Veille/")' },
+    ],
+    example: `save_article({
+  url: "https://example.com/great-article",
+  tags: ["ai", "product"]
+})`,
+    category: "workflow",
+  },
 ];
 
 const useCases = [
   {
     title: "Sauvegarder un article de veille",
     steps: [
-      "Lire l'article avec web_fetch",
-      "Résumer et extraire les takeaways",
-      'vault_write dans Veille/ avec tags et frontmatter',
+      "save_article avec l'URL",
+      "Article auto-extrait en markdown + frontmatter",
+      "Claude peut ensuite analyser/résumer via vault_read",
     ],
-    tools: ["vault_write"],
+    tools: ["save_article", "vault_read"],
   },
   {
     title: "Retrouver une note existante",
@@ -138,6 +180,23 @@ const useCases = [
     ],
     tools: ["vault_read", "vault_write"],
   },
+  {
+    title: "Réorganiser le vault",
+    steps: [
+      "vault_list pour voir la structure",
+      "vault_move pour déplacer les notes",
+      "vault_delete pour supprimer les obsolètes",
+    ],
+    tools: ["vault_list", "vault_move", "vault_delete"],
+  },
+  {
+    title: "Health check",
+    steps: [
+      "GET /api/health pour vérifier PAT + vault",
+      "Voir le rate limit GitHub restant",
+    ],
+    tools: [],
+  },
 ];
 
 export default function AdminPage() {
@@ -151,8 +210,8 @@ export default function AdminPage() {
           <p style={styles.subtitle}>Personal MCP Server — Admin Dashboard</p>
         </div>
         <div style={styles.badges}>
-          <span style={{ ...styles.badge, ...styles.badgeGreen }}>v1.0.0</span>
-          <span style={{ ...styles.badge, ...styles.badgeBlue }}>5 tools</span>
+          <span style={{ ...styles.badge, ...styles.badgeGreen }}>v2.0.0</span>
+          <span style={{ ...styles.badge, ...styles.badgeBlue }}>8 tools</span>
           <span style={{ ...styles.badge, ...styles.badgePurple }}>
             Streamable HTTP
           </span>
@@ -212,6 +271,8 @@ export default function AdminPage() {
                   ...styles.badge,
                   ...(tool.category === "vault"
                     ? styles.badgeBlue
+                    : tool.category === "workflow"
+                    ? styles.badgePurple
                     : styles.badgeYellow),
                 }}
               >
@@ -289,7 +350,7 @@ export default function AdminPage() {
       </section>
 
       <footer style={styles.footer}>
-        YassMCP v1.0.0 — Built by Yassine &times; Claude
+        YassMCP v2.0.0 — Built by Yassine &times; Claude
       </footer>
     </div>
   );
