@@ -10,6 +10,14 @@ import { vaultMoveSchema, handleVaultMove } from "@/tools/vault-move";
 import { saveArticleSchema, handleSaveArticle } from "@/tools/save-article";
 import { readPaywalledSchema, handleReadPaywalled } from "@/tools/read-paywalled";
 import { handleMyContext } from "@/tools/my-context";
+import { vaultAppendSchema, handleVaultAppend } from "@/tools/vault-append";
+import { vaultBatchReadSchema, handleVaultBatchRead } from "@/tools/vault-batch-read";
+import { vaultRecentSchema, handleVaultRecent } from "@/tools/vault-recent";
+import { vaultStatsSchema, handleVaultStats } from "@/tools/vault-stats";
+import { vaultBacklinksSchema, handleVaultBacklinks } from "@/tools/vault-backlinks";
+import { vaultDueSchema, handleVaultDue } from "@/tools/vault-due";
+import { gmailInboxSchema, handleGmailInbox } from "@/tools/gmail-inbox";
+import { calendarEventsSchema, handleCalendarEvents } from "@/tools/calendar-events";
 
 const mcpHandler = createMcpHandler(
   (server) => {
@@ -70,6 +78,62 @@ const mcpHandler = createMcpHandler(
     );
 
     server.tool(
+      "vault_append",
+      "Append content to an existing note without rewriting it. Reads the note, appends your content with a separator, and writes back in one operation (2 API calls instead of 3). Ideal for journals, running logs, and accumulating ideas.",
+      vaultAppendSchema,
+      withLogging("vault_append", async (params) => handleVaultAppend(params))
+    );
+
+    server.tool(
+      "vault_batch_read",
+      "Read multiple notes in a single call (max 20). Returns all contents with parsed frontmatter and SHA. Perfect for weekly reviews, daily digests, or loading context from several notes at once.",
+      vaultBatchReadSchema,
+      withLogging("vault_batch_read", async (params) => handleVaultBatchRead(params))
+    );
+
+    server.tool(
+      "vault_recent",
+      "Get the N most recently modified notes in the vault (or a specific folder). Returns paths, commit messages, and dates. Essential for weekly reviews and catching up on recent activity.",
+      vaultRecentSchema,
+      withLogging("vault_recent", async (params) => handleVaultRecent(params))
+    );
+
+    server.tool(
+      "vault_stats",
+      "Get vault statistics: total notes, notes per folder, inbox count, total size. Useful for housekeeping and understanding vault structure at a glance.",
+      vaultStatsSchema,
+      withLogging("vault_stats", async (params) => handleVaultStats(params))
+    );
+
+    server.tool(
+      "vault_backlinks",
+      "Find all notes that link to a given note via [[wikilinks]]. Also returns forward links from the target note. Enables graph-of-knowledge navigation — ask 'what references [[cadens]]' or 'what's connected to this note'.",
+      vaultBacklinksSchema,
+      withLogging("vault_backlinks", async (params) => handleVaultBacklinks(params))
+    );
+
+    server.tool(
+      "vault_due",
+      "Find notes with a 'resurface' frontmatter field whose date has passed. Supports resurface: YYYY-MM-DD (date-based) and resurface: when_relevant (always included). Use for spaced repetition, reminders, and resurfacing forgotten insights.",
+      vaultDueSchema,
+      withLogging("vault_due", async (params) => handleVaultDue(params))
+    );
+
+    server.tool(
+      "gmail_inbox",
+      "List recent emails from Gmail. Supports Gmail search queries (is:unread, from:xxx, subject:xxx, newer_than:7d). Returns sender, subject, date, read/unread status, and snippet.",
+      gmailInboxSchema,
+      withLogging("gmail_inbox", async (params) => handleGmailInbox(params))
+    );
+
+    server.tool(
+      "calendar_events",
+      "List upcoming events from ALL Google Calendars (personal, shared, etc.). Returns event title, time, calendar name, location, and Meet link.",
+      calendarEventsSchema,
+      withLogging("calendar_events", async (params) => handleCalendarEvents(params))
+    );
+
+    server.tool(
       "my_context",
       "Get Yassine's personal context (role, active projects, priorities, tech stack). Reads from System/context.md in the vault.",
       {},
@@ -79,7 +143,7 @@ const mcpHandler = createMcpHandler(
   {
     serverInfo: {
       name: "YassMCP",
-      version: "3.0.0",
+      version: "4.0.0",
     },
   },
   {
