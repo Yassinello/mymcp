@@ -34,8 +34,9 @@ export async function handleGmailInbox(params: {
       month: "short",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Europe/Paris",
     });
-    return `[${status}] ${e.from} — "${e.subject}" — ${shortDate}\n  ${e.snippet}`;
+    return `[${status}] ${e.from} — "${e.subject}" — ${shortDate} (id:${e.id})\n  ${e.snippet}`;
   });
 
   return {

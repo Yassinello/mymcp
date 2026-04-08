@@ -6,12 +6,26 @@ export interface ToolLog {
   timestamp: string;
 }
 
+// In-memory ring buffer for recent logs (survives across requests in same serverless instance)
+const LOG_BUFFER_SIZE = 100;
+const recentLogs: ToolLog[] = [];
+
 export function logToolCall(log: ToolLog) {
+  recentLogs.push(log);
+  if (recentLogs.length > LOG_BUFFER_SIZE) {
+    recentLogs.shift();
+  }
+
   const emoji = log.status === "success" ? "✓" : "✗";
   const errorSuffix = log.error ? ` — ${log.error}` : "";
   console.log(
     `[YassMCP] ${emoji} ${log.tool} (${log.durationMs}ms)${errorSuffix}`
   );
+}
+
+export function getRecentLogs(count?: number): ToolLog[] {
+  const n = Math.min(count || 20, LOG_BUFFER_SIZE);
+  return recentLogs.slice(-n);
 }
 
 export function withLogging<TParams, TResult>(

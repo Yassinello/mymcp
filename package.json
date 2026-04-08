@@ -8,6 +8,8 @@
     "start": "next start"
   },
   "dependencies": {
+    "@browserbasehq/sdk": "^2.10.0",
+    "@browserbasehq/stagehand": "^3.2.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "js-yaml": "^4.1.1",
     "mcp-handler": "^1.1.0",

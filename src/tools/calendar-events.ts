@@ -29,11 +29,13 @@ export async function handleCalendarEvents(params: { days?: number }) {
       weekday: "short",
       day: "numeric",
       month: "short",
+      timeZone: "Europe/Paris",
     });
     const time = e.start.includes("T")
       ? start.toLocaleTimeString("fr-FR", {
           hour: "2-digit",
           minute: "2-digit",
+          timeZone: "Europe/Paris",
         })
       : "Journee";
     const meet = e.hangoutLink ? " [Meet]" : "";

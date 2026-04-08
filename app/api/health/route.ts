@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   try {
     const health = await checkVaultHealth();
     return Response.json(
-      { ...health, version: "3.0.0", tools: 8 },
+      { ...health, version: "4.0.0", tools: 18 },
       { status: health.ok ? 200 : 503 }
     );
   } catch (error) {

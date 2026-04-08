@@ -17,7 +17,28 @@ import { vaultStatsSchema, handleVaultStats } from "@/tools/vault-stats";
 import { vaultBacklinksSchema, handleVaultBacklinks } from "@/tools/vault-backlinks";
 import { vaultDueSchema, handleVaultDue } from "@/tools/vault-due";
 import { gmailInboxSchema, handleGmailInbox } from "@/tools/gmail-inbox";
+import { gmailReadSchema, handleGmailRead } from "@/tools/gmail-read";
+import { gmailSendSchema, handleGmailSend } from "@/tools/gmail-send";
+import { gmailReplySchema, handleGmailReply } from "@/tools/gmail-reply";
+import { gmailTrashSchema, handleGmailTrash } from "@/tools/gmail-trash";
+import { gmailLabelSchema, handleGmailLabel } from "@/tools/gmail-label";
+import { gmailSearchSchema, handleGmailSearch } from "@/tools/gmail-search";
+import { gmailDraftSchema, handleGmailDraft } from "@/tools/gmail-draft";
+import { gmailAttachmentSchema, handleGmailAttachment } from "@/tools/gmail-attachment";
 import { calendarEventsSchema, handleCalendarEvents } from "@/tools/calendar-events";
+import { calendarCreateSchema, handleCalendarCreate } from "@/tools/calendar-create";
+import { calendarDeleteSchema, handleCalendarDelete } from "@/tools/calendar-delete";
+import { calendarUpdateSchema, handleCalendarUpdate } from "@/tools/calendar-update";
+import { calendarFindFreeSchema, handleCalendarFindFree } from "@/tools/calendar-find-free";
+import { calendarRsvpSchema, handleCalendarRsvp } from "@/tools/calendar-rsvp";
+import { contactsSearchSchema, handleContactsSearch } from "@/tools/contacts-search";
+import { driveSearchSchema, handleDriveSearch } from "@/tools/drive-search";
+import { driveReadSchema, handleDriveRead } from "@/tools/drive-read";
+import { mcpLogsSchema, handleMcpLogs } from "@/tools/mcp-logs";
+import { webBrowseSchema, handleWebBrowse } from "@/tools/web-browse";
+import { webExtractSchema, handleWebExtract } from "@/tools/web-extract";
+import { webActSchema, handleWebAct } from "@/tools/web-act";
+import { linkedinFeedSchema, handleLinkedinFeed } from "@/tools/linkedin-feed";
 
 const mcpHandler = createMcpHandler(
   (server) => {
@@ -119,12 +140,72 @@ const mcpHandler = createMcpHandler(
       withLogging("vault_due", async (params) => handleVaultDue(params))
     );
 
+    // --- Gmail tools ---
+
     server.tool(
       "gmail_inbox",
-      "List recent emails from Gmail. Supports Gmail search queries (is:unread, from:xxx, subject:xxx, newer_than:7d). Returns sender, subject, date, read/unread status, and snippet.",
+      "List recent emails from Gmail. Supports Gmail search queries (is:unread, from:xxx, subject:xxx, newer_than:7d). Returns sender, subject, date, read/unread status, snippet, and message ID.",
       gmailInboxSchema,
       withLogging("gmail_inbox", async (params) => handleGmailInbox(params))
     );
+
+    server.tool(
+      "gmail_read",
+      "Read the full content of an email (body, headers, attachments list). Use the message ID from gmail_inbox.",
+      gmailReadSchema,
+      withLogging("gmail_read", async (params) => handleGmailRead(params))
+    );
+
+    server.tool(
+      "gmail_send",
+      "Send a new email from Yassine's Gmail. Supports To, CC, BCC. Plain text body. Always show the draft to the user for approval before calling this tool.",
+      gmailSendSchema,
+      withLogging("gmail_send", async (params) => handleGmailSend(params))
+    );
+
+    server.tool(
+      "gmail_reply",
+      "Reply to an existing email thread. Automatically sets In-Reply-To, References, and thread ID. Always show the reply to the user for approval before calling this tool.",
+      gmailReplySchema,
+      withLogging("gmail_reply", async (params) => handleGmailReply(params))
+    );
+
+    server.tool(
+      "gmail_trash",
+      "Move an email to trash. Requires the message ID from gmail_inbox.",
+      gmailTrashSchema,
+      withLogging("gmail_trash", async (params) => handleGmailTrash(params))
+    );
+
+    server.tool(
+      "gmail_label",
+      "Add or remove labels on an email. Use to archive (remove INBOX), mark read (remove UNREAD), star (add STARRED), etc.",
+      gmailLabelSchema,
+      withLogging("gmail_label", async (params) => handleGmailLabel(params))
+    );
+
+    server.tool(
+      "gmail_search",
+      "Search emails with full body content. Supports all Gmail operators (from:, subject:, has:attachment, after:, label:, etc.). Returns up to 10 results with full message body.",
+      gmailSearchSchema,
+      withLogging("gmail_search", async (params) => handleGmailSearch(params))
+    );
+
+    server.tool(
+      "gmail_draft",
+      "Create a draft email in Gmail without sending it. The user can review and send from Gmail. Safer than gmail_send for important emails.",
+      gmailDraftSchema,
+      withLogging("gmail_draft", async (params) => handleGmailDraft(params))
+    );
+
+    server.tool(
+      "gmail_attachment",
+      "Download and read an email attachment. Returns text content for text files, or metadata for binary files. Get attachment IDs from gmail_read.",
+      gmailAttachmentSchema,
+      withLogging("gmail_attachment", async (params) => handleGmailAttachment(params))
+    );
+
+    // --- Calendar tools ---
 
     server.tool(
       "calendar_events",
@@ -132,6 +213,107 @@ const mcpHandler = createMcpHandler(
       calendarEventsSchema,
       withLogging("calendar_events", async (params) => handleCalendarEvents(params))
     );
+
+    server.tool(
+      "calendar_create",
+      "Create a new event on Google Calendar. Supports datetime or all-day events, location, and description. Default calendar is primary.",
+      calendarCreateSchema,
+      withLogging("calendar_create", async (params) => handleCalendarCreate(params))
+    );
+
+    server.tool(
+      "calendar_delete",
+      "Delete/cancel an event from Google Calendar. Requires event ID from calendar_events.",
+      calendarDeleteSchema,
+      withLogging("calendar_delete", async (params) => handleCalendarDelete(params))
+    );
+
+    server.tool(
+      "calendar_update",
+      "Update an existing calendar event (reschedule, rename, change location). Only pass the fields you want to change.",
+      calendarUpdateSchema,
+      withLogging("calendar_update", async (params) => handleCalendarUpdate(params))
+    );
+
+    server.tool(
+      "calendar_find_free",
+      "Find free time slots across all calendars. Checks busy times via FreeBusy API and returns available slots during working hours (8h-19h, Mon-Fri, Europe/Paris).",
+      calendarFindFreeSchema,
+      withLogging("calendar_find_free", async (params) => handleCalendarFindFree(params))
+    );
+
+    server.tool(
+      "calendar_rsvp",
+      "Accept, decline, or tentatively accept a calendar invitation. Sends update to organizer.",
+      calendarRsvpSchema,
+      withLogging("calendar_rsvp", async (params) => handleCalendarRsvp(params))
+    );
+
+    // --- Contacts tools ---
+
+    server.tool(
+      "contacts_search",
+      "Search Google Contacts by name, email, phone, or company. Returns name, email, phone, organization, and job title. Use to find someone's email before sending.",
+      contactsSearchSchema,
+      withLogging("contacts_search", async (params) => handleContactsSearch(params))
+    );
+
+    // --- Drive tools ---
+
+    server.tool(
+      "drive_search",
+      "Search Google Drive for files by name or content. Returns file name, type (Doc/Sheet/Slides/PDF), last modified date, and link. Searches across all shared drives.",
+      driveSearchSchema,
+      withLogging("drive_search", async (params) => handleDriveSearch(params))
+    );
+
+    server.tool(
+      "drive_read",
+      "Read the content of a Google Drive file. Exports Google Docs as plain text, Sheets as CSV, Slides as text. For binary files (PDF, images), returns metadata with a link.",
+      driveReadSchema,
+      withLogging("drive_read", async (params) => handleDriveRead(params))
+    );
+
+    // --- Admin tools ---
+
+    server.tool(
+      "mcp_logs",
+      "View recent MCP tool call logs. Shows tool name, duration, status, and errors. Useful for debugging failed calls. Logs are in-memory (reset on cold start).",
+      mcpLogsSchema,
+      withLogging("mcp_logs", async (params) => handleMcpLogs(params))
+    );
+
+    // --- Browser tools ---
+
+    server.tool(
+      "web_browse",
+      "Open a URL in a cloud browser and return the visible text content. Handles JavaScript-rendered pages, login-protected pages (if session exists), and dynamic content. Use scroll_count to load more content. Use context_name='linkedin' for LinkedIn pages (uses saved login session).",
+      webBrowseSchema,
+      withLogging("web_browse", async (params) => handleWebBrowse(params))
+    );
+
+    server.tool(
+      "web_extract",
+      "Open a URL and extract structured data using AI. Provide a natural language instruction describing what to extract. Returns JSON data. Great for: LinkedIn feed posts, competitor pricing, changelogs, news headlines, product features, job listings.",
+      webExtractSchema,
+      withLogging("web_extract", async (params) => handleWebExtract(params))
+    );
+
+    server.tool(
+      "web_act",
+      "Open a URL and perform actions in the browser using natural language commands. Each action is executed sequentially. DANGEROUS: can click buttons, fill forms, submit data. The calling agent should always ask user confirmation before invoking this tool. Examples: post on LinkedIn, fill a form, click a button, accept cookies.",
+      webActSchema,
+      withLogging("web_act", async (params) => handleWebAct(params))
+    );
+
+    server.tool(
+      "linkedin_feed",
+      "Read your LinkedIn feed. Returns recent posts with author, content text, engagement metrics (likes, comments), and relative date. Automatically uses saved LinkedIn session. Call max 3 times per day.",
+      linkedinFeedSchema,
+      withLogging("linkedin_feed", async (params) => handleLinkedinFeed(params))
+    );
+
+    // --- Context ---
 
     server.tool(
       "my_context",
