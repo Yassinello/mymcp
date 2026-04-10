@@ -49,7 +49,7 @@ export async function GET(request: Request) {
     .reduce((sum, p) => sum + p.manifest.tools.length, 0);
 
   return Response.json({
-    version: "1.0.0",
+    version: "0.1.1",
     packs,
     totalTools,
     config: {

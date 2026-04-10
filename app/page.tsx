@@ -1,67 +1,12 @@
-import { headers } from "next/headers";
-import { checkAdminAuth } from "@/core/auth";
 import { resolveRegistry } from "@/core/registry";
 import { getInstanceConfig } from "@/core/config";
 import { getRecentLogs } from "@/core/logging";
+import { AppShell } from "./sidebar";
 import { ConfigBlock } from "./config-block";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  // Auth check — construct a minimal Request from incoming headers
-  const headersList = await headers();
-  const authHeader = headersList.get("authorization") || "";
-  const fakeReq = new Request("http://localhost", {
-    headers: { authorization: authHeader },
-  });
-
-  // Check for token in URL query (for simple browser access)
-  // Next.js doesn't expose query params in server components easily,
-  // so we check the x-forwarded-* or referer for token
-  const adminToken = (process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN)?.trim();
-
-  // For the dashboard, we allow access if no admin token is configured
-  // Otherwise, the API endpoints handle auth
-  if (adminToken) {
-    const authError = checkAdminAuth(fakeReq);
-    if (authError) {
-      return (
-        <div className="container">
-          <header className="header">
-            <div>
-              <h1 className="header-title">MyMCP</h1>
-              <p className="header-subtitle">Authentication required</p>
-            </div>
-          </header>
-          <div
-            style={{
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius)",
-              padding: "2rem",
-              textAlign: "center",
-            }}
-          >
-            <p style={{ color: "var(--text-dim)", marginBottom: "1rem" }}>
-              Access this dashboard via the admin status API:
-            </p>
-            <code
-              style={{
-                background: "var(--bg-input)",
-                padding: "0.5rem 1rem",
-                borderRadius: "6px",
-                fontSize: "0.85rem",
-              }}
-            >
-              GET /api/admin/status (with ADMIN_AUTH_TOKEN header)
-            </code>
-          </div>
-        </div>
-      );
-    }
-  }
-
-  // Derive everything from the registry — single source of truth
   const registry = resolveRegistry();
   const config = getInstanceConfig();
   const logs = getRecentLogs(10);
@@ -70,192 +15,133 @@ export default async function DashboardPage() {
     ? `https://${process.env.VERCEL_URL}`
     : "http://localhost:3000";
   const enabledPacks = registry.filter((p) => p.enabled);
-  const disabledPacks = registry.filter((p) => !p.enabled);
   const totalTools = enabledPacks.reduce((sum, p) => sum + p.manifest.tools.length, 0);
 
   return (
-    <div className="container">
-      {/* Header */}
-      <header className="header">
-        <div>
-          <h1 className="header-title">MyMCP</h1>
-          <p className="header-subtitle">Personal MCP Server — {config.displayName}</p>
-        </div>
-        <div className="header-badges">
-          <span className="badge badge-green">
-            <span className="status-dot live" />
-            Live
-          </span>
-          <span className="badge badge-blue">{totalTools} tools</span>
-          <span className="badge badge-purple">v1.0.0</span>
-        </div>
-      </header>
-
+    <AppShell title="Dashboard" subtitle="Overview of your personal MCP server.">
       {/* Stats */}
-      <div className="stats-bar">
-        <div className="stat-card">
-          <span className="stat-value" style={{ color: "var(--accent)" }}>
-            {totalTools}
-          </span>
-          <span className="stat-label">Active Tools</span>
+      <div className="grid grid-cols-3 gap-4 mb-10">
+        <div className="border border-border rounded-lg p-5">
+          <p className="text-2xl font-bold font-mono text-accent">{totalTools}</p>
+          <p className="text-xs text-text-muted uppercase tracking-wide mt-1">Active Tools</p>
         </div>
-        <div className="stat-card">
-          <span className="stat-value" style={{ color: "var(--green)" }}>
-            {enabledPacks.length}
-          </span>
-          <span className="stat-label">Active Packs</span>
+        <div className="border border-border rounded-lg p-5">
+          <p className="text-2xl font-bold font-mono text-green">{enabledPacks.length}</p>
+          <p className="text-xs text-text-muted uppercase tracking-wide mt-1">Active Packs</p>
         </div>
-        <div className="stat-card">
-          <span className="stat-value" style={{ color: "var(--text-dim)" }}>
-            {disabledPacks.length}
-          </span>
-          <span className="stat-label">Inactive Packs</span>
-        </div>
-        <div className="stat-card">
-          <span className="stat-value" style={{ color: "var(--yellow)" }}>
-            {config.timezone}
-          </span>
-          <span className="stat-label">Timezone</span>
+        <div className="border border-border rounded-lg p-5">
+          <p className="text-2xl font-bold font-mono text-text-dim">
+            {registry.length - enabledPacks.length}
+          </p>
+          <p className="text-xs text-text-muted uppercase tracking-wide mt-1">Inactive</p>
         </div>
       </div>
 
-      {/* Packs */}
-      <section className="section">
-        <h2 className="section-title">Tool Packs</h2>
-        {registry.map((pack) => (
-          <div key={pack.manifest.id} className="tool-card">
-            <div className="tool-header">
-              <span className="tool-name">{pack.manifest.label}</span>
-              <span className={`badge ${pack.enabled ? "badge-green" : "badge-dim"}`}>
-                {pack.enabled ? "Active" : "Inactive"}
-              </span>
-              <span className="badge badge-blue">{pack.manifest.tools.length} tools</span>
-            </div>
-            <p className="tool-desc">
-              {pack.enabled
-                ? pack.manifest.description
-                : `${pack.manifest.description} — ${pack.reason}`}
-            </p>
-            {pack.enabled && (
-              <div className="usecase-tags">
-                {pack.manifest.tools.map((t) => (
-                  <span key={t.name} className="tool-tag">
-                    {t.name}
-                  </span>
-                ))}
+      {/* Pack cards — Cadens style */}
+      <section className="mb-10">
+        <h2 className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.1em] mb-3">
+          Tool Packs
+        </h2>
+        <div className="border border-border rounded-lg divide-y divide-border">
+          {registry.map((pack) => (
+            <div
+              key={pack.manifest.id}
+              className="flex items-center gap-4 px-5 py-4 hover:bg-bg-muted transition-colors"
+            >
+              <div className="w-9 h-9 rounded-lg bg-bg-muted border border-border-light flex items-center justify-center text-text-muted text-sm font-semibold">
+                {pack.manifest.label.charAt(0)}
               </div>
-            )}
-          </div>
-        ))}
-      </section>
-
-      {/* MCP Connection — Claude Desktop + Claude Code configs */}
-      <section className="section">
-        <h2 className="section-title">Connect</h2>
-
-        <ConfigBlock
-          title="Claude Desktop"
-          subtitle="Add to claude_desktop_config.json"
-          config={JSON.stringify(
-            {
-              mcpServers: {
-                mymcp: {
-                  url: `${baseUrl}/api/mcp`,
-                  headers: { Authorization: "Bearer <MCP_AUTH_TOKEN>" },
-                },
-              },
-            },
-            null,
-            2
-          )}
-        />
-
-        <div style={{ height: "1rem" }} />
-
-        <ConfigBlock
-          title="Claude Code"
-          subtitle="Add to ~/.claude/settings.json"
-          config={JSON.stringify(
-            {
-              mcpServers: {
-                mymcp: {
-                  type: "http",
-                  url: `${baseUrl}/api/mcp`,
-                  headers: { Authorization: "Bearer <MCP_AUTH_TOKEN>" },
-                },
-              },
-            },
-            null,
-            2
-          )}
-        />
-
-        <div style={{ marginTop: "1rem" }}>
-          <a href="/setup" style={{ color: "var(--accent)", fontSize: "0.9rem" }}>
-            Need to configure packs? Go to Setup →
-          </a>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm">{pack.manifest.label}</span>
+                  {pack.enabled ? (
+                    <span className="text-[11px] font-medium text-green bg-green-bg px-2 py-0.5 rounded-full">
+                      Active
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-medium text-text-muted bg-bg-muted px-2 py-0.5 rounded-full">
+                      Inactive
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-text-dim mt-0.5 truncate">
+                  {pack.enabled
+                    ? pack.manifest.description
+                    : `${pack.manifest.description} — ${pack.reason}`}
+                </p>
+              </div>
+              <span className="text-sm text-text-muted whitespace-nowrap">
+                {pack.manifest.tools.length} tools
+              </span>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* Recent Logs (ephemeral) */}
+      {/* Connection configs */}
+      <section className="mb-10">
+        <h2 className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.1em] mb-3">
+          Connect
+        </h2>
+        <div className="space-y-3">
+          <ConfigBlock
+            title="Claude Desktop"
+            subtitle="claude_desktop_config.json"
+            config={JSON.stringify(
+              {
+                mcpServers: {
+                  mymcp: {
+                    url: `${baseUrl}/api/mcp`,
+                    headers: { Authorization: "Bearer <MCP_AUTH_TOKEN>" },
+                  },
+                },
+              },
+              null,
+              2
+            )}
+          />
+          <ConfigBlock
+            title="Claude Code"
+            subtitle="~/.claude/settings.json"
+            config={JSON.stringify(
+              {
+                mcpServers: {
+                  mymcp: {
+                    type: "http",
+                    url: `${baseUrl}/api/mcp`,
+                    headers: { Authorization: "Bearer <MCP_AUTH_TOKEN>" },
+                  },
+                },
+              },
+              null,
+              2
+            )}
+          />
+        </div>
+      </section>
+
+      {/* Recent logs */}
       {logs.length > 0 && (
-        <section className="section">
-          <h2 className="section-title">
-            Recent Logs{" "}
-            <span
-              style={{
-                fontSize: "0.7rem",
-                color: "var(--text-muted)",
-                fontWeight: 400,
-                textTransform: "none",
-              }}
-            >
-              (ephemeral — resets on cold start)
-            </span>
+        <section>
+          <h2 className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.1em] mb-3">
+            Recent Logs <span className="font-normal normal-case text-text-muted">(ephemeral)</span>
           </h2>
-          <div
-            style={{
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius)",
-              padding: "1rem 1.5rem",
-            }}
-          >
+          <div className="border border-border rounded-lg divide-y divide-border">
             {logs.map((log, i) => (
-              <div key={i} className="changelog-item">
+              <div key={i} className="flex items-center gap-3 px-5 py-2.5 text-sm">
                 <span
-                  className="changelog-version"
-                  style={{
-                    color: log.status === "success" ? "var(--green)" : "var(--red)",
-                    minWidth: "140px",
-                  }}
-                >
-                  {log.tool}
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${log.status === "success" ? "bg-green" : "bg-red"}`}
+                />
+                <span className="font-mono text-xs w-36 truncate">{log.tool}</span>
+                <span className="text-text-muted flex-1 truncate">
+                  {log.status === "success" ? "OK" : log.error}
                 </span>
-                <span className="changelog-desc">
-                  {log.status === "success" ? "OK" : log.error} — {log.durationMs}ms
-                </span>
+                <span className="font-mono text-xs text-text-muted">{log.durationMs}ms</span>
               </div>
             ))}
           </div>
         </section>
       )}
-
-      <footer className="footer">
-        <a href="/playground" style={{ color: "var(--accent)", textDecoration: "none" }}>
-          Tool Playground
-        </a>
-        {" · "}
-        <a href="/setup" style={{ color: "var(--accent)", textDecoration: "none" }}>
-          Setup
-        </a>
-        {" · "}
-        <a href="/packs" style={{ color: "var(--accent)", textDecoration: "none" }}>
-          Packs
-        </a>
-        {" · "}
-        MyMCP v1.0.0
-      </footer>
-    </div>
+    </AppShell>
   );
 }

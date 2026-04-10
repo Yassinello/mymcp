@@ -4,5 +4,5 @@
  * Detailed diagnostics are in the private admin dashboard.
  */
 export async function GET() {
-  return Response.json({ ok: true, version: "1.0.0" });
+  return Response.json({ ok: true, version: "0.1.1" });
 }

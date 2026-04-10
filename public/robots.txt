@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /packs
+Disallow: /
+Disallow: /setup
+Disallow: /playground
+Disallow: /api/

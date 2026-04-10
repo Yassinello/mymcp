@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Sidebar } from "../sidebar";
 
 interface ToolInfo {
   name: string;
@@ -22,16 +23,13 @@ export default function PlaygroundPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load tools from admin status API
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("token") || "";
     fetch(`/api/admin/status`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then((r) => r.json())
-      .then((data) => {
-        setPacks(data.packs?.filter((p: PackInfo) => p.enabled) || []);
-      })
+      .then((data) => setPacks(data.packs?.filter((p: PackInfo) => p.enabled) || []))
       .catch(() => setError("Failed to load tools. Check admin auth."));
   }, []);
 
@@ -42,7 +40,6 @@ export default function PlaygroundPage() {
     setLoading(true);
     setResult(null);
     setError(null);
-
     try {
       const params = JSON.parse(paramsJson);
       const token = new URLSearchParams(window.location.search).get("token") || "";
@@ -55,11 +52,8 @@ export default function PlaygroundPage() {
         body: JSON.stringify({ tool: selectedTool, params }),
       });
       const data = await res.json();
-      if (data.error) {
-        setError(data.error);
-      } else {
-        setResult(JSON.stringify(data.result, null, 2));
-      }
+      if (data.error) setError(data.error);
+      else setResult(JSON.stringify(data.result, null, 2));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Call failed");
     } finally {
@@ -70,160 +64,98 @@ export default function PlaygroundPage() {
   const selectedInfo = allTools.find((t) => t.name === selectedTool);
 
   return (
-    <div className="container">
-      <header className="header">
-        <div>
-          <h1 className="header-title">Tool Playground</h1>
-          <p className="header-subtitle">Test any active tool directly from the dashboard</p>
-        </div>
-        <div className="header-badges">
-          <span className="badge badge-blue">{allTools.length} tools available</span>
-        </div>
-      </header>
+    <div className="flex min-h-screen">
+      <Sidebar />
+      <main className="flex-1 overflow-auto">
+        <div className="max-w-4xl mx-auto px-8 py-10">
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold tracking-tight">Playground</h1>
+            <p className="text-text-dim mt-1">Test any active tool with custom parameters.</p>
+          </div>
 
-      {/* Tool selector */}
-      <section className="section">
-        <div className="tool-card">
-          <label
-            style={{
-              display: "block",
-              fontSize: "0.8rem",
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              marginBottom: "0.5rem",
-            }}
-          >
-            Tool
-          </label>
-          <select
-            value={selectedTool}
-            onChange={(e) => {
-              setSelectedTool(e.target.value);
-              setResult(null);
-              setError(null);
-            }}
-            style={{
-              width: "100%",
-              background: "var(--bg-input)",
-              border: "1px solid var(--border)",
-              borderRadius: "8px",
-              padding: "0.6rem 1rem",
-              color: "var(--text)",
-              fontSize: "0.9rem",
-              fontFamily: "var(--font-mono)",
-            }}
-          >
-            <option value="">Select a tool...</option>
-            {packs.map((pack) => (
-              <optgroup key={pack.id} label={pack.label}>
-                {pack.tools.map((tool) => (
-                  <option key={tool.name} value={tool.name}>
-                    {tool.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          {/* Tool selector */}
+          <div className="border border-border rounded-lg p-5 mb-4">
+            <label className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.1em] mb-2 block">
+              Tool
+            </label>
+            <select
+              value={selectedTool}
+              onChange={(e) => {
+                setSelectedTool(e.target.value);
+                setResult(null);
+                setError(null);
+              }}
+              className="w-full bg-bg-muted border border-border rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent/30"
+            >
+              <option value="">Select a tool...</option>
+              {packs.map((pack) => (
+                <optgroup key={pack.id} label={pack.label}>
+                  {pack.tools.map((tool) => (
+                    <option key={tool.name} value={tool.name}>
+                      {tool.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
 
-          {selectedInfo && (
-            <p style={{ color: "var(--text-dim)", fontSize: "0.85rem", marginTop: "0.5rem" }}>
-              {selectedInfo.description.slice(0, 150)}
-              {selectedInfo.description.length > 150 ? "..." : ""}
-            </p>
+            {selectedInfo && (
+              <p className="text-sm text-text-dim mt-2">
+                {selectedInfo.description.slice(0, 200)}
+                {selectedInfo.description.length > 200 ? "..." : ""}
+              </p>
+            )}
+          </div>
+
+          {/* Params */}
+          <div className="border border-border rounded-lg p-5 mb-4">
+            <label className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.1em] mb-2 block">
+              Parameters (JSON)
+            </label>
+            <textarea
+              value={paramsJson}
+              onChange={(e) => setParamsJson(e.target.value)}
+              rows={5}
+              className="w-full bg-bg-muted border border-border rounded-md px-3 py-2 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-accent/30"
+              placeholder='{"query": "example"}'
+            />
+            <button
+              onClick={callTool}
+              disabled={!selectedTool || loading}
+              className={`mt-3 px-5 py-2 rounded-md text-sm font-medium transition-colors ${
+                selectedTool && !loading
+                  ? "bg-accent text-white hover:bg-accent/90 cursor-pointer"
+                  : "bg-bg-muted text-text-muted cursor-not-allowed"
+              }`}
+            >
+              {loading ? "Running..." : "Call Tool"}
+            </button>
+          </div>
+
+          {/* Result */}
+          {(result || error) && (
+            <div className="border border-border rounded-lg p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="font-semibold text-sm">Result</span>
+                <span
+                  className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                    error ? "text-red bg-red-bg" : "text-green bg-green-bg"
+                  }`}
+                >
+                  {error ? "Error" : "Success"}
+                </span>
+              </div>
+              <pre
+                className={`bg-bg-muted rounded-md p-4 text-xs font-mono overflow-auto max-h-96 whitespace-pre-wrap ${
+                  error ? "text-red" : "text-text-dim"
+                }`}
+              >
+                {error || result}
+              </pre>
+            </div>
           )}
         </div>
-      </section>
-
-      {/* Params input */}
-      <section className="section">
-        <div className="tool-card">
-          <label
-            style={{
-              display: "block",
-              fontSize: "0.8rem",
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              marginBottom: "0.5rem",
-            }}
-          >
-            Parameters (JSON)
-          </label>
-          <textarea
-            value={paramsJson}
-            onChange={(e) => setParamsJson(e.target.value)}
-            rows={5}
-            style={{
-              width: "100%",
-              background: "var(--bg-input)",
-              border: "1px solid var(--border)",
-              borderRadius: "8px",
-              padding: "0.75rem 1rem",
-              color: "var(--text)",
-              fontSize: "0.85rem",
-              fontFamily: "var(--font-mono)",
-              lineHeight: 1.6,
-              resize: "vertical",
-            }}
-            placeholder='{"query": "example"}'
-          />
-
-          <button
-            onClick={callTool}
-            disabled={!selectedTool || loading}
-            style={{
-              marginTop: "1rem",
-              background: loading ? "var(--text-muted)" : "var(--accent)",
-              color: "white",
-              border: "none",
-              padding: "0.6rem 1.5rem",
-              borderRadius: "8px",
-              cursor: selectedTool && !loading ? "pointer" : "not-allowed",
-              fontSize: "0.9rem",
-              fontWeight: 600,
-            }}
-          >
-            {loading ? "Running..." : "Call Tool"}
-          </button>
-        </div>
-      </section>
-
-      {/* Result */}
-      {(result || error) && (
-        <section className="section">
-          <div className="tool-card">
-            <div className="tool-header">
-              <span className="tool-name">Result</span>
-              <span className={`badge ${error ? "badge-dim" : "badge-green"}`}>
-                {error ? "Error" : "Success"}
-              </span>
-            </div>
-            <pre
-              style={{
-                background: "var(--bg-input)",
-                borderRadius: "8px",
-                padding: "1rem",
-                fontSize: "0.82rem",
-                fontFamily: "var(--font-mono)",
-                color: error ? "var(--red)" : "var(--text-dim)",
-                overflow: "auto",
-                maxHeight: "400px",
-                whiteSpace: "pre-wrap",
-                marginTop: "0.75rem",
-              }}
-            >
-              {error || result}
-            </pre>
-          </div>
-        </section>
-      )}
-
-      <footer className="footer">
-        <a href="/" style={{ color: "var(--accent)", textDecoration: "none" }}>
-          Back to Dashboard
-        </a>
-      </footer>
+      </main>
     </div>
   );
 }

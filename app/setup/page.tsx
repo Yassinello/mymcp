@@ -1,10 +1,10 @@
 import { resolveRegistry } from "@/core/registry";
+import { AppShell } from "../sidebar";
 
 export const dynamic = "force-dynamic";
 
 export default async function SetupPage() {
   const registry = resolveRegistry();
-
   const packs = registry.map((p) => ({
     id: p.manifest.id,
     label: p.manifest.label,
@@ -14,274 +14,205 @@ export default async function SetupPage() {
     requiredEnvVars: p.manifest.requiredEnvVars,
   }));
 
-  const googlePack = packs.find((p) => p.id === "google");
-  const vaultPack = packs.find((p) => p.id === "vault");
-  const browserPack = packs.find((p) => p.id === "browser");
-
   const configurable = packs.filter((p) => p.requiredEnvVars.length > 0);
   const configured = configurable.filter((p) => p.enabled);
   const progress =
     configurable.length > 0 ? Math.round((configured.length / configurable.length) * 100) : 100;
 
-  return (
-    <div className="container">
-      <header className="header">
-        <div>
-          <h1 className="header-title">MyMCP Setup</h1>
-          <p className="header-subtitle">Configure your personal MCP server</p>
-        </div>
-        <div className="header-badges">
-          <span className={`badge ${progress === 100 ? "badge-green" : "badge-yellow"}`}>
-            {configured.length}/{configurable.length} packs configured
-          </span>
-        </div>
-      </header>
+  const googlePack = packs.find((p) => p.id === "google");
+  const vaultPack = packs.find((p) => p.id === "vault");
+  const browserPack = packs.find((p) => p.id === "browser");
+  const slackPack = packs.find((p) => p.id === "slack");
+  const notionPack = packs.find((p) => p.id === "notion");
 
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000";
+
+  return (
+    <AppShell
+      title="Setup"
+      subtitle={`${configured.length}/${configurable.length} packs configured.`}
+    >
       {/* Progress bar */}
-      <div style={{ marginBottom: "2rem" }}>
-        <div
-          style={{
-            background: "var(--bg-input)",
-            borderRadius: "6px",
-            height: "8px",
-            overflow: "hidden",
-          }}
-        >
+      <div className="mb-8">
+        <div className="bg-bg-muted rounded-full h-2 overflow-hidden">
           <div
-            style={{
-              background: progress === 100 ? "var(--green)" : "var(--accent)",
-              height: "100%",
-              width: `${progress}%`,
-              transition: "width 0.3s",
-              borderRadius: "6px",
-            }}
+            className={`h-full rounded-full transition-all ${progress === 100 ? "bg-green" : "bg-accent"}`}
+            style={{ width: `${progress}%` }}
           />
         </div>
       </div>
 
-      {/* Google Workspace */}
-      <section className="section">
-        <div className="tool-card">
-          <div className="tool-header">
-            <span className="tool-name">Google Workspace</span>
-            <span className={`badge ${googlePack?.enabled ? "badge-green" : "badge-dim"}`}>
-              {googlePack?.enabled ? "Configured" : "Not configured"}
-            </span>
-          </div>
-          <p className="tool-desc">Gmail, Calendar, Contacts, Drive — 18 tools</p>
-
-          {!googlePack?.enabled && (
-            <div
-              style={{
-                background: "var(--bg-input)",
-                borderRadius: "var(--radius-sm)",
-                padding: "1.25rem",
-                marginTop: "1rem",
-              }}
-            >
-              <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", lineHeight: 1.8 }}>
-                <strong style={{ color: "var(--text)" }}>Step 1:</strong> Create a Google Cloud
-                OAuth app
-                <br />
-                Go to{" "}
+      <div className="space-y-4">
+        {[
+          {
+            pack: googlePack!,
+            steps: (
+              <>
+                <strong>1.</strong> Create a{" "}
                 <a
                   href="https://console.cloud.google.com/apis/credentials"
                   target="_blank"
                   rel="noopener"
-                  style={{ color: "var(--accent)" }}
+                  className="text-accent hover:underline"
                 >
-                  Google Cloud Console → APIs & Services → Credentials
-                </a>
+                  Google Cloud OAuth app
+                </a>{" "}
+                (Web application type)
                 <br />
-                Create an OAuth 2.0 Client ID (Web application type)
-                <br />
-                Add callback URL:{" "}
-                <code
-                  style={{
-                    background: "var(--bg-card)",
-                    padding: "2px 6px",
-                    borderRadius: "3px",
-                    fontSize: "0.82rem",
-                  }}
-                >
-                  {process.env.VERCEL_URL
-                    ? `https://${process.env.VERCEL_URL}`
-                    : "http://localhost:3000"}
-                  /api/auth/google/callback
+                <strong>2.</strong> Add callback URL:{" "}
+                <code className="bg-bg-muted px-1.5 py-0.5 rounded text-xs">
+                  {baseUrl}/api/auth/google/callback
                 </code>
                 <br />
+                <strong>3.</strong> Set{" "}
+                <code className="bg-bg-muted px-1.5 py-0.5 rounded text-xs">GOOGLE_CLIENT_ID</code>,{" "}
+                <code className="bg-bg-muted px-1.5 py-0.5 rounded text-xs">
+                  GOOGLE_CLIENT_SECRET
+                </code>{" "}
+                in Vercel
                 <br />
-                <strong style={{ color: "var(--text)" }}>Step 2:</strong> Set GOOGLE_CLIENT_ID and
-                GOOGLE_CLIENT_SECRET in Vercel env vars
+                <strong>4.</strong>{" "}
+                {process.env.GOOGLE_CLIENT_ID ? (
+                  <a href="/api/auth/google" className="text-accent font-medium hover:underline">
+                    Connect Google Account →
+                  </a>
+                ) : (
+                  <span className="text-text-muted">Set client ID/secret first, then redeploy</span>
+                )}
+              </>
+            ),
+          },
+          {
+            pack: vaultPack!,
+            steps: (
+              <>
+                <strong>1.</strong> Create a GitHub repo for your Obsidian vault
                 <br />
-                <br />
-                <strong style={{ color: "var(--text)" }}>Step 3:</strong> Click the button below to
-                connect your Google account
-                <br />
-              </p>
-              {process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? (
-                <a
-                  href="/api/auth/google"
-                  style={{
-                    display: "inline-block",
-                    marginTop: "1rem",
-                    background: "var(--accent)",
-                    color: "white",
-                    padding: "0.6rem 1.5rem",
-                    borderRadius: "8px",
-                    textDecoration: "none",
-                    fontWeight: 600,
-                    fontSize: "0.9rem",
-                  }}
-                >
-                  Connect Google Account
-                </a>
-              ) : (
-                <p style={{ color: "var(--yellow)", fontSize: "0.85rem", marginTop: "0.5rem" }}>
-                  Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET first, then redeploy.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Vault */}
-      <section className="section">
-        <div className="tool-card">
-          <div className="tool-header">
-            <span className="tool-name">Obsidian Vault</span>
-            <span className={`badge ${vaultPack?.enabled ? "badge-green" : "badge-dim"}`}>
-              {vaultPack?.enabled ? "Configured" : "Not configured"}
-            </span>
-          </div>
-          <p className="tool-desc">15 vault tools — read, write, search, backlinks, and more</p>
-
-          {!vaultPack?.enabled && (
-            <div
-              style={{
-                background: "var(--bg-input)",
-                borderRadius: "var(--radius-sm)",
-                padding: "1.25rem",
-                marginTop: "1rem",
-              }}
-            >
-              <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", lineHeight: 1.8 }}>
-                <strong style={{ color: "var(--text)" }}>Step 1:</strong> Create a GitHub repo for
-                your Obsidian vault
-                <br />
-                <strong style={{ color: "var(--text)" }}>Step 2:</strong> Generate a{" "}
+                <strong>2.</strong> Generate a{" "}
                 <a
                   href="https://github.com/settings/tokens"
                   target="_blank"
                   rel="noopener"
-                  style={{ color: "var(--accent)" }}
+                  className="text-accent hover:underline"
                 >
-                  GitHub Personal Access Token
+                  GitHub PAT
                 </a>{" "}
-                with{" "}
-                <code
-                  style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}
-                >
-                  repo
-                </code>{" "}
-                scope
+                with <code className="bg-bg-muted px-1.5 py-0.5 rounded text-xs">repo</code> scope
                 <br />
-                <strong style={{ color: "var(--text)" }}>Step 3:</strong> Set these env vars in
-                Vercel:
-                <br />
-                <code
-                  style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}
-                >
-                  GITHUB_PAT
-                </code>{" "}
-                and{" "}
-                <code
-                  style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}
-                >
-                  GITHUB_REPO
-                </code>{" "}
-                (format: owner/repo)
-              </p>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Browser */}
-      <section className="section">
-        <div className="tool-card">
-          <div className="tool-header">
-            <span className="tool-name">Browser Automation</span>
-            <span className={`badge ${browserPack?.enabled ? "badge-green" : "badge-dim"}`}>
-              {browserPack?.enabled ? "Configured" : "Not configured"}
-            </span>
-          </div>
-          <p className="tool-desc">4 tools — web browse, extract, act, LinkedIn feed</p>
-
-          {!browserPack?.enabled && (
-            <div
-              style={{
-                background: "var(--bg-input)",
-                borderRadius: "var(--radius-sm)",
-                padding: "1.25rem",
-                marginTop: "1rem",
-              }}
-            >
-              <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", lineHeight: 1.8 }}>
-                <strong style={{ color: "var(--text)" }}>Step 1:</strong> Create a{" "}
+                <strong>3.</strong> Set{" "}
+                <code className="bg-bg-muted px-1.5 py-0.5 rounded text-xs">GITHUB_PAT</code> and{" "}
+                <code className="bg-bg-muted px-1.5 py-0.5 rounded text-xs">GITHUB_REPO</code>{" "}
+                (owner/repo)
+              </>
+            ),
+          },
+          {
+            pack: browserPack!,
+            steps: (
+              <>
+                <strong>1.</strong> Create a{" "}
                 <a
                   href="https://browserbase.com"
                   target="_blank"
                   rel="noopener"
-                  style={{ color: "var(--accent)" }}
+                  className="text-accent hover:underline"
                 >
                   Browserbase
                 </a>{" "}
-                account (free tier: 1h/month)
+                account
                 <br />
-                <strong style={{ color: "var(--text)" }}>Step 2:</strong> Create an{" "}
+                <strong>2.</strong> Create an{" "}
                 <a
                   href="https://openrouter.ai/keys"
                   target="_blank"
                   rel="noopener"
-                  style={{ color: "var(--accent)" }}
+                  className="text-accent hover:underline"
                 >
                   OpenRouter
                 </a>{" "}
-                API key (for AI-powered browser actions)
+                API key
                 <br />
-                <strong style={{ color: "var(--text)" }}>Step 3:</strong> Set these env vars in
-                Vercel:
-                <br />
-                <code
-                  style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}
-                >
+                <strong>3.</strong> Set{" "}
+                <code className="bg-bg-muted px-1.5 py-0.5 rounded text-xs">
                   BROWSERBASE_API_KEY
                 </code>
                 ,{" "}
-                <code
-                  style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}
-                >
+                <code className="bg-bg-muted px-1.5 py-0.5 rounded text-xs">
                   BROWSERBASE_PROJECT_ID
                 </code>
                 ,{" "}
-                <code
-                  style={{ background: "var(--bg-card)", padding: "2px 6px", borderRadius: "3px" }}
-                >
+                <code className="bg-bg-muted px-1.5 py-0.5 rounded text-xs">
                   OPENROUTER_API_KEY
                 </code>
-              </p>
+              </>
+            ),
+          },
+          {
+            pack: slackPack!,
+            steps: (
+              <>
+                <strong>1.</strong> Create a{" "}
+                <a
+                  href="https://api.slack.com/apps"
+                  target="_blank"
+                  rel="noopener"
+                  className="text-accent hover:underline"
+                >
+                  Slack App
+                </a>{" "}
+                with Bot Token Scopes: channels:history, channels:read, chat:write, search:read
+                <br />
+                <strong>2.</strong> Set{" "}
+                <code className="bg-bg-muted px-1.5 py-0.5 rounded text-xs">SLACK_BOT_TOKEN</code>
+              </>
+            ),
+          },
+          {
+            pack: notionPack!,
+            steps: (
+              <>
+                <strong>1.</strong> Create a{" "}
+                <a
+                  href="https://www.notion.so/my-integrations"
+                  target="_blank"
+                  rel="noopener"
+                  className="text-accent hover:underline"
+                >
+                  Notion Integration
+                </a>
+                <br />
+                <strong>2.</strong> Share target pages/databases with the integration
+                <br />
+                <strong>3.</strong> Set{" "}
+                <code className="bg-bg-muted px-1.5 py-0.5 rounded text-xs">NOTION_API_KEY</code>
+              </>
+            ),
+          },
+        ].map(({ pack, steps }) => (
+          <div key={pack.id} className="border border-border rounded-lg p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-semibold">{pack.label}</span>
+              {pack.enabled ? (
+                <span className="text-[11px] font-medium text-green bg-green-bg px-2 py-0.5 rounded-full">
+                  Configured
+                </span>
+              ) : (
+                <span className="text-[11px] font-medium text-orange bg-orange-bg px-2 py-0.5 rounded-full">
+                  Not configured
+                </span>
+              )}
             </div>
-          )}
-        </div>
-      </section>
-
-      <footer className="footer">
-        <a href="/" style={{ color: "var(--accent)", textDecoration: "none" }}>
-          Back to Dashboard
-        </a>
-      </footer>
-    </div>
+            <p className="text-sm text-text-dim mb-3">{pack.description}</p>
+            {!pack.enabled && (
+              <div className="bg-bg-muted rounded-md p-4 text-sm text-text-dim leading-7">
+                {steps}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </AppShell>
   );
 }

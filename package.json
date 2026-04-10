@@ -1,6 +1,6 @@
 {
   "name": "mymcp",
-  "version": "1.0.0",
+  "version": "0.1.1",
   "description": "Personal MCP server framework — deploy your AI backend to Vercel in 5 minutes",
   "keywords": [
     "mcp",
@@ -28,7 +28,9 @@
     "format": "prettier --write \"src/**/*.ts\" \"app/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"app/**/*.{ts,tsx}\"",
     "test:contract": "npx tsx scripts/contract-test.ts",
+    "test:registry": "npx tsx scripts/registry-test.ts",
     "test:e2e": "npx tsx scripts/e2e-test.ts",
+    "test": "npm run test:registry && npm run test:contract",
     "prepare": "husky"
   },
   "dependencies": {

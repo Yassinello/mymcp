@@ -84,7 +84,18 @@ export async function GET(request: Request) {
   }
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function tokenPage(error: string | null, token: string | null): string {
+  const safeToken = token ? escapeHtml(token) : null;
+  const safeError = error ? escapeHtml(error) : null;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -111,12 +122,12 @@ function tokenPage(error: string | null, token: string | null): string {
     <h1>MyMCP — Google OAuth</h1>
     ${
       error
-        ? `<div class="error">${error}</div>`
+        ? `<div class="error">${safeError}</div>`
         : `
       <p class="success">Google account connected successfully.</p>
       <p style="color: #888; margin-bottom: 0.5rem;">Your refresh token (click to reveal):</p>
       <div class="token-box">
-        <span id="token" class="token-hidden" onclick="reveal()">${token}</span>
+        <span id="token" class="token-hidden" onclick="reveal()">${safeToken}</span>
       </div>
       <div>
         <button class="reveal-btn" onclick="reveal()">Reveal Token</button>
@@ -135,7 +146,7 @@ function tokenPage(error: string | null, token: string | null): string {
       <script>
         function reveal() { document.getElementById('token').classList.remove('token-hidden'); }
         function copyToken() {
-          navigator.clipboard.writeText('${token}');
+          navigator.clipboard.writeText('${safeToken}');
           document.querySelector('.copy-btn').textContent = 'Copied!';
           setTimeout(() => { document.querySelector('.copy-btn').textContent = 'Copy to Clipboard'; }, 2000);
         }
