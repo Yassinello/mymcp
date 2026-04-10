@@ -3,6 +3,7 @@ import { checkAdminAuth } from "@/core/auth";
 import { resolveRegistry } from "@/core/registry";
 import { getInstanceConfig } from "@/core/config";
 import { getRecentLogs } from "@/core/logging";
+import { ConfigBlock } from "./config-block";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,9 @@ export default async function DashboardPage() {
   const config = getInstanceConfig();
   const logs = getRecentLogs(10);
 
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000";
   const enabledPacks = registry.filter((p) => p.enabled);
   const disabledPacks = registry.filter((p) => !p.enabled);
   const totalTools = enabledPacks.reduce(
@@ -156,22 +160,43 @@ export default async function DashboardPage() {
         ))}
       </section>
 
-      {/* MCP Connection */}
+      {/* MCP Connection — Claude Desktop + Claude Code configs */}
       <section className="section">
         <h2 className="section-title">Connect</h2>
-        <div className="connection-block">
-          <pre>
-            {`{
-  "mcpServers": {
-    "mymcp": {
-      "url": "${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"}/api/mcp",
-      "headers": {
-        "Authorization": "Bearer <MCP_AUTH_TOKEN>"
-      }
-    }
-  }
-}`}
-          </pre>
+
+        <ConfigBlock
+          title="Claude Desktop"
+          subtitle="Add to claude_desktop_config.json"
+          config={JSON.stringify({
+            mcpServers: {
+              mymcp: {
+                url: `${baseUrl}/api/mcp`,
+                headers: { Authorization: "Bearer <MCP_AUTH_TOKEN>" },
+              },
+            },
+          }, null, 2)}
+        />
+
+        <div style={{ height: "1rem" }} />
+
+        <ConfigBlock
+          title="Claude Code"
+          subtitle="Add to ~/.claude/settings.json"
+          config={JSON.stringify({
+            mcpServers: {
+              mymcp: {
+                type: "http",
+                url: `${baseUrl}/api/mcp`,
+                headers: { Authorization: "Bearer <MCP_AUTH_TOKEN>" },
+              },
+            },
+          }, null, 2)}
+        />
+
+        <div style={{ marginTop: "1rem" }}>
+          <a href="/setup" style={{ color: "var(--accent)", fontSize: "0.9rem" }}>
+            Need to configure packs? Go to Setup →
+          </a>
         </div>
       </section>
 

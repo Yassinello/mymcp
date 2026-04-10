@@ -63,6 +63,17 @@ export function validatePublicUrl(url: string): void {
     }
   }
 
+  // Block IPv6 private ranges
+  const bare = host.replace(/^\[|\]$/g, "");
+  if (
+    bare.startsWith("fd") ||    // fd00::/8 — unique local
+    bare.startsWith("fe80") ||  // fe80::/10 — link-local
+    bare.startsWith("fc") ||    // fc00::/7 — unique local
+    bare === "::1"              // loopback (also caught above)
+  ) {
+    throw new Error("Access to private networks is not allowed");
+  }
+
   // Block cloud metadata endpoints
   if (host === "metadata.google.internal" || host === "169.254.169.254") {
     throw new Error("Access to cloud metadata is not allowed");
