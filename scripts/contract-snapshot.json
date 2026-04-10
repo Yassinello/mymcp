@@ -179,6 +179,30 @@
     "schemaKeys": []
   },
   {
+    "name": "notion_create",
+    "pack": "notion",
+    "schemaKeys": [
+      "content",
+      "database_id",
+      "title"
+    ]
+  },
+  {
+    "name": "notion_read",
+    "pack": "notion",
+    "schemaKeys": [
+      "page_id"
+    ]
+  },
+  {
+    "name": "notion_search",
+    "pack": "notion",
+    "schemaKeys": [
+      "limit",
+      "query"
+    ]
+  },
+  {
     "name": "read_paywalled",
     "pack": "vault",
     "schemaKeys": [
@@ -193,6 +217,38 @@
       "tags",
       "title",
       "url"
+    ]
+  },
+  {
+    "name": "slack_channels",
+    "pack": "slack",
+    "schemaKeys": [
+      "limit"
+    ]
+  },
+  {
+    "name": "slack_read",
+    "pack": "slack",
+    "schemaKeys": [
+      "channel",
+      "limit"
+    ]
+  },
+  {
+    "name": "slack_search",
+    "pack": "slack",
+    "schemaKeys": [
+      "count",
+      "query"
+    ]
+  },
+  {
+    "name": "slack_send",
+    "pack": "slack",
+    "schemaKeys": [
+      "channel",
+      "text",
+      "thread_ts"
     ]
   },
   {

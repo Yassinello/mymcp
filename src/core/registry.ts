@@ -6,8 +6,17 @@ import { googlePack } from "@/packs/google/manifest";
 import { vaultPack } from "@/packs/vault/manifest";
 import { browserPack } from "@/packs/browser/manifest";
 import { adminPack } from "@/packs/admin/manifest";
+import { slackPack } from "@/packs/slack/manifest";
+import { notionPack } from "@/packs/notion/manifest";
 
-const ALL_PACKS: PackManifest[] = [googlePack, vaultPack, browserPack, adminPack];
+const ALL_PACKS: PackManifest[] = [
+  googlePack,
+  vaultPack,
+  browserPack,
+  slackPack,
+  notionPack,
+  adminPack,
+];
 
 /**
  * Resolve which packs are enabled based on env vars.

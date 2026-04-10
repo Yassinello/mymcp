@@ -16,9 +16,11 @@ import { resolve } from "path";
 import { googlePack } from "../src/packs/google/manifest";
 import { vaultPack } from "../src/packs/vault/manifest";
 import { browserPack } from "../src/packs/browser/manifest";
+import { slackPack } from "../src/packs/slack/manifest";
+import { notionPack } from "../src/packs/notion/manifest";
 import { adminPack } from "../src/packs/admin/manifest";
 
-const ALL_PACKS = [googlePack, vaultPack, browserPack, adminPack];
+const ALL_PACKS = [googlePack, vaultPack, browserPack, slackPack, notionPack, adminPack];
 const SNAPSHOT_PATH = resolve(__dirname, "contract-snapshot.json");
 
 interface ToolContract {

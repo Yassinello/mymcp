@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">MyMCP</h1>
-  <p align="center"><strong>Your personal AI backend. One endpoint. 38 tools. Deploy in 5 minutes.</strong></p>
+  <p align="center"><strong>Your personal AI backend. One endpoint. 45 tools. Deploy in 5 minutes.</strong></p>
 </p>
 
 <p align="center">
@@ -18,41 +18,38 @@
 ---
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Claude / ChatGPT / AI                   │
-│                    (any MCP-compatible client)               │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ MCP (Streamable HTTP)
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     MyMCP on Vercel                          │
-│                                                             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐    │
-│  │  Google   │  │  Vault   │  │ Browser  │  │  Admin  │    │
-│  │ Workspace │  │ Obsidian │  │   Auto   │  │  Logs   │    │
-│  │ 18 tools  │  │ 15 tools │  │  4 tools │  │ 1 tool  │    │
-│  └─────┬─────┘  └─────┬────┘  └─────┬────┘  └─────────┘    │
-│        │              │              │                       │
-│     Registry ← Manifests ← Env vars (auto-activation)      │
-└────────┼──────────────┼──────────────┼──────────────────────┘
-         │              │              │
-         ▼              ▼              ▼
-   Google APIs    GitHub API    Browserbase
-   (Gmail, Cal,   (Obsidian     (Stagehand +
-    Contacts,      vault)        OpenRouter)
-    Drive)
+┌─────────────────────────────────────────────────────────────────────┐
+│                       Claude / ChatGPT / AI                         │
+│                      (any MCP-compatible client)                    │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │ MCP (Streamable HTTP)
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        MyMCP on Vercel / Docker                     │
+│                                                                     │
+│  ┌──────────┐ ┌────────┐ ┌────────┐ ┌───────┐ ┌────────┐ ┌─────┐  │
+│  │  Google   │ │ Vault  │ │Browser │ │ Slack │ │ Notion │ │Admin│  │
+│  │ Workspace │ │Obsidian│ │  Auto  │ │       │ │        │ │     │  │
+│  │ 18 tools  │ │15 tools│ │4 tools │ │4 tools│ │3 tools │ │1 tool│ │
+│  └─────┬─────┘ └───┬────┘ └───┬────┘ └───┬───┘ └───┬────┘ └─────┘  │
+│        │           │          │          │         │                │
+│      Registry ← Pack Manifests ← Env vars (auto-activation)       │
+└────────┼───────────┼──────────┼──────────┼─────────┼───────────────┘
+         │           │          │          │         │
+         ▼           ▼          ▼          ▼         ▼
+    Google APIs  GitHub API  Browserbase  Slack API  Notion API
 ```
 
 ## Why MyMCP?
 
 Most MCP setups require running 5 separate servers, each with their own config. Or paying for a hosted platform that controls your data.
 
-MyMCP gives you **one server, one endpoint, 38 tools** — deployed on Vercel's free tier. You own everything.
+MyMCP gives you **one server, one endpoint, 45 tools** — deployed on Vercel's free tier (or Docker). You own everything.
 
 | | MyMCP | Separate MCP servers | Hosted platforms |
 |---|---|---|---|
 | **Setup** | Fork + env vars + deploy | 5 repos, 5 configs | Sign up + monthly fee |
-| **Tools** | 38 pre-built | Build your own | 1000s (but vendor lock-in) |
+| **Tools** | 45 pre-built | Build your own | 1000s (but vendor lock-in) |
 | **Endpoint** | 1 | 5+ | 1 (their server) |
 | **Cost** | Free (Vercel free tier) | Free but complex | $0-80/month |
 | **Data** | Your Vercel, your keys | Your machines | Their servers |
@@ -75,6 +72,15 @@ cd mymcp
 cp .env.example .env    # Fill in your values
 npm install
 npm run dev             # http://localhost:3000
+```
+
+### Option 3: Docker
+
+```bash
+git clone https://github.com/Yassinello/mymcp.git
+cd mymcp
+docker build -t mymcp .
+docker run -p 3000:3000 --env-file .env mymcp
 ```
 
 ### Connect to Claude Desktop
@@ -110,7 +116,7 @@ npm run dev             # http://localhost:3000
 
 ## Tool Packs
 
-MyMCP ships **38 production-ready tools** organized in 4 packs. Each pack activates automatically when its credentials are present in env vars.
+MyMCP ships **45 production-ready tools** organized in 6 packs. Each pack activates automatically when its credentials are present in env vars.
 
 ### Google Workspace — 18 tools
 
@@ -146,6 +152,27 @@ MyMCP ships **38 production-ready tools** organized in 4 packs. Each pack activa
 
 **Requires:** `BROWSERBASE_API_KEY` + `BROWSERBASE_PROJECT_ID` + `OPENROUTER_API_KEY`
 
+### Slack — 4 tools
+
+| Tool | What it does |
+|------|-------------|
+| `slack_channels` | List channels with topic, member count |
+| `slack_read` | Read recent messages from a channel |
+| `slack_send` | Send a message or threaded reply |
+| `slack_search` | Search messages (supports Slack operators: from:, in:, has:) |
+
+**Requires:** `SLACK_BOT_TOKEN`
+
+### Notion — 3 tools
+
+| Tool | What it does |
+|------|-------------|
+| `notion_search` | Search pages by title or content |
+| `notion_read` | Read full page content as markdown |
+| `notion_create` | Create a page in a database |
+
+**Requires:** `NOTION_API_KEY`
+
 ### Admin — 1 tool
 
 `mcp_logs` — View recent tool calls, errors, latency. Always active, no credentials needed.
@@ -162,6 +189,8 @@ src/
       tools/            ← Individual tool handlers
     vault/              ← Obsidian Vault (15 tools)
     browser/            ← Browser Automation (4 tools)
+    slack/              ← Slack (4 tools)
+    notion/             ← Notion (3 tools)
     admin/              ← Admin & Observability (1 tool)
 
 app/
