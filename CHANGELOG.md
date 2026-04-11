@@ -1,6 +1,21 @@
 # Changelog
 
 All notable changes to MyMCP.
+## [0.2.0] - 2026-04-11
+
+### Added
+
+- Slack thread/profile, Notion update/query, Composio pack — 51 tools / 7 packs v0.2.0
+
+### Documentation
+
+- Update CHANGELOG for v0.1.2
+- Clarify no folder needed before running installer
+
+### Fixed
+
+- Option 1 now shows npx command explicitly
+
 ## [0.1.2] - 2026-04-11
 
 ### Added
