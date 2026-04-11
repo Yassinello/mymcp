@@ -40,6 +40,10 @@
     Google APIs  GitHub API  Browserbase  Slack API  Notion API
 ```
 
+## The Story
+
+I built MyMCP because I wanted a single MCP server that works everywhere — Claude, ChatGPT, Hermes, OpenClaw, and any other MCP-compatible client. It started as a simple bridge to my Obsidian vault with a few tools, and kept growing as I added Google Workspace, browser automation, Slack, and Notion. At some point I realized: if it's useful to me, it might be useful to others — so I open-sourced it.
+
 ## Why MyMCP?
 
 Most MCP setups require running 5 separate servers, each with their own config. Or paying for a hosted platform that controls your data.
@@ -53,18 +57,82 @@ MyMCP gives you **one server, one endpoint, 45 tools** — deployed on Vercel's 
 | **Endpoint** | 1 | 5+ | 1 (their server) |
 | **Cost** | Free (Vercel free tier) | Free but complex | $0-80/month |
 | **Data** | Your Vercel, your keys | Your machines | Their servers |
-| **Docker** | No | Usually yes | N/A |
+| **Docker** | Yes | Usually yes | N/A |
 
 ## Quick Start
 
-### Option 1: Deploy to Vercel (recommended)
+> **Which option should I pick?**
+>
+> | You are... | Best option |
+> |---|---|
+> | Using Claude Code (CLI or Desktop) | [Option 1](#option-1-from-claude-code-recommended) — ask Claude to do it for you |
+> | Comfortable with the terminal | [Option 2](#option-2-interactive-installer) — `npx @yassinello/create-mymcp` |
+> | Prefer clicking buttons | [Option 3](#option-3-deploy-to-vercel) — one-click Vercel deploy |
+> | Want to self-host | [Option 4](#option-4-docker) |
 
-1. Click the **Deploy with Vercel** button above
-2. Set `MCP_AUTH_TOKEN` (generate with `openssl rand -hex 32`)
-3. Add credentials for the packs you want (see [Configuration](#configuration))
-4. Deploy — your MCP endpoint is live at `https://your-app.vercel.app/api/mcp`
+---
 
-### Option 2: Run locally
+### Option 1: From Claude Code (recommended)
+
+If you're reading this from Claude Code (Desktop, CLI, or Web), you can set up MyMCP without leaving the conversation. Just ask Claude:
+
+> "Clone MyMCP, help me configure my .env with the packs I want, and deploy to Vercel."
+
+Claude will:
+1. Clone the repo to your machine
+2. Walk you through which packs to enable
+3. Generate your `MCP_AUTH_TOKEN` securely
+4. Help you get API credentials for each pack
+5. Create your `.env` file
+6. Deploy to Vercel (or run locally)
+7. Add the MCP server to your Claude config
+
+That's it — zero manual setup.
+
+---
+
+### Option 2: Interactive installer
+
+```bash
+npx @yassinello/create-mymcp@latest
+```
+
+The CLI walks you through everything step by step:
+
+```
+[1/5] Project setup        → Pick a directory name
+[2/5] Cloning MyMCP        → Downloads the code + sets up update tracking
+[3/5] Choose your packs    → Google Workspace? Obsidian? Slack? (Y/n for each)
+[4/5] Configure credentials → Paste your API keys (with links to get them)
+[5/5] Install & deploy     → npm install + optional Vercel deploy
+```
+
+At the end you get a working `.env`, installed dependencies, and an `upstream` remote for future updates.
+
+---
+
+### Option 3: Deploy to Vercel
+
+1. Click the **Deploy with Vercel** button at the top of this page
+2. Choose a name for your private repo copy (e.g. `my-mcp-instance`)
+3. Set `MCP_AUTH_TOKEN` — generate one with `openssl rand -hex 32`
+4. Add credentials for the packs you want (see [Configuration](#configuration))
+5. Click **Deploy** — your endpoint is live at `https://your-app.vercel.app/api/mcp`
+
+---
+
+### Option 4: Docker
+
+```bash
+git clone https://github.com/Yassinello/mymcp.git
+cd mymcp
+cp .env.example .env    # Fill in your API keys
+docker compose up       # or: docker build -t mymcp . && docker run -p 3000:3000 --env-file .env mymcp
+```
+
+---
+
+### Option 5: Run locally (development)
 
 ```bash
 git clone https://github.com/Yassinello/mymcp.git
@@ -74,16 +142,16 @@ npm install
 npm run dev             # http://localhost:3000
 ```
 
-### Option 3: Docker
+---
 
-```bash
-git clone https://github.com/Yassinello/mymcp.git
-cd mymcp
-docker build -t mymcp .
-docker run -p 3000:3000 --env-file .env mymcp
-```
+### Connect your AI client
 
-### Connect to Claude Desktop
+Once deployed, add MyMCP to your AI client's config:
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+File: `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
 
 ```json
 {
@@ -97,8 +165,12 @@ docker run -p 3000:3000 --env-file .env mymcp
   }
 }
 ```
+</details>
 
-### Connect to Claude Code
+<details>
+<summary><strong>Claude Code</strong></summary>
+
+File: `~/.claude.json` (global) or `.mcp.json` (per-project)
 
 ```json
 {
@@ -113,6 +185,39 @@ docker run -p 3000:3000 --env-file .env mymcp
   }
 }
 ```
+</details>
+
+<details>
+<summary><strong>ChatGPT / Other MCP clients</strong></summary>
+
+Use the Streamable HTTP endpoint:
+- **URL**: `https://your-app.vercel.app/api/mcp`
+- **Auth**: Bearer token (your `MCP_AUTH_TOKEN`)
+- **Method**: POST
+</details>
+
+---
+
+### Staying up to date
+
+MyMCP is a [template repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository). Your copy is standalone — it won't auto-update. To pull in new tools and bug fixes:
+
+```bash
+# One-time setup (skip if you used npx @yassinello/create-mymcp — already done)
+git remote add upstream https://github.com/Yassinello/mymcp.git
+
+# Pull updates anytime
+git fetch upstream
+git merge upstream/main
+```
+
+Or simply:
+
+```bash
+npm run update
+```
+
+Your `.env` is never touched — all customization lives in env vars, not in code. Updates are always safe to merge.
 
 ## Tool Packs
 

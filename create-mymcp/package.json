@@ -1,0 +1,29 @@
+{
+  "name": "@yassinello/create-mymcp",
+  "version": "0.1.2",
+  "description": "Set up your personal MCP server in minutes — interactive installer for MyMCP",
+  "bin": {
+    "create-mymcp": "./index.mjs"
+  },
+  "keywords": [
+    "mcp",
+    "create",
+    "installer",
+    "claude",
+    "chatgpt",
+    "ai",
+    "model-context-protocol"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yassinello/mymcp",
+    "directory": "create-mymcp"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "index.mjs"
+  ]
+}
