@@ -1,6 +1,16 @@
 # Changelog
 
 All notable changes to MyMCP.
+## [0.1.2] - 2026-04-11
+
+### Added
+
+- Create-mymcp CLI installer, GitHub template, pedagogical README v0.1.2
+
+### Documentation
+
+- Update CHANGELOG for v0.1.1
+
 ## [0.1.1] - 2026-04-10
 
 ### Added
