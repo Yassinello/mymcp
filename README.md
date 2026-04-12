@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">MyMCP</h1>
-  <p align="center"><strong>Your personal AI backend. One endpoint. 60 tools. Deploy in 5 minutes.</strong></p>
+  <p align="center"><strong>Your personal AI backend. One endpoint. 59 tools. Deploy in 5 minutes.</strong></p>
 </p>
 
 <p align="center">
@@ -54,12 +54,12 @@ I built MyMCP because I wanted a single MCP server that works everywhere (Claude
 
 Most MCP setups require running 5 separate servers, each with their own config. Or paying for a hosted platform that controls your data.
 
-MyMCP gives you **one server, one endpoint, 60 tools** — deployed on Vercel's free tier (or Docker). You own everything.
+MyMCP gives you **one server, one endpoint, 59 tools** — deployed on Vercel's free tier (or Docker). You own everything.
 
 | | MyMCP | Separate MCP servers | Hosted platforms |
 |---|---|---|---|
 | **Setup** | Fork + env vars + deploy | 5 repos, 5 configs | Sign up + monthly fee |
-| **Tools** | 60 pre-built | Build your own | 1000s (but vendor lock-in) |
+| **Tools** | 59 pre-built | Build your own | 1000s (but vendor lock-in) |
 | **Endpoint** | 1 | 5+ | 1 (their server) |
 | **Cost** | Free (Vercel free tier) | Free but complex | $0-80/month |
 | **Data** | Your Vercel, your keys | Your machines | Their servers |
@@ -271,7 +271,7 @@ Your `.env` is never touched — all customization lives in env vars, not in cod
 
 ## Tool Packs
 
-MyMCP ships **60 production-ready tools** organized in 9 packs. Each pack activates automatically when its credentials are present in env vars.
+MyMCP ships **59 production-ready tools** organized in 9 packs. Each pack activates automatically when its credentials are present in env vars.
 
 ### Google Workspace — 18 tools
 
@@ -349,12 +349,11 @@ LinkedIn scraping and general actor execution via the Apify platform.
 
 **Requires:** `APIFY_TOKEN`
 
-### Paywall — 2 tools
+### Paywall — 1 tool
 
 | Tool | What it does |
 |------|-------------|
-| `read_paywalled` | Read paywalled articles via a reader service |
-| `read_paywalled_hard` | Hard bypass for stubborn paywalls |
+| `read_paywalled` | Read paywalled articles via a reader service (with hard-bypass fallback) |
 
 No credentials required — always active.
 
@@ -388,7 +387,7 @@ src/
     slack/              ← Slack (6 tools)
     notion/             ← Notion (5 tools)
     apify/              ← Apify — LinkedIn + actors (8 tools)
-    paywall/            ← Paywall readers (2 tools)
+    paywall/            ← Paywall readers (1 tool)
     composio/           ← Composio bridge (2 tools → 1000+ integrations)
     admin/              ← Admin & Observability (1 tool)
 
