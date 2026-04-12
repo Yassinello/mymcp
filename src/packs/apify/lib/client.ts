@@ -45,13 +45,16 @@ export async function runActor(
   const token = getToken();
   // Apify accepts either `owner/name` or `owner~name` in the path; `~` is safer.
   const path = actorId.includes("/") ? actorId.replace("/", "~") : actorId;
-  const url = `${APIFY_BASE}/acts/${encodeURIComponent(path)}/run-sync-get-dataset-items?timeout=${RUN_SYNC_TIMEOUT_SECONDS}&token=${token}`;
+  const url = `${APIFY_BASE}/acts/${encodeURIComponent(path)}/run-sync-get-dataset-items?timeout=${RUN_SYNC_TIMEOUT_SECONDS}`;
 
   let res: Response;
   try {
     res = await fetchWithTimeout(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify(input),
     });
   } catch (err) {

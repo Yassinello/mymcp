@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { z, ZodError } from "zod";
 import { checkAdminAuth } from "@/core/auth";
 import { getEnabledPacks } from "@/core/registry";
+import { withLogging } from "@/core/logging";
 
 const DESTRUCTIVE = /^(send_|create_|delete_|write_|update_|move_)/;
 
@@ -57,9 +59,26 @@ export async function POST(request: Request) {
   for (const pack of enabled) {
     for (const tool of pack.manifest.tools) {
       if (tool.name === toolName) {
+        // Validate args against the tool's Zod schema before invoking.
+        // ToolDefinition.schema is Record<string, ZodTypeAny>, so wrap it.
+        let parsedArgs: Record<string, unknown>;
+        try {
+          parsedArgs = z.object(tool.schema).parse(args) as Record<string, unknown>;
+        } catch (err) {
+          if (err instanceof ZodError) {
+            return NextResponse.json(
+              { ok: false, error: "Invalid arguments", issues: err.issues },
+              { status: 400 }
+            );
+          }
+          throw err;
+        }
+
         const start = Date.now();
         try {
-          const result = await tool.handler(args);
+          // Route through withLogging so sandbox invocations appear in the Logs tab.
+          const wrapped = withLogging(tool.name, tool.handler);
+          const result = await wrapped(parsedArgs);
           return NextResponse.json({
             ok: true,
             data: result,

@@ -1,3 +1,4 @@
+import { lookup } from "node:dns/promises";
 import type { Skill } from "../store";
 import { replaceSkill } from "../store";
 
@@ -22,9 +23,98 @@ export interface FetchRemoteResult {
   error?: string;
 }
 
-export async function fetchRemote(url: string): Promise<FetchRemoteResult> {
-  if (!/^https:\/\//i.test(url)) {
+/** Check if an IPv4 literal or resolved IP string is in a blocked range. */
+function isBlockedIPv4(ip: string): boolean {
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return false;
+  const [a, b] = parts;
+  // loopback 127/8
+  if (a === 127) return true;
+  // any 0.0.0.0/8
+  if (a === 0) return true;
+  // RFC1918
+  if (a === 10) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  // link-local 169.254/16 (includes 169.254.169.254 cloud metadata)
+  if (a === 169 && b === 254) return true;
+  // carrier-grade NAT
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  return false;
+}
+
+function isBlockedIPv6(ip: string): boolean {
+  const lower = ip.toLowerCase().replace(/^\[|\]$/g, "");
+  if (lower === "::1" || lower === "::") return true;
+  // link-local fe80::/10
+  if (
+    lower.startsWith("fe8") ||
+    lower.startsWith("fe9") ||
+    lower.startsWith("fea") ||
+    lower.startsWith("feb")
+  )
+    return true;
+  // ULA fc00::/7 (fc.. / fd..)
+  if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
+  // IPv4-mapped ::ffff:x.y.z.w — delegate
+  const mapped = lower.match(/^::ffff:([0-9.]+)$/);
+  if (mapped) return isBlockedIPv4(mapped[1]);
+  return false;
+}
+
+/**
+ * Validates a URL is safe to fetch from a server: https only, no loopback,
+ * no private networks, no cloud metadata. Resolves DNS and rejects if the
+ * resolved IP lands in a blocked range.
+ */
+async function validateRemoteUrl(url: string): Promise<{ ok: boolean; error?: string }> {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return { ok: false, error: "Invalid URL" };
+  }
+  if (parsed.protocol !== "https:") {
     return { ok: false, error: "URL must use https://" };
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".internal") ||
+    host === "metadata.google.internal"
+  ) {
+    return { ok: false, error: "Blocked hostname" };
+  }
+  // If host is an IP literal, check it directly.
+  if (/^[0-9.]+$/.test(host)) {
+    if (isBlockedIPv4(host)) return { ok: false, error: "Blocked IP literal" };
+  } else if (host.includes(":")) {
+    if (isBlockedIPv6(host)) return { ok: false, error: "Blocked IPv6 literal" };
+  } else {
+    // Hostname — resolve via DNS and check all addresses.
+    try {
+      const addrs = await lookup(host, { all: true });
+      for (const a of addrs) {
+        if (a.family === 4 && isBlockedIPv4(a.address)) {
+          return { ok: false, error: "Hostname resolves to blocked network" };
+        }
+        if (a.family === 6 && isBlockedIPv6(a.address)) {
+          return { ok: false, error: "Hostname resolves to blocked network" };
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: `DNS lookup failed: ${msg}` };
+    }
+  }
+  return { ok: true };
+}
+
+export async function fetchRemote(url: string): Promise<FetchRemoteResult> {
+  const guard = await validateRemoteUrl(url);
+  if (!guard.ok) {
+    return { ok: false, error: guard.error };
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -32,9 +122,15 @@ export async function fetchRemote(url: string): Promise<FetchRemoteResult> {
     const res = await fetch(url, {
       signal: controller.signal,
       redirect: "follow",
-      headers: { "User-Agent": "MyMCP-Skills/1.0" },
+      headers: {
+        "User-Agent": "MyMCP-Skills/1.0",
+        // Optimistic byte cap — many servers honor Range and save bandwidth.
+        // We still enforce MAX_BYTES below as defense in depth.
+        Range: `bytes=0-${MAX_BYTES - 1}`,
+      },
     });
-    if (!res.ok) {
+    // 206 = partial content (Range honored); 200 = full body (Range ignored).
+    if (!res.ok && res.status !== 206) {
       return { ok: false, error: `HTTP ${res.status}` };
     }
     const buf = await res.arrayBuffer();

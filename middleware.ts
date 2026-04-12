@@ -57,6 +57,17 @@ export function middleware(request: NextRequest) {
     pathname === "/playground" ||
     pathname === "/packs";
 
+  if (adminGated && !adminToken) {
+    // Misconfiguration: admin surface exists but no token set.
+    // Never fall through to serving the page unauthenticated.
+    return new NextResponse(
+      JSON.stringify({
+        error: "Admin auth not configured. Set ADMIN_AUTH_TOKEN or MCP_AUTH_TOKEN.",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   if (adminGated && adminToken) {
     if (!isAuthorized(request, adminToken)) {
       return new NextResponse(

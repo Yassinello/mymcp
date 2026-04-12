@@ -129,6 +129,14 @@ interface VercelEnvVar {
   type?: string;
 }
 
+/** Strip Vercel token and truncate an upstream response body for safe error messages. */
+function sanitizeVercelBody(text: string, token: string): string {
+  let out = text;
+  if (token) out = out.split(token).join("<redacted>");
+  if (out.length > 500) out = out.slice(0, 500) + "…";
+  return out;
+}
+
 class VercelEnvStore implements EnvStore {
   kind = "vercel" as const;
   private token: string;
@@ -157,7 +165,12 @@ class VercelEnvStore implements EnvStore {
         headers: { Authorization: `Bearer ${this.token}` },
       }
     );
-    if (!res.ok) throw new Error(`Vercel API list failed: ${res.status}`);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(
+        `Vercel API list failed: ${res.status} ${sanitizeVercelBody(text, this.token)}`
+      );
+    }
     const data = (await res.json()) as { envs: VercelEnvVar[] };
     return data.envs || [];
   }
@@ -204,7 +217,9 @@ class VercelEnvStore implements EnvStore {
         );
         if (!res.ok) {
           const text = await res.text();
-          throw new Error(`Vercel PATCH ${key} failed: ${res.status} ${text}`);
+          throw new Error(
+            `Vercel PATCH ${key} failed: ${res.status} ${sanitizeVercelBody(text, this.token)}`
+          );
         }
       } else {
         // POST new
@@ -221,7 +236,9 @@ class VercelEnvStore implements EnvStore {
         );
         if (!res.ok) {
           const text = await res.text();
-          throw new Error(`Vercel POST ${key} failed: ${res.status} ${text}`);
+          throw new Error(
+            `Vercel POST ${key} failed: ${res.status} ${sanitizeVercelBody(text, this.token)}`
+          );
         }
       }
       written++;

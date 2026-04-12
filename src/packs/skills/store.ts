@@ -125,6 +125,19 @@ async function writeRaw(skills: Skill[]): Promise<void> {
   await fs.rename(tmp, p);
 }
 
+// ── Write mutex ─────────────────────────────────────────────────────────
+// Serialize all mutating operations to avoid lost-update races when the
+// read-modify-write cycle of two callers interleaves.
+let writeQueue: Promise<void> = Promise.resolve();
+function enqueueWrite<T>(fn: () => Promise<T>): Promise<T> {
+  const next = writeQueue.then(() => fn());
+  writeQueue = next.then(
+    () => undefined,
+    () => undefined
+  );
+  return next;
+}
+
 // ── Public API ──────────────────────────────────────────────────────────
 
 export async function listSkills(): Promise<Skill[]> {
@@ -155,61 +168,69 @@ export async function getSkill(id: string): Promise<Skill | null> {
   return all.find((s) => s.id === id) ?? null;
 }
 
-export async function createSkill(input: SkillCreateInput): Promise<Skill> {
-  const parsed = skillCreateInputSchema.parse(input);
-  const all = await readRaw();
-  const existingIds = new Set(all.map((s) => s.id));
-  const id = await uniqueId(slugify(parsed.name), existingIds);
-  const now = new Date().toISOString();
-  const skill: Skill = {
-    id,
-    name: parsed.name,
-    description: parsed.description ?? "",
-    content: parsed.content ?? "",
-    arguments: parsed.arguments ?? [],
-    source: parsed.source,
-    createdAt: now,
-    updatedAt: now,
-  };
-  all.push(skill);
-  await writeRaw(all);
-  return skill;
+export function createSkill(input: SkillCreateInput): Promise<Skill> {
+  return enqueueWrite(async () => {
+    const parsed = skillCreateInputSchema.parse(input);
+    const all = await readRaw();
+    const existingIds = new Set(all.map((s) => s.id));
+    const id = await uniqueId(slugify(parsed.name), existingIds);
+    const now = new Date().toISOString();
+    const skill: Skill = {
+      id,
+      name: parsed.name,
+      description: parsed.description ?? "",
+      content: parsed.content ?? "",
+      arguments: parsed.arguments ?? [],
+      source: parsed.source,
+      createdAt: now,
+      updatedAt: now,
+    };
+    all.push(skill);
+    await writeRaw(all);
+    return skill;
+  });
 }
 
-export async function updateSkill(id: string, patch: SkillUpdateInput): Promise<Skill | null> {
-  const parsed = skillUpdateInputSchema.parse(patch);
-  const all = await readRaw();
-  const idx = all.findIndex((s) => s.id === id);
-  if (idx === -1) return null;
-  const prev = all[idx];
-  const next: Skill = {
-    ...prev,
-    ...parsed,
-    id: prev.id,
-    createdAt: prev.createdAt,
-    updatedAt: new Date().toISOString(),
-    // preserve or update source carefully
-    source: parsed.source ?? prev.source,
-    arguments: parsed.arguments ?? prev.arguments,
-  };
-  all[idx] = next;
-  await writeRaw(all);
-  return next;
+export function updateSkill(id: string, patch: SkillUpdateInput): Promise<Skill | null> {
+  return enqueueWrite(async () => {
+    const parsed = skillUpdateInputSchema.parse(patch);
+    const all = await readRaw();
+    const idx = all.findIndex((s) => s.id === id);
+    if (idx === -1) return null;
+    const prev = all[idx];
+    const next: Skill = {
+      ...prev,
+      ...parsed,
+      id: prev.id,
+      createdAt: prev.createdAt,
+      updatedAt: new Date().toISOString(),
+      // preserve or update source carefully
+      source: parsed.source ?? prev.source,
+      arguments: parsed.arguments ?? prev.arguments,
+    };
+    all[idx] = next;
+    await writeRaw(all);
+    return next;
+  });
 }
 
-export async function deleteSkill(id: string): Promise<boolean> {
-  const all = await readRaw();
-  const next = all.filter((s) => s.id !== id);
-  if (next.length === all.length) return false;
-  await writeRaw(next);
-  return true;
+export function deleteSkill(id: string): Promise<boolean> {
+  return enqueueWrite(async () => {
+    const all = await readRaw();
+    const next = all.filter((s) => s.id !== id);
+    if (next.length === all.length) return false;
+    await writeRaw(next);
+    return true;
+  });
 }
 
 /** Replace a skill wholesale (used by refresh-cache write path). */
-export async function replaceSkill(skill: Skill): Promise<void> {
-  const all = await readRaw();
-  const idx = all.findIndex((s) => s.id === skill.id);
-  if (idx === -1) return;
-  all[idx] = skill;
-  await writeRaw(all);
+export function replaceSkill(skill: Skill): Promise<void> {
+  return enqueueWrite(async () => {
+    const all = await readRaw();
+    const idx = all.findIndex((s) => s.id === skill.id);
+    if (idx === -1) return;
+    all[idx] = skill;
+    await writeRaw(all);
+  });
 }

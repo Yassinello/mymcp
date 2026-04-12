@@ -1,4 +1,4 @@
-import type { PackManifest } from "@/core/types";
+import type { PackManifest, ToolDefinition } from "@/core/types";
 import { SOURCES, hasAtLeastOneSource } from "./sources";
 import { readPaywalledSchema, handleReadPaywalled } from "./tools/read-paywalled";
 import {
@@ -43,26 +43,28 @@ export const paywallPack: PackManifest = {
     };
   },
   guide: buildGuide(),
-  tools: [
-    {
-      name: "read_paywalled",
-      description:
-        "Read a paywalled article from a supported source (Medium, Substack) and return clean markdown. Uses your stored session cookie to bypass the paywall via a simple HTTP fetch + Readability extraction. Fast and cheap — try this first.",
-      schema: readPaywalledSchema,
-      handler: async (params) => handleReadPaywalled(params as { url: string }),
-    },
-    // Tier 2: only register when the Browser pack is also configured.
-    ...(isBrowserPackConfigured()
-      ? [
-          {
-            name: "read_paywalled_hard",
-            description:
-              "Read a paywalled article using a full cloud browser (Browserbase). Use only if `read_paywalled` fails due to JavaScript rendering or anti-bot protection. Slower and consumes Browserbase credits.",
-            schema: readPaywalledHardSchema,
-            handler: async (params: Record<string, unknown>) =>
-              handleReadPaywalledHard(params as { url: string }),
-          },
-        ]
-      : []),
-  ],
+  // Lazy getter so isBrowserPackConfigured() is evaluated at registry resolve
+  // time, letting hot env edits register read_paywalled_hard without restart.
+  get tools(): ToolDefinition[] {
+    const tools: ToolDefinition[] = [
+      {
+        name: "read_paywalled",
+        description:
+          "Read a paywalled article from a supported source (Medium, Substack) and return clean markdown. Uses your stored session cookie to bypass the paywall via a simple HTTP fetch + Readability extraction. Fast and cheap — try this first.",
+        schema: readPaywalledSchema,
+        handler: async (params) => handleReadPaywalled(params as { url: string }),
+      },
+    ];
+    if (isBrowserPackConfigured()) {
+      tools.push({
+        name: "read_paywalled_hard",
+        description:
+          "Read a paywalled article using a full cloud browser (Browserbase). Use only if `read_paywalled` fails due to JavaScript rendering or anti-bot protection. Slower and consumes Browserbase credits.",
+        schema: readPaywalledHardSchema,
+        handler: async (params: Record<string, unknown>) =>
+          handleReadPaywalledHard(params as { url: string }),
+      });
+    }
+    return tools;
+  },
 };
