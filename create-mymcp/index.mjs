@@ -105,7 +105,7 @@ async function main() {
 
   log("");
   info("Installing dependencies (this takes ~1 minute)...");
-  const installResult = spawnSync("npm", ["install"], {
+  const installResult = spawnSync("npm", ["install", "--loglevel=error"], {
     cwd: projectDir,
     stdio: "inherit",
     shell: true,
