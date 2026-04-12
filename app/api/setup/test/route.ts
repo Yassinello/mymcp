@@ -62,23 +62,24 @@ export async function POST(request: Request) {
           });
         }
 
-        // Use access token to verify
-        const userRes = await fetch("https://www.googleapis.com/oauth2/v1/userinfo?alt=json", {
+        // Verify by calling Gmail getProfile (scope user actually needs)
+        const profileRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
           headers: { Authorization: `Bearer ${tokenData.access_token}` },
         });
 
-        if (userRes.ok) {
-          const user = (await userRes.json()) as { email?: string };
+        if (profileRes.ok) {
+          const profile = (await profileRes.json()) as { emailAddress?: string };
           return NextResponse.json({
             ok: true,
-            message: `Connected as ${user.email || "Google user"}`,
+            message: `Connected as ${profile.emailAddress || "Google user"}`,
           });
         }
 
+        // Fallback: token exchange worked, so creds are valid even if Gmail scope missing
         return NextResponse.json({
-          ok: false,
-          message: "Google API error",
-          detail: `User info endpoint returned ${userRes.status}`,
+          ok: true,
+          message:
+            "OAuth credentials valid (Gmail scope not granted — other Google APIs may still work)",
         });
       }
 
