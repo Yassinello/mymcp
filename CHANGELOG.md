@@ -1,42 +1,90 @@
 # Changelog
 
 All notable changes to MyMCP.
-
 ## [0.3.1] - 2026-04-13
+
+### Added
+
+- Interactive setup wizard UI + simplified CLI
+- Wizard in AppShell layout with sidebar, welcome intro, SaaS feel
+- Comprehensive UX/UI improvements to setup wizard
+- Hot env API (filesystem + Vercel REST)
+- Per-request registry for hot env reloading
+- Wizard simplified to 2 steps with auto token generation
+- /config dashboard shell with 6 tabs + first-run middleware
+- Sandbox + logs API endpoints for /config tabs
+- Sidebar points to /config tabs; setup add-pack mode accepts empty query
+- Skills store + schema + atomic file I/O
+- Skills pack manifest + MCP tool exposure
+- Skills MCP prompts exposure
+- Skills CRUD UI + API routes
+- Skills manual refresh endpoint
+- Skills claude-skill export
+- Pack-skeleton-and-source-registry
+- Tier1-read-paywalled-tool
+- Config-pack-credential-guide
+- Tier2-read-paywalled-hard
+- Cleanup-old-vault-paywall-tool
+- Pack skeleton + runActor helper
+- Manifest with allowlist + registry wiring
+- Wizard + setup test + env example for apify
+- Contract test + snapshot with apify pack
+- Pluggable KV storage
+- Destructive tool flag
+- Read version from package.json instead of hardcoding
+- Warn on missing ADMIN_AUTH_TOKEN at startup
+- Add durable observability sink via KV store
+- Add per-token rate limiting to MCP endpoint
+- Add McpToolError class and structured error codes
+- Add GitHub Issues pack (6 tools)
+- Implement multi-token auth support
+- Add Linear pack with 6 tools
+- Add Airtable pack with 7 tools
+- Auto-pull on dev start + dashboard update banner
+- Add landing page at / route with INSTANCE_MODE toggle
+- Connectors page redesign — accordion expand, inline guides, hide core
 
 ### Changed
 
-- **Renamed Packs → Connectors** across the entire codebase (directories, types, env vars in UI, dashboard labels). The user-facing concept is now "Connector" — clearer for non-developers and aligned with Zapier/Make/n8n terminology.
-- **Connectors page redesign** — cards now expand inline on click (accordion) instead of routing to a separate Edit view. The redundant "Edit" link is gone.
-- Toggle on a not-yet-configured connector now shows a "Setup needed" affordance instead of silently failing — clicking the card opens the credential form.
-- Framework-only connectors (Skills, Admin) are now hidden from the Connectors page via a new `core: true` manifest flag. They remain registered and continue to expose their tools.
-
-### Added
-
-- **Per-connector credential guides** — every user-facing connector (Google, Vault, Slack, Notion, GitHub, Linear, Airtable, Apify, Browser, Composio) now ships an in-app markdown guide with prerequisites, step-by-step credential acquisition, and troubleshooting. Rendered in the expanded card view.
-- New optional `guide?: string` and `core?: boolean` fields on `ConnectorManifest`.
-
-## [0.3.0] - 2026-04-13
-
-### Added
-
-- **GitHub Issues pack** — 6 new tools: `github_list_issues`, `github_get_issue`, `github_create_issue`, `github_update_issue`, `github_add_comment`, `github_search_issues`
-- **Structured error types** — `McpToolError` class with 8 typed error codes (`NOT_FOUND`, `UNAUTHORIZED`, `RATE_LIMITED`, `INVALID_INPUT`, `UPSTREAM_ERROR`, `TIMEOUT`, `QUOTA_EXCEEDED`, `INTERNAL`), retryable flag, and `withLogging()` integration
-- **Durable observability** — two-tier logging sink: in-memory ring buffer (fast path) + async KV persistence (Upstash/Filesystem) via fire-and-forget writes
-- **Per-token rate limiting** — sliding-window rate limiter backed by KV store, SHA-256 hashed keys, fail-open on store errors
-- **Startup auth warning** — logs a clear warning when `ADMIN_AUTH_TOKEN` is missing instead of silently accepting unauthenticated requests
-
-### Fixed
-
-- Version now read dynamically from `package.json` instead of a hardcoded string
-
-### Security
-
-- Added `SECURITY.md` with vulnerability reporting policy and responsible disclosure guidance
+- Typed tool handlers via generics
+- Streaming fetch with byte cap
+- Rename middleware to proxy
+- Use fs.promises for non-blocking I/O
+- Flatten config nav into sidebar, drop horizontal tabs
+- Rename Packs → Connectors across codebase
 
 ### Documentation
 
-- Expanded `CONTRIBUTING.md` into a full community contribution guide covering setup, conventions, and PR workflow
+- Update CHANGELOG for v0.2.1
+- Update README to reflect 9 packs and 60 tools
+- Fix tool counts to match contract snapshot (59 tools, not 60)
+- Expand CONTRIBUTING.md into full community contribution guide
+- Add SECURITY.md with vulnerability reporting policy
+- Document three upgrade paths (auto predev, dashboard banner, manual)
+
+### Fixed
+
+- Wizard UI polish — design system alignment, tooltips, collapsible guides, better UX
+- Suppress npm install warnings in CLI installer
+- Merge wizard steps 1+2, fix Google test, add error details toggle
+- Setup wizard hydration warning + Google test uses Gmail API
+- Security hardening + sandbox validation + allowlist + hot reload
+- Make update script Windows-compatible + bump to 0.3.1
+- CheckAdminAuth now reads mymcp_admin_token cookie
+- Bypass / redirect when INSTANCE_MODE != personal
+
+### Maintenance
+
+- Publish @yassinello/create-mymcp@0.3.1
+- Remove unlinked /packs and /playground routes
+- Release v0.3.0 — version bump, changelog, test fix
+- Update contract test to include github and linear packs
+- Bump version to 0.3.1
+
+### Test
+
+- Add unit tests for lib modules
+- Add contract tests for GitHub Issues pack
 
 ## [0.2.1] - 2026-04-12
 
