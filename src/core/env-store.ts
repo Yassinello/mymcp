@@ -149,6 +149,152 @@ function sanitizeVercelBody(text: string, token: string): string {
   return out;
 }
 
+// ── Vercel auto-magic redeploy ───────────────────────────────────────
+
+/** True when VERCEL_TOKEN + VERCEL_PROJECT_ID are both present. */
+export function isVercelAutoMagicAvailable(): boolean {
+  return Boolean(process.env.VERCEL_TOKEN && process.env.VERCEL_PROJECT_ID);
+}
+
+interface VercelGitSource {
+  type?: string;
+  repoId?: number | string;
+  ref?: string;
+  org?: string;
+  repo?: string;
+}
+
+interface VercelDeploymentListItem {
+  uid?: string;
+  name?: string;
+  meta?: { githubCommitRef?: string; [k: string]: unknown };
+  gitSource?: VercelGitSource;
+}
+
+interface VercelDeploymentsListResponse {
+  deployments?: VercelDeploymentListItem[];
+}
+
+interface VercelCreateDeploymentResponse {
+  id?: string;
+  uid?: string;
+}
+
+/**
+ * Trigger a fresh production deployment of the latest git commit on Vercel.
+ *
+ * Best-effort: never throws. Returns `{ ok: false, error }` on any failure
+ * with the Vercel token stripped from any error message. Has a 10s timeout
+ * on each upstream fetch via AbortController.
+ */
+export async function triggerVercelRedeploy(): Promise<{
+  ok: boolean;
+  deploymentId?: string;
+  error?: string;
+}> {
+  const token = process.env.VERCEL_TOKEN || "";
+  const projectId = process.env.VERCEL_PROJECT_ID || "";
+  const teamId = process.env.VERCEL_TEAM_ID || "";
+
+  if (!token || !projectId) {
+    return { ok: false, error: "VERCEL_TOKEN/VERCEL_PROJECT_ID not set" };
+  }
+
+  const teamQs = teamId ? `&teamId=${encodeURIComponent(teamId)}` : "";
+  const teamQsAlone = teamId ? `?teamId=${encodeURIComponent(teamId)}` : "";
+
+  // Step 1: fetch latest production deployment to extract gitSource + name.
+  let latest: VercelDeploymentListItem | undefined;
+  {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10_000);
+    try {
+      const res = await fetch(
+        `https://api.vercel.com/v6/deployments?projectId=${encodeURIComponent(projectId)}&limit=1&target=production${teamQs}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: ctrl.signal,
+        }
+      );
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        return {
+          ok: false,
+          error: `Vercel deployments list failed: ${res.status} ${sanitizeVercelBody(text, token)}`,
+        };
+      }
+      const data = (await res.json()) as VercelDeploymentsListResponse;
+      latest = data.deployments?.[0];
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return {
+        ok: false,
+        error: `Vercel deployments list error: ${sanitizeVercelBody(msg, token)}`,
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  if (!latest) {
+    return { ok: false, error: "No prior production deployment found to redeploy" };
+  }
+
+  const projectName = latest.name;
+  const gitSource = latest.gitSource;
+  const ref = gitSource?.ref || latest.meta?.githubCommitRef;
+  const repoId = gitSource?.repoId;
+
+  if (!projectName || !gitSource?.type || !repoId || !ref) {
+    return {
+      ok: false,
+      error: "Latest deployment is missing gitSource info — cannot redeploy automatically",
+    };
+  }
+
+  // Step 2: create a fresh production deployment from the same git source.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10_000);
+  try {
+    const body = {
+      name: projectName,
+      target: "production",
+      gitSource: {
+        type: gitSource.type,
+        repoId,
+        ref,
+      },
+    };
+    const res = await fetch(`https://api.vercel.com/v13/deployments${teamQsAlone}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      return {
+        ok: false,
+        error: `Vercel create deployment failed: ${res.status} ${sanitizeVercelBody(text, token)}`,
+      };
+    }
+    const data = (await res.json()) as VercelCreateDeploymentResponse;
+    const deploymentId = data.id || data.uid;
+    return { ok: true, deploymentId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      error: `Vercel create deployment error: ${sanitizeVercelBody(msg, token)}`,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 class VercelEnvStore implements EnvStore {
   kind = "vercel" as const;
   private token: string;

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { ToolLog } from "@/core/logging";
 import type { InstanceConfig } from "@/core/types";
+import { HealthWidget } from "./health-widget";
 
 type UpdateStatus =
   | { state: "loading" }
@@ -95,6 +96,9 @@ export function OverviewTab({
 
   return (
     <div className="space-y-6">
+      {/* Instance health widget */}
+      <HealthWidget />
+
       {/* Update banner */}
       {update.state === "ready" && update.available && result.state !== "done" && (
         <div className="border border-orange/30 bg-orange/5 rounded-lg p-4 flex items-center gap-4">

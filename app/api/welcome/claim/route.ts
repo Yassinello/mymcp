@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
-import { getOrCreateClaim, isFirstRunMode, isBootstrapActive } from "@/core/first-run";
-import { __internals } from "@/core/first-run";
+import {
+  getOrCreateClaim,
+  isFirstRunMode,
+  isBootstrapActive,
+  rehydrateBootstrapAsync,
+  FIRST_RUN_COOKIE_NAME,
+  CLAIM_TTL_MS,
+} from "@/core/first-run";
 
 /**
  * POST /api/welcome/claim
@@ -12,6 +18,7 @@ import { __internals } from "@/core/first-run";
  *   { status: "claimed-by-other" }
  */
 export async function POST(request: Request) {
+  await rehydrateBootstrapAsync();
   if (!isFirstRunMode() && !isBootstrapActive()) {
     return NextResponse.json({ status: "already-initialized" });
   }
@@ -30,7 +37,7 @@ export async function POST(request: Request) {
     const secureFlag = process.env.VERCEL === "1" ? "; Secure" : "";
     res.headers.set(
       "set-cookie",
-      `${__internals.COOKIE_NAME}=${encodeURIComponent(result.cookieToSet)}; Path=/; HttpOnly; SameSite=Strict${secureFlag}; Max-Age=${Math.floor(__internals.CLAIM_TTL_MS / 1000)}`
+      `${FIRST_RUN_COOKIE_NAME}=${encodeURIComponent(result.cookieToSet)}; Path=/; HttpOnly; SameSite=Strict${secureFlag}; Max-Age=${Math.floor(CLAIM_TTL_MS / 1000)}`
     );
   }
 

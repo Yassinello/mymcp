@@ -1,5 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { parseEnvFile, serializeEnv } from "./env-store";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import {
+  parseEnvFile,
+  serializeEnv,
+  isVercelAutoMagicAvailable,
+  triggerVercelRedeploy,
+} from "./env-store";
 
 describe("parseEnvFile", () => {
   it("parses simple KEY=value pairs", () => {
@@ -88,5 +93,134 @@ describe("serializeEnv", () => {
     const out = serializeEnv(rawLines, { OLD: "2", NEW: "3" });
     expect(out).toContain("OLD=2");
     expect(out).toContain("NEW=3");
+  });
+});
+
+describe("isVercelAutoMagicAvailable", () => {
+  const origToken = process.env.VERCEL_TOKEN;
+  const origProj = process.env.VERCEL_PROJECT_ID;
+
+  afterEach(() => {
+    process.env.VERCEL_TOKEN = origToken;
+    process.env.VERCEL_PROJECT_ID = origProj;
+  });
+
+  it("returns false when token missing", () => {
+    delete process.env.VERCEL_TOKEN;
+    process.env.VERCEL_PROJECT_ID = "proj";
+    expect(isVercelAutoMagicAvailable()).toBe(false);
+  });
+
+  it("returns false when projectId missing", () => {
+    process.env.VERCEL_TOKEN = "tkn";
+    delete process.env.VERCEL_PROJECT_ID;
+    expect(isVercelAutoMagicAvailable()).toBe(false);
+  });
+
+  it("returns true when both present", () => {
+    process.env.VERCEL_TOKEN = "tkn";
+    process.env.VERCEL_PROJECT_ID = "proj";
+    expect(isVercelAutoMagicAvailable()).toBe(true);
+  });
+});
+
+describe("triggerVercelRedeploy", () => {
+  const origToken = process.env.VERCEL_TOKEN;
+  const origProj = process.env.VERCEL_PROJECT_ID;
+  const origTeam = process.env.VERCEL_TEAM_ID;
+  const origFetch = global.fetch;
+
+  beforeEach(() => {
+    process.env.VERCEL_TOKEN = "secret-tkn-xyz";
+    process.env.VERCEL_PROJECT_ID = "proj_123";
+    delete process.env.VERCEL_TEAM_ID;
+  });
+
+  afterEach(() => {
+    process.env.VERCEL_TOKEN = origToken;
+    process.env.VERCEL_PROJECT_ID = origProj;
+    process.env.VERCEL_TEAM_ID = origTeam;
+    global.fetch = origFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("returns error when env not set", async () => {
+    delete process.env.VERCEL_TOKEN;
+    const out = await triggerVercelRedeploy();
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/VERCEL_TOKEN/);
+  });
+
+  it("returns ok with deploymentId on happy path", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/v6/deployments")) {
+        return new Response(
+          JSON.stringify({
+            deployments: [
+              {
+                uid: "dpl_old",
+                name: "my-mcp",
+                meta: { githubCommitRef: "main" },
+                gitSource: { type: "github", repoId: 12345, ref: "main" },
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/v13/deployments")) {
+        return new Response(JSON.stringify({ id: "dpl_new" }), { status: 200 });
+      }
+      return new Response("nope", { status: 404 });
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const out = await triggerVercelRedeploy();
+    expect(out.ok).toBe(true);
+    expect(out.deploymentId).toBe("dpl_new");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("strips the Vercel token from upstream errors", async () => {
+    global.fetch = (async () =>
+      new Response("error containing secret-tkn-xyz oops", {
+        status: 500,
+      })) as unknown as typeof fetch;
+    const out = await triggerVercelRedeploy();
+    expect(out.ok).toBe(false);
+    expect(out.error).toBeDefined();
+    expect(out.error).not.toContain("secret-tkn-xyz");
+    expect(out.error).toContain("<redacted>");
+  });
+
+  it("returns error when no prior production deployment exists", async () => {
+    global.fetch = (async () =>
+      new Response(JSON.stringify({ deployments: [] }), {
+        status: 200,
+      })) as unknown as typeof fetch;
+    const out = await triggerVercelRedeploy();
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/No prior production deployment/);
+  });
+
+  it("returns error when latest deployment lacks gitSource", async () => {
+    global.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          deployments: [{ uid: "dpl_x", name: "my-mcp" }],
+        }),
+        { status: 200 }
+      )) as unknown as typeof fetch;
+    const out = await triggerVercelRedeploy();
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/gitSource/);
+  });
+
+  it("never throws — wraps thrown fetch errors", async () => {
+    global.fetch = (async () => {
+      throw new Error("boom secret-tkn-xyz");
+    }) as unknown as typeof fetch;
+    const out = await triggerVercelRedeploy();
+    expect(out.ok).toBe(false);
+    expect(out.error).not.toContain("secret-tkn-xyz");
   });
 });

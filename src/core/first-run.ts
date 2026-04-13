@@ -28,9 +28,12 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getKVStore } from "./kv-store";
 
-const COOKIE_NAME = "mymcp_firstrun_claim";
-const CLAIM_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const KV_BOOTSTRAP_KEY = "mymcp:firstrun:bootstrap";
+
+export const FIRST_RUN_COOKIE_NAME = "mymcp_firstrun_claim";
+export const CLAIM_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const BOOTSTRAP_TTL_MS = 15 * 60 * 1000; // 15 minutes (Vercel /tmp lifetime)
 const BOOTSTRAP_PATH = join(tmpdir(), ".mymcp-bootstrap.json");
 
@@ -47,6 +50,62 @@ interface BootstrapPayload {
 // Module-level state. Reset on cold start; hydrated from /tmp where possible.
 const claims = new Map<string, ClaimRecord>();
 let activeBootstrap: BootstrapPayload | null = null;
+
+/**
+ * KV is OPTIONAL. The factory in kv-store.ts always returns *something*
+ * (filesystem fallback) but for cross-instance persistence we only want
+ * a backend that's actually shared across instances. On Vercel without
+ * Upstash, the kv-store fallback is /tmp — which gives no benefit over
+ * the bootstrap /tmp file we already write. So we skip mirroring there.
+ * Off-Vercel we mirror to ./data/kv.json (genuinely durable + shared).
+ */
+function isExternalKvAvailable(): boolean {
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) return true;
+  if (process.env.VERCEL !== "1") return true;
+  return false;
+}
+
+async function persistBootstrapToKv(payload: BootstrapPayload): Promise<void> {
+  if (!isExternalKvAvailable()) return;
+  try {
+    const kv = getKVStore();
+    await kv.set(KV_BOOTSTRAP_KEY, JSON.stringify(payload));
+  } catch (err) {
+    console.info(
+      `[MyMCP first-run] KV persist skipped: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+async function loadBootstrapFromKv(): Promise<BootstrapPayload | null> {
+  if (!isExternalKvAvailable()) return null;
+  try {
+    const kv = getKVStore();
+    const raw = await kv.get(KV_BOOTSTRAP_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as BootstrapPayload;
+    if (!parsed?.claimId || !parsed?.token || !parsed?.createdAt) return null;
+    if (Date.now() - parsed.createdAt > BOOTSTRAP_TTL_MS) return null;
+    return parsed;
+  } catch (err) {
+    console.info(
+      `[MyMCP first-run] KV load skipped: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return null;
+  }
+}
+
+async function deleteBootstrapFromKv(): Promise<void> {
+  if (!isExternalKvAvailable()) return;
+  try {
+    const kv = getKVStore();
+    await kv.delete(KV_BOOTSTRAP_KEY);
+  } catch (err) {
+    console.info(
+      `[MyMCP first-run] KV delete skipped: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
 
 function getSigningSecret(): string {
   return `mymcp-firstrun-v1:${process.env.VERCEL_GIT_COMMIT_SHA || "local-dev-secret"}`;
@@ -82,7 +141,7 @@ function decodeCookie(raw: string): string | null {
 function readClaimCookie(request: Request): string | null {
   const cookieHeader = request.headers.get("cookie");
   if (!cookieHeader) return null;
-  const re = new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]+)`);
+  const re = new RegExp(`(?:^|;\\s*)${FIRST_RUN_COOKIE_NAME}=([^;]+)`);
   const m = cookieHeader.match(re);
   if (!m) return null;
   return decodeCookie(decodeURIComponent(m[1]));
@@ -143,6 +202,7 @@ export function getOrCreateClaim(request: Request): ClaimResult {
 
   const claimId = randomBytes(32).toString("hex");
   claims.set(claimId, { createdAt: Date.now() });
+  console.info(`[MyMCP first-run] new claim minted (id=${claimId.slice(0, 8)}…)`);
   return {
     claimId,
     isNewClaim: true,
@@ -177,17 +237,48 @@ export function bootstrapToken(claimId: string): { token: string } {
 
   activeBootstrap = { claimId, token, createdAt: Date.now() };
 
+  let persisted = false;
   try {
     writeFileSync(BOOTSTRAP_PATH, JSON.stringify(activeBootstrap), { encoding: "utf-8" });
+    persisted = true;
   } catch {
     // Best effort: /tmp may be read-only in some environments.
   }
 
+  // Fire-and-forget cross-instance persistence. Keeps bootstrapToken sync.
+  void persistBootstrapToKv(activeBootstrap);
+
+  console.info(
+    `[MyMCP first-run] bootstrap token minted (claim=${claimId.slice(0, 8)}…, persisted=${persisted})`
+  );
   return { token };
+}
+
+/**
+ * Force-clear all bootstrap state (in-memory + on-disk). Distinct from
+ * clearBootstrap() in that it logs loudly — used by the recovery escape hatch.
+ */
+export function forceReset(): void {
+  activeBootstrap = null;
+  claims.clear();
+  try {
+    if (existsSync(BOOTSTRAP_PATH)) unlinkSync(BOOTSTRAP_PATH);
+  } catch {
+    // Ignore.
+  }
+  void deleteBootstrapFromKv();
+  console.info("[MyMCP first-run] forceReset() called — bootstrap state cleared");
 }
 
 /** Re-hydrate bootstrap state from /tmp on cold start. Called at module load. */
 export function rehydrateBootstrapFromTmp(): void {
+  if (process.env.MYMCP_RECOVERY_RESET === "1") {
+    forceReset();
+    console.warn(
+      "[MyMCP first-run] MYMCP_RECOVERY_RESET=1 detected — bootstrap reset. Remove the env var after recovery."
+    );
+    return;
+  }
   try {
     if (!existsSync(BOOTSTRAP_PATH)) return;
     const raw = readFileSync(BOOTSTRAP_PATH, "utf-8");
@@ -199,6 +290,9 @@ export function rehydrateBootstrapFromTmp(): void {
     if (!process.env.MCP_AUTH_TOKEN) {
       process.env.MCP_AUTH_TOKEN = parsed.token;
     }
+    console.info(
+      `[MyMCP first-run] re-hydrated bootstrap from /tmp (claim=${parsed.claimId.slice(0, 8)}…, age=${Math.round((Date.now() - parsed.createdAt) / 1000)}s)`
+    );
   } catch {
     // Ignore malformed/missing bootstrap state.
   }
@@ -213,6 +307,37 @@ export function clearBootstrap(): void {
   } catch {
     // Ignore.
   }
+  void deleteBootstrapFromKv();
+}
+
+/**
+ * Async re-hydration: first try /tmp (sync, fast path), then KV if /tmp
+ * came up empty. If KV had a payload that /tmp didn't, mirror it back to
+ * /tmp so the next cold start on this same instance hits the fast path.
+ *
+ * Handlers should call this at entry to pick up bootstrap state minted on
+ * a different cold-start instance. Cheap when KV is unconfigured (no-op).
+ */
+export async function rehydrateBootstrapAsync(): Promise<void> {
+  rehydrateBootstrapFromTmp();
+  if (activeBootstrap) return;
+  if (!isExternalKvAvailable()) return;
+  const fromKv = await loadBootstrapFromKv();
+  if (!fromKv) return;
+  activeBootstrap = fromKv;
+  claims.set(fromKv.claimId, { createdAt: fromKv.createdAt });
+  if (!process.env.MCP_AUTH_TOKEN) {
+    process.env.MCP_AUTH_TOKEN = fromKv.token;
+  }
+  // Mirror back to /tmp for warm-instance fast path.
+  try {
+    writeFileSync(BOOTSTRAP_PATH, JSON.stringify(fromKv), { encoding: "utf-8" });
+  } catch {
+    // Ignore.
+  }
+  console.info(
+    `[MyMCP first-run] re-hydrated bootstrap from KV (claim=${fromKv.claimId.slice(0, 8)}…)`
+  );
 }
 
 /** Test-only helper. Resets all module-level state. */
@@ -224,11 +349,18 @@ export function __resetFirstRunForTests(): void {
   } catch {
     // Ignore.
   }
+  // Also clear KV (sync path with best-effort fire-and-forget).
+  void deleteBootstrapFromKv();
 }
 
+/** Test-only helper. Awaitable variant — guarantees KV is cleared too. */
+export async function __resetFirstRunForTestsAsync(): Promise<void> {
+  __resetFirstRunForTests();
+  await deleteBootstrapFromKv();
+}
+
+// Test-only internals (not part of the public API).
 export const __internals = {
-  COOKIE_NAME,
-  CLAIM_TTL_MS,
   BOOTSTRAP_TTL_MS,
   BOOTSTRAP_PATH,
   encodeCookie,

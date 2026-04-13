@@ -8,6 +8,17 @@ interface InitResponse {
   ok: boolean;
   token: string;
   instanceUrl: string;
+  autoMagic?: boolean;
+  envWritten?: boolean;
+  redeployTriggered?: boolean;
+  redeployError?: string;
+}
+
+interface AutoMagicState {
+  autoMagic: boolean;
+  envWritten: boolean;
+  redeployTriggered: boolean;
+  redeployError?: string;
 }
 
 interface StatusResponse {
@@ -25,6 +36,7 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
   const [copied, setCopied] = useState(false);
   const [snippetOpen, setSnippetOpen] = useState(false);
   const [permanent, setPermanent] = useState(false);
+  const [autoMagicState, setAutoMagicState] = useState<AutoMagicState | null>(null);
 
   // Step 1: claim the instance. If we re-enter with bootstrap already active
   // (user came back to /welcome before the redeploy), auto-call init so we
@@ -49,6 +61,12 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
             if (!cancelled && initRes.ok && "token" in initData) {
               setToken(initData.token);
               setInstanceUrl(initData.instanceUrl || window.location.origin);
+              setAutoMagicState({
+                autoMagic: Boolean(initData.autoMagic),
+                envWritten: Boolean(initData.envWritten),
+                redeployTriggered: Boolean(initData.redeployTriggered),
+                redeployError: initData.redeployError,
+              });
             }
           } catch {
             // Silent — user can still click "Initialize" manually below.
@@ -90,6 +108,12 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
       }
       setToken(data.token);
       setInstanceUrl(data.instanceUrl || window.location.origin);
+      setAutoMagicState({
+        autoMagic: Boolean(data.autoMagic),
+        envWritten: Boolean(data.envWritten),
+        redeployTriggered: Boolean(data.redeployTriggered),
+        redeployError: data.redeployError,
+      });
     } catch {
       setError("Network error.");
     } finally {
@@ -174,6 +198,10 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
         >
           {busy ? "Generating…" : "Initialize this instance"}
         </button>
+        <a href="/config" className="block mt-4 text-sm text-slate-500 hover:text-slate-300">
+          Or explore the dashboard first →
+        </a>
+        <RecoveryFooter />
       </Shell>
     );
   }
@@ -181,11 +209,16 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
   // Token visible: either freshly minted or we re-entered with bootstrap active.
   return (
     <Shell wide>
-      {permanent && (
-        <div className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-300">
-          Setup complete — your Vercel deployment is now using the permanent token.
-        </div>
-      )}
+      {permanent &&
+        !(
+          autoMagicState?.autoMagic &&
+          autoMagicState.envWritten &&
+          autoMagicState.redeployTriggered
+        ) && (
+          <div className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-300">
+            Setup complete — your Vercel deployment is now using the permanent token.
+          </div>
+        )}
 
       <h1 className="text-3xl font-bold text-white mb-3 tracking-tight">Your auth token</h1>
       <p className="text-slate-400 mb-6 leading-relaxed">
@@ -210,50 +243,107 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
         </div>
       )}
 
-      <ol className="space-y-4 mb-8">
-        <li className="flex items-start gap-3">
-          <span className="text-emerald-400 mt-0.5">✓</span>
-          <span className="text-slate-300">Token generated</span>
-        </li>
-        <li className="flex items-start gap-3">
-          <span className="text-slate-500 mt-0.5">□</span>
-          <span className="text-slate-300">
-            Add token to Vercel as <code className="text-blue-300">MCP_AUTH_TOKEN</code> →{" "}
-            <a
-              href={vercelEnvUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 underline"
-            >
-              Open Vercel dashboard
-            </a>
-          </span>
-        </li>
-        <li className="flex items-start gap-3">
-          <span className="text-slate-500 mt-0.5">□</span>
-          <span className="text-slate-300">
-            Redeploy from the Deployments tab →{" "}
-            <a
-              href={vercelDeployUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 underline"
-            >
-              Open Vercel dashboard
-            </a>
-          </span>
-        </li>
-        <li className="flex items-start gap-3">
-          <span className="text-slate-500 mt-0.5">□</span>
-          <button
-            type="button"
-            onClick={() => setSnippetOpen((v) => !v)}
-            className="text-left text-slate-300 hover:text-white"
-          >
-            Configure Claude Desktop {snippetOpen ? "↑" : "↓"}
-          </button>
-        </li>
-      </ol>
+      {(() => {
+        const autoMagicSuccess =
+          autoMagicState?.autoMagic &&
+          autoMagicState.envWritten &&
+          autoMagicState.redeployTriggered;
+        const autoMagicPartial =
+          autoMagicState?.autoMagic &&
+          (!autoMagicState.envWritten || !autoMagicState.redeployTriggered);
+
+        if (autoMagicSuccess) {
+          return (
+            <ol className="space-y-4 mb-8">
+              <li className="flex items-start gap-3">
+                <span className="text-emerald-400 mt-0.5">✓</span>
+                <span className="text-slate-300">Token generated</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-emerald-400 mt-0.5">✓</span>
+                <span className="text-slate-300">Written to Vercel env vars</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span
+                  className={permanent ? "text-emerald-400 mt-0.5" : "text-amber-400 mt-0.5"}
+                  aria-hidden
+                >
+                  {permanent ? "✓" : "⏳"}
+                </span>
+                <span className="text-slate-300">
+                  {permanent ? "Redeployed — your instance is permanent." : "Redeploying… (~60s)"}
+                </span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-slate-500 mt-0.5">□</span>
+                <button
+                  type="button"
+                  onClick={() => setSnippetOpen((v) => !v)}
+                  className="text-left text-slate-300 hover:text-white"
+                >
+                  Configure Claude Desktop {snippetOpen ? "↑" : "↓"}
+                </button>
+              </li>
+            </ol>
+          );
+        }
+
+        return (
+          <>
+            {autoMagicPartial && (
+              <div className="mb-4 rounded-lg border border-amber-900/60 bg-amber-950/40 px-4 py-3 text-sm text-amber-300">
+                Auto-deploy partially failed
+                {autoMagicState?.redeployError ? ` (${autoMagicState.redeployError})` : ""} — fall
+                back to manual steps below.
+              </div>
+            )}
+            <ol className="space-y-4 mb-8">
+              <li className="flex items-start gap-3">
+                <span className="text-emerald-400 mt-0.5">✓</span>
+                <span className="text-slate-300">Token generated</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-slate-500 mt-0.5">□</span>
+                <span className="text-slate-300">
+                  Add token to Vercel as <code className="text-blue-300">MCP_AUTH_TOKEN</code> →{" "}
+                  <a
+                    href={vercelEnvUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300 underline"
+                  >
+                    Open Vercel dashboard
+                  </a>
+                </span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-slate-500 mt-0.5">□</span>
+                <span className="text-slate-300">
+                  Redeploy from the Deployments tab →{" "}
+                  <a
+                    href={vercelDeployUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300 underline"
+                  >
+                    Open Vercel dashboard
+                  </a>
+                </span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-slate-500 mt-0.5">□</span>
+                <button
+                  type="button"
+                  onClick={() => setSnippetOpen((v) => !v)}
+                  className="text-left text-slate-300 hover:text-white"
+                >
+                  Configure Claude Desktop {snippetOpen ? "↑" : "↓"}
+                </button>
+              </li>
+            </ol>
+          </>
+        );
+      })()}
 
       {snippetOpen && (
         <pre className="mb-8 overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-4 text-xs text-slate-300">
@@ -278,7 +368,24 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
       >
         Continue to dashboard →
       </a>
+      <RecoveryFooter />
     </Shell>
+  );
+}
+
+function RecoveryFooter() {
+  return (
+    <details className="mt-12 text-xs text-slate-600">
+      <summary className="cursor-pointer hover:text-slate-400">Locked out? Recover access</summary>
+      <p className="mt-2 leading-relaxed">
+        If you&apos;ve lost access to this instance, set{" "}
+        <code className="text-slate-500">MYMCP_RECOVERY_RESET=1</code> in your Vercel project&apos;s
+        environment variables and trigger a redeploy. After the new deployment boots, the bootstrap
+        state will be cleared and you can claim this instance again from <code>/welcome</code>.
+        Remove <code className="text-slate-500">MYMCP_RECOVERY_RESET</code> after recovery —
+        otherwise it resets on every cold start.
+      </p>
+    </details>
   );
 }
 

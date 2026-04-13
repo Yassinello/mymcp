@@ -2,7 +2,9 @@ import { AppShell } from "../sidebar";
 import { getInstanceConfig } from "@/core/config";
 import { resolveRegistry } from "@/core/registry";
 import { getRecentLogs } from "@/core/logging";
+import { isFirstRunMode } from "@/core/first-run";
 import { ConfigTabs } from "./tabs";
+import { DryRunBanner } from "./dry-run-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -53,8 +55,14 @@ export default async function ConfigPage({
     })),
   }));
 
+  // Dry-run mode: instance has no MCP_AUTH_TOKEN. The user reached this page
+  // via the /welcome claim cookie (checkAdminAuth's isClaimer bypass) and is
+  // exploring before minting a token.
+  const dryRunMode = isFirstRunMode();
+
   return (
     <AppShell title={meta.title} subtitle={meta.subtitle} displayName={config.displayName}>
+      {dryRunMode && <DryRunBanner />}
       <ConfigTabs
         activeTab={tab}
         connectors={connectorSummaries}

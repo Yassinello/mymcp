@@ -5,6 +5,9 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // first-run tests share OS /tmp paths; run files sequentially to avoid
+    // cross-worker races on BOOTSTRAP_PATH.
+    fileParallelism: false,
   },
   resolve: {
     alias: {
