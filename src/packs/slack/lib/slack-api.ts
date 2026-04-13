@@ -1,3 +1,5 @@
+import { McpToolError, ErrorCode } from "@/core/errors";
+
 const SLACK_API = "https://slack.com/api";
 
 interface SlackResponse {
@@ -10,7 +12,15 @@ async function slackFetch<T extends SlackResponse>(
   params: Record<string, string | number | boolean | undefined> = {}
 ): Promise<T> {
   const token = process.env.SLACK_BOT_TOKEN;
-  if (!token) throw new Error("SLACK_BOT_TOKEN not configured");
+  if (!token)
+    throw new McpToolError({
+      code: ErrorCode.CONFIGURATION_ERROR,
+      toolName: "slack",
+      message: "SLACK_BOT_TOKEN not configured",
+      userMessage:
+        "Slack pack is not configured. Add SLACK_BOT_TOKEN to your environment variables.",
+      retryable: false,
+    });
 
   const body = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -28,7 +38,20 @@ async function slackFetch<T extends SlackResponse>(
 
   const data = (await res.json()) as T;
   if (!data.ok) {
-    throw new Error(`Slack API error: ${data.error || "unknown"}`);
+    const slackError = data.error || "unknown";
+    const isAuth =
+      slackError === "not_authed" ||
+      slackError === "invalid_auth" ||
+      slackError === "token_revoked";
+    throw new McpToolError({
+      code: isAuth ? ErrorCode.AUTH_FAILED : ErrorCode.EXTERNAL_API_ERROR,
+      toolName: "slack",
+      message: `Slack API error: ${slackError}`,
+      userMessage: isAuth
+        ? `Slack authentication failed (${slackError}). Check your SLACK_BOT_TOKEN.`
+        : `Slack API error: ${slackError}`,
+      retryable: slackError === "ratelimited",
+    });
   }
   return data;
 }
@@ -210,7 +233,15 @@ export async function searchMessages(
 ): Promise<{ text: string; channel: string; user: string; ts: string; date: string }[]> {
   // Note: search requires a user token (xoxp-), not a bot token
   const token = process.env.SLACK_USER_TOKEN || process.env.SLACK_BOT_TOKEN;
-  if (!token) throw new Error("SLACK_BOT_TOKEN or SLACK_USER_TOKEN not configured");
+  if (!token)
+    throw new McpToolError({
+      code: ErrorCode.CONFIGURATION_ERROR,
+      toolName: "slack",
+      message: "SLACK_BOT_TOKEN or SLACK_USER_TOKEN not configured",
+      userMessage:
+        "Slack search requires SLACK_USER_TOKEN or SLACK_BOT_TOKEN in your environment variables.",
+      retryable: false,
+    });
 
   const res = await fetch(
     `${SLACK_API}/search.messages?query=${encodeURIComponent(query)}&count=${count || 10}`,
@@ -228,7 +259,14 @@ export async function searchMessages(
     };
   };
 
-  if (!data.ok) throw new Error(`Slack search error: ${data.error}`);
+  if (!data.ok)
+    throw new McpToolError({
+      code: ErrorCode.EXTERNAL_API_ERROR,
+      toolName: "slack",
+      message: `Slack search error: ${data.error}`,
+      userMessage: `Slack search failed: ${data.error}`,
+      retryable: data.error === "ratelimited",
+    });
 
   return (data.messages?.matches || []).map((m) => ({
     text: m.text,

@@ -10,6 +10,8 @@ export interface ToolResult {
   [key: string]: unknown;
   content: { type: "text"; text: string }[];
   isError?: boolean;
+  /** Machine-readable error code from McpToolError — present on error responses only */
+  errorCode?: string;
 }
 
 /** Single tool definition — the unit of functionality.

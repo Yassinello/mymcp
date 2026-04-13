@@ -1,4 +1,5 @@
 import { getGoogleAccessToken } from "./google-auth";
+import { McpToolError, ErrorCode } from "@/core/errors";
 
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 500;
@@ -45,7 +46,35 @@ export async function googleFetch(url: string, opts: GoogleFetchOpts = {}): Prom
         continue;
       }
 
+      if (res.status === 429) {
+        throw new McpToolError({
+          code: ErrorCode.RATE_LIMITED,
+          toolName: "google",
+          message: `Google API rate limited: ${url}`,
+          userMessage: "Google API rate limit reached. Please try again in a moment.",
+          retryable: true,
+        });
+      }
+
       // Surface 4xx errors clearly (except 404 which callers may handle)
+      if (res.status === 401 || res.status === 403) {
+        const body = await res.text();
+        let detail = body;
+        try {
+          const json = JSON.parse(body);
+          detail = json.error?.message || json.error_description || body;
+        } catch {
+          /* not JSON */
+        }
+        throw new McpToolError({
+          code: ErrorCode.AUTH_FAILED,
+          toolName: "google",
+          message: `Google API ${res.status}: ${detail}`,
+          userMessage: `Google authentication failed (${res.status}). Check your credentials.`,
+          retryable: false,
+        });
+      }
+
       if (res.status >= 400 && res.status !== 404) {
         const body = await res.text();
         let detail = body;
@@ -55,17 +84,31 @@ export async function googleFetch(url: string, opts: GoogleFetchOpts = {}): Prom
         } catch {
           /* not JSON */
         }
-        throw new Error(`Google API ${res.status}: ${detail} (${opts.method || "GET"} ${url})`);
+        throw new McpToolError({
+          code: ErrorCode.EXTERNAL_API_ERROR,
+          toolName: "google",
+          message: `Google API ${res.status}: ${detail} (${opts.method || "GET"} ${url})`,
+          userMessage: `Google API error (${res.status}): ${detail}`,
+          retryable: res.status >= 500,
+        });
       }
 
       return res;
     } catch (err: unknown) {
+      if (err instanceof McpToolError) throw err;
       if (err instanceof Error && err.name === "AbortError") {
         if (attempt < MAX_RETRIES) {
           await sleep(INITIAL_BACKOFF_MS * Math.pow(2, attempt));
           continue;
         }
-        throw new Error(`Google API timeout after ${timeoutMs}ms: ${url}`, { cause: err });
+        throw new McpToolError({
+          code: ErrorCode.TIMEOUT,
+          toolName: "google",
+          message: `Google API timeout after ${timeoutMs}ms: ${url}`,
+          userMessage: "Google API request timed out. Please try again.",
+          retryable: true,
+          cause: err,
+        });
       }
       throw err;
     } finally {
@@ -74,7 +117,13 @@ export async function googleFetch(url: string, opts: GoogleFetchOpts = {}): Prom
   }
 
   // Should never reach here, but TypeScript needs it
-  throw new Error(`Google API: max retries exceeded for ${url}`);
+  throw new McpToolError({
+    code: ErrorCode.EXTERNAL_API_ERROR,
+    toolName: "google",
+    message: `Google API: max retries exceeded for ${url}`,
+    userMessage: "Google API is unavailable after multiple retries. Please try again later.",
+    retryable: true,
+  });
 }
 
 /**

@@ -1,10 +1,14 @@
 import { getKVStore } from "./kv-store";
+import { McpToolError } from "./errors";
+import type { ToolResult } from "./types";
 
 export interface ToolLog {
   tool: string;
   durationMs: number;
   status: "success" | "error";
   error?: string;
+  errorCode?: string;
+  retryable?: boolean;
   timestamp: string;
 }
 
@@ -19,7 +23,9 @@ export function logToolCall(log: ToolLog) {
   }
 
   const emoji = log.status === "success" ? "✓" : "✗";
-  const errorSuffix = log.error ? ` — ${log.error}` : "";
+  const errorSuffix = log.error
+    ? ` — ${log.errorCode ? `[${log.errorCode}] ` : ""}${log.error}`
+    : "";
   console.log(`[MyMCP] ${emoji} ${log.tool} (${log.durationMs}ms)${errorSuffix}`);
 
   // Write to durable KV store if enabled (fire-and-forget)
@@ -42,6 +48,8 @@ export function logToolCall(log: ToolLog) {
           text: `[MyMCP] Tool error: ${log.tool} — ${log.error} (${log.durationMs}ms)`,
           tool: log.tool,
           error: log.error,
+          errorCode: log.errorCode,
+          retryable: log.retryable,
           durationMs: log.durationMs,
           timestamp: log.timestamp,
         }),
@@ -125,10 +133,10 @@ export async function getDurableLogs(
   return results;
 }
 
-export function withLogging<TParams, TResult>(
+export function withLogging<TParams>(
   toolName: string,
-  handler: (params: TParams) => Promise<TResult>
-): (params: TParams) => Promise<TResult> {
+  handler: (params: TParams) => Promise<ToolResult>
+): (params: TParams) => Promise<ToolResult> {
   return async (params: TParams) => {
     const start = Date.now();
     try {
@@ -141,13 +149,33 @@ export function withLogging<TParams, TResult>(
       });
       return result;
     } catch (error) {
+      const durationMs = Date.now() - start;
+      const timestamp = new Date().toISOString();
+
+      if (error instanceof McpToolError) {
+        logToolCall({
+          tool: toolName,
+          durationMs,
+          status: "error",
+          error: error.message,
+          errorCode: error.code,
+          retryable: error.retryable,
+          timestamp,
+        });
+        return {
+          content: [{ type: "text", text: error.userMessage }],
+          isError: true,
+          errorCode: error.code,
+        };
+      }
+
       const message = error instanceof Error ? error.message : String(error);
       logToolCall({
         tool: toolName,
-        durationMs: Date.now() - start,
+        durationMs,
         status: "error",
         error: message,
-        timestamp: new Date().toISOString(),
+        timestamp,
       });
       throw error;
     }

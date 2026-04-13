@@ -1,15 +1,6 @@
-let cachedToken: { access_token: string; expires_at: number } | null = null;
+import { McpToolError, ErrorCode } from "@/core/errors";
 
-export class GoogleAuthError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-    public readonly hint: string
-  ) {
-    super(message);
-    this.name = "GoogleAuthError";
-  }
-}
+let cachedToken: { access_token: string; expires_at: number } | null = null;
 
 export async function getGoogleAccessToken(): Promise<string> {
   // Return cached token if still valid (with 5min margin)
@@ -27,11 +18,13 @@ export async function getGoogleAccessToken(): Promise<string> {
       !clientSecret && "GOOGLE_CLIENT_SECRET",
       !refreshToken && "GOOGLE_REFRESH_TOKEN",
     ].filter(Boolean);
-    throw new GoogleAuthError(
-      `Missing env vars: ${missing.join(", ")}`,
-      "missing_config",
-      "Add the missing variables in Vercel → Settings → Environment Variables, then redeploy."
-    );
+    throw new McpToolError({
+      code: ErrorCode.CONFIGURATION_ERROR,
+      toolName: "google",
+      message: `Missing env vars: ${missing.join(", ")}`,
+      userMessage: `Google pack is not configured. Add ${missing.join(", ")} in your environment variables.`,
+      retryable: false,
+    });
   }
 
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -48,25 +41,27 @@ export async function getGoogleAccessToken(): Promise<string> {
   const data = await res.json();
 
   if (!data.access_token) {
-    const errorCode = data.error || "unknown";
+    const oauthCode = data.error || "unknown";
     const errorDesc = data.error_description || "";
 
-    const hints: Record<string, string> = {
+    const userHints: Record<string, string> = {
       invalid_client:
-        "OAuth client does not exist or was deleted. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Vercel, then verify the app exists in Google Cloud Console → Credentials.",
+        "OAuth client does not exist or was deleted. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
       invalid_grant:
-        "Refresh token was revoked or expired. Use the /setup page to re-authenticate, then update GOOGLE_REFRESH_TOKEN in Vercel.",
-      unauthorized_client:
-        "OAuth client is not authorized for this grant type. Verify the app type in Google Cloud Console.",
-      invalid_scope:
-        "One or more requested scopes are not authorized. Check scopes in Google Cloud Console → OAuth consent screen → Scopes.",
+        "Refresh token was revoked or expired. Re-authenticate via /setup and update GOOGLE_REFRESH_TOKEN.",
+      unauthorized_client: "OAuth client is not authorized for this grant type.",
+      invalid_scope: "One or more scopes are not authorized. Check OAuth consent screen scopes.",
     };
 
-    throw new GoogleAuthError(
-      `Google OAuth failed: ${errorCode} — ${errorDesc}`,
-      errorCode,
-      hints[errorCode] || `Unknown error (${errorCode}). Check the 3 GOOGLE_* env vars in Vercel.`
-    );
+    throw new McpToolError({
+      code: ErrorCode.AUTH_FAILED,
+      toolName: "google",
+      message: `Google OAuth failed: ${oauthCode} — ${errorDesc}`,
+      userMessage:
+        userHints[oauthCode] ||
+        `Google authentication failed (${oauthCode}). Check your GOOGLE_* environment variables.`,
+      retryable: false,
+    });
   }
 
   cachedToken = {
