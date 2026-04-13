@@ -2,6 +2,20 @@
 
 All notable changes to MyMCP.
 
+## [0.3.1] - 2026-04-13
+
+### Changed
+
+- **Renamed Packs → Connectors** across the entire codebase (directories, types, env vars in UI, dashboard labels). The user-facing concept is now "Connector" — clearer for non-developers and aligned with Zapier/Make/n8n terminology.
+- **Connectors page redesign** — cards now expand inline on click (accordion) instead of routing to a separate Edit view. The redundant "Edit" link is gone.
+- Toggle on a not-yet-configured connector now shows a "Setup needed" affordance instead of silently failing — clicking the card opens the credential form.
+- Framework-only connectors (Skills, Admin) are now hidden from the Connectors page via a new `core: true` manifest flag. They remain registered and continue to expose their tools.
+
+### Added
+
+- **Per-connector credential guides** — every user-facing connector (Google, Vault, Slack, Notion, GitHub, Linear, Airtable, Apify, Browser, Composio) now ships an in-app markdown guide with prerequisites, step-by-step credential acquisition, and troubleshooting. Rendered in the expanded card view.
+- New optional `guide?: string` and `core?: boolean` fields on `ConnectorManifest`.
+
 ## [0.3.0] - 2026-04-13
 
 ### Added
