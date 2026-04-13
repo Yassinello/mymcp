@@ -21,6 +21,8 @@ import { notionPack } from "../src/packs/notion/manifest";
 import { adminPack } from "../src/packs/admin/manifest";
 import { paywallPack } from "../src/packs/paywall/manifest";
 import { apifyPack } from "../src/packs/apify/manifest";
+import { githubPack } from "../src/packs/github/manifest";
+import { linearPack } from "../src/packs/linear/manifest";
 
 const ALL_PACKS = [
   googlePack,
@@ -30,6 +32,8 @@ const ALL_PACKS = [
   notionPack,
   paywallPack,
   apifyPack,
+  githubPack,
+  linearPack,
   adminPack,
 ];
 const SNAPSHOT_PATH = resolve(__dirname, "contract-snapshot.json");

@@ -140,6 +140,70 @@
     ]
   },
   {
+    "name": "github_add_comment",
+    "pack": "github",
+    "schemaKeys": [
+      "body",
+      "issue_number",
+      "repo"
+    ]
+  },
+  {
+    "name": "github_create_issue",
+    "pack": "github",
+    "schemaKeys": [
+      "assignees",
+      "body",
+      "labels",
+      "milestone",
+      "repo",
+      "title"
+    ]
+  },
+  {
+    "name": "github_get_issue",
+    "pack": "github",
+    "schemaKeys": [
+      "include_comments",
+      "issue_number",
+      "repo"
+    ]
+  },
+  {
+    "name": "github_list_issues",
+    "pack": "github",
+    "schemaKeys": [
+      "assignee",
+      "labels",
+      "limit",
+      "milestone",
+      "repo",
+      "state"
+    ]
+  },
+  {
+    "name": "github_search_issues",
+    "pack": "github",
+    "schemaKeys": [
+      "limit",
+      "query"
+    ]
+  },
+  {
+    "name": "github_update_issue",
+    "pack": "github",
+    "schemaKeys": [
+      "assignees",
+      "body",
+      "issue_number",
+      "labels",
+      "milestone",
+      "repo",
+      "state",
+      "title"
+    ]
+  },
+  {
     "name": "gmail_attachment",
     "pack": "google",
     "schemaKeys": [
@@ -215,6 +279,67 @@
     "pack": "google",
     "schemaKeys": [
       "message_id"
+    ]
+  },
+  {
+    "name": "linear_create_issue",
+    "pack": "linear",
+    "schemaKeys": [
+      "assignee",
+      "description",
+      "labels",
+      "priority",
+      "state",
+      "team",
+      "title"
+    ]
+  },
+  {
+    "name": "linear_get_issue",
+    "pack": "linear",
+    "schemaKeys": [
+      "identifier",
+      "include_comments"
+    ]
+  },
+  {
+    "name": "linear_list_issues",
+    "pack": "linear",
+    "schemaKeys": [
+      "assignee",
+      "limit",
+      "project",
+      "state",
+      "team"
+    ]
+  },
+  {
+    "name": "linear_list_projects",
+    "pack": "linear",
+    "schemaKeys": [
+      "limit",
+      "team"
+    ]
+  },
+  {
+    "name": "linear_search_issues",
+    "pack": "linear",
+    "schemaKeys": [
+      "limit",
+      "query"
+    ]
+  },
+  {
+    "name": "linear_update_issue",
+    "pack": "linear",
+    "schemaKeys": [
+      "assignee",
+      "description",
+      "identifier",
+      "labels",
+      "priority",
+      "state",
+      "title"
     ]
   },
   {
