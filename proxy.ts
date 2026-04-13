@@ -44,7 +44,7 @@ export function proxy(request: NextRequest) {
   if (pathname === "/setup" && !request.nextUrl.searchParams.has("add")) {
     return NextResponse.redirect(new URL("/config", request.url));
   }
-  if (pathname === "/") {
+  if (pathname === "/" && process.env.INSTANCE_MODE === "personal") {
     return NextResponse.redirect(new URL("/config", request.url));
   }
 
