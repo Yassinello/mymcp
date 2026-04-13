@@ -6,6 +6,7 @@ import { getEnabledPacks, logRegistryState } from "@/core/registry";
 import { listSkillsSync, getSkill } from "@/packs/skills/store";
 import { renderSkill } from "@/packs/skills/lib/render";
 import { maybeRefreshRemote } from "@/packs/skills/lib/remote-fetcher";
+import { VERSION } from "@/core/version";
 
 /**
  * Build a fresh MCP handler that reflects the current registry state.
@@ -89,7 +90,7 @@ function buildHandler() {
     {
       serverInfo: {
         name: "MyMCP",
-        version: "0.2.0",
+        version: VERSION,
       },
     },
     {

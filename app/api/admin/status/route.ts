@@ -2,6 +2,7 @@ import { checkAdminAuth } from "@/core/auth";
 import { resolveRegistry } from "@/core/registry";
 import { getInstanceConfig } from "@/core/config";
 import { getRecentLogs } from "@/core/logging";
+import { VERSION } from "@/core/version";
 
 /**
  * Private admin status endpoint — requires ADMIN_AUTH_TOKEN.
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
     .reduce((sum, p) => sum + p.manifest.tools.length, 0);
 
   return Response.json({
-    version: "0.1.1",
+    version: VERSION,
     packs,
     totalTools,
     config: {
