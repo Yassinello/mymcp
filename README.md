@@ -370,6 +370,20 @@ No credentials required — always active.
 
 **Requires:** `LINEAR_API_KEY` (Settings → API → Personal API keys in Linear)
 
+### Airtable — 7 tools
+
+| Tool | What it does |
+|------|-------------|
+| `airtable_list_bases` | List all accessible Airtable bases with IDs and permission levels |
+| `airtable_list_tables` | List tables in a base with fields and views |
+| `airtable_list_records` | List records with optional view, filter formula, sort, and limit |
+| `airtable_get_record` | Get a single record by ID with all field values |
+| `airtable_create_record` | Create a new record with specified field values |
+| `airtable_update_record` | Partially update a record (untouched fields are preserved) |
+| `airtable_search_records` | Case-insensitive text search on a specified field |
+
+**Requires:** `AIRTABLE_API_KEY` (Personal access token from https://airtable.com/create/tokens)
+
 ### Composio — 2 tools + 1000s of integrations
 
 | Tool | What it does |

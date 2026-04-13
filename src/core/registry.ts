@@ -14,6 +14,7 @@ import { paywallPack } from "@/packs/paywall/manifest";
 import { apifyPack } from "@/packs/apify/manifest";
 import { githubPack } from "@/packs/github/manifest";
 import { linearPack } from "@/packs/linear/manifest";
+import { airtablePack } from "@/packs/airtable/manifest";
 
 const ALL_PACKS: PackManifest[] = [
   googlePack,
@@ -27,6 +28,7 @@ const ALL_PACKS: PackManifest[] = [
   apifyPack,
   githubPack,
   linearPack,
+  airtablePack,
   adminPack,
 ];
 
