@@ -1,6 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import pkg from "../package.json";
+
+const VERSION = `v${pkg.version}`;
 
 const NAV = [
   { section: "OVERVIEW", items: [{ href: "/config", label: "Dashboard", icon: "grid" }] },
@@ -128,7 +131,7 @@ export function Sidebar({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold truncate">{displayName}</p>
-            <p className="text-[10px] text-text-muted truncate">v0.2.1</p>
+            <p className="text-[10px] text-text-muted truncate">{VERSION}</p>
           </div>
           <a
             href="https://github.com/Yassinello/mymcp"

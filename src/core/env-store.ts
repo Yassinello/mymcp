@@ -8,8 +8,17 @@
  * Selection: `process.env.VERCEL === "1"` → Vercel. Otherwise → Filesystem.
  */
 
-import { readFileSync, writeFileSync, existsSync, renameSync } from "node:fs";
+import { promises as fs } from "node:fs";
 import { join } from "node:path";
+
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface EnvStore {
   kind: "filesystem" | "vercel";
@@ -84,15 +93,15 @@ class FilesystemEnvStore implements EnvStore {
   }
 
   async read(): Promise<Record<string, string>> {
-    if (!existsSync(this.envPath)) return {};
-    const content = readFileSync(this.envPath, "utf-8");
+    if (!(await pathExists(this.envPath))) return {};
+    const content = await fs.readFile(this.envPath, "utf-8");
     return parseEnvFile(content).vars;
   }
 
   async write(vars: Record<string, string>): Promise<{ written: number; note?: string }> {
     let existingLines: string[];
-    if (existsSync(this.envPath)) {
-      const content = readFileSync(this.envPath, "utf-8");
+    if (await pathExists(this.envPath)) {
+      const content = await fs.readFile(this.envPath, "utf-8");
       existingLines = parseEnvFile(content).rawLines;
     } else {
       existingLines = [
@@ -106,8 +115,8 @@ class FilesystemEnvStore implements EnvStore {
 
     // Atomic write: .env.tmp → rename
     const tmpPath = this.envPath + ".tmp";
-    writeFileSync(tmpPath, serialized, "utf-8");
-    renameSync(tmpPath, this.envPath);
+    await fs.writeFile(tmpPath, serialized, "utf-8");
+    await fs.rename(tmpPath, this.envPath);
 
     // Also update process.env so subsequent reads in the same process see new values
     // (Next.js will auto-reload the dev server but this makes the change visible immediately)
