@@ -2,6 +2,12 @@
 
 All notable changes to MyMCP.
 
+## [0.3.2] - 2026-04-13
+
+### Changed
+
+- **Landing page header CTA** — replaced ambiguous "Login" button (which pointed to `/setup` and made no sense on the marketing landing) with **"Open my instance"**, a popover that asks for the user's deployed instance URL, validates it, persists it in `localStorage`, and redirects to `{url}/config`. Subsequent visits one-click straight through. Includes a "Forget saved instance" escape hatch and a "Don't have one yet? Deploy →" link that anchors to the hero deploy section.
+
 ## [0.3.1] - 2026-04-13
 
 ### Changed

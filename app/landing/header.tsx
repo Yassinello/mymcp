@@ -1,3 +1,5 @@
+import OpenInstanceButton from "./open-instance-button";
+
 export default function LandingHeader() {
   return (
     <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-sm sticky top-0 z-50">
@@ -14,12 +16,7 @@ export default function LandingHeader() {
           >
             GitHub
           </a>
-          <a
-            href="/setup"
-            className="text-sm text-slate-900 bg-white hover:bg-slate-100 transition-colors px-3 py-1.5 rounded-md font-medium"
-          >
-            Login
-          </a>
+          <OpenInstanceButton />
         </nav>
       </div>
     </header>

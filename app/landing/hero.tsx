@@ -3,7 +3,7 @@ export default function Hero() {
     "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fmymcp&env=MCP_AUTH_TOKEN,MYMCP_DISPLAY_NAME&envDescription=MCP%20auth%20token%20and%20display%20name%20required%20to%20start.&project-name=my-mcp&repository-name=my-mcp";
 
   return (
-    <section className="pt-24 pb-20 px-6">
+    <section id="deploy" className="pt-24 pb-20 px-6">
       <div className="max-w-4xl mx-auto text-center">
         <p className="text-sm font-mono text-blue-400 mb-4 tracking-wider uppercase">
           Open source · MIT licensed
