@@ -1,4 +1,6 @@
 import { timingSafeEqual, createHash } from "crypto";
+import { isLoopbackRequest } from "./request-utils";
+import { isClaimer } from "./first-run";
 
 /**
  * Auth utilities for MyMCP.
@@ -101,7 +103,17 @@ export function checkMcpAuth(request: Request): { error: Response | null; tokenI
 export function checkAdminAuth(request: Request): Response | null {
   warnAdminTokenFallback();
   const token = (process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN)?.trim();
-  if (!token) return null;
+  if (!token) {
+    // First-run mode (no token configured anywhere). We must NOT silently
+    // grant admin access to the public internet — that would let anyone seize
+    // a fresh Vercel deploy. Allow access only when:
+    //   (a) the request is from loopback (local dev), or
+    //   (b) the request carries a valid first-run claim cookie (the user who
+    //       initialized this instance via /welcome).
+    if (isLoopbackRequest(request)) return null;
+    if (isClaimer(request)) return null;
+    return new Response("Unauthorized", { status: 401 });
+  }
 
   const provided = extractToken(request);
   if (provided && safeCompare(provided, token)) return null;

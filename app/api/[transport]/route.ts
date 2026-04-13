@@ -2,6 +2,7 @@ import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 import { withLogging } from "@/core/logging";
 import { checkMcpAuth, extractToken } from "@/core/auth";
+import { isFirstRunMode } from "@/core/first-run";
 import { checkRateLimit } from "@/core/rate-limit";
 import { getEnabledPacks, logRegistryState } from "@/core/registry";
 import { listSkillsSync, getSkill } from "@/connectors/skills/store";
@@ -102,6 +103,17 @@ function buildHandler(callerTokenId?: string | null) {
 }
 
 async function handler(request: Request): Promise<Response> {
+  // Zero-config / first-run guard: if the instance has not yet been
+  // initialized via /welcome, refuse all MCP traffic with a clear message.
+  if (isFirstRunMode()) {
+    return new Response(
+      JSON.stringify({
+        error: "Instance not yet initialized. Visit /welcome to set it up.",
+      }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   const { error: authError, tokenId } = checkMcpAuth(request);
   if (authError) return authError;
 

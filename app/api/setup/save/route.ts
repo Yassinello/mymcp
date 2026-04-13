@@ -1,49 +1,7 @@
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 import { getEnvStore } from "@/core/env-store";
 import { checkAdminAuth } from "@/core/auth";
-
-/**
- * Determine if a request originates from a loopback address.
- * First-run writes are restricted to loopback to prevent remote token seizure
- * on dev servers that bind 0.0.0.0.
- */
-function isLoopbackCandidate(ip: string): boolean {
-  const n = ip
-    .replace(/^::ffff:/, "")
-    .trim()
-    .toLowerCase();
-  return n === "127.0.0.1" || n === "::1" || n === "localhost" || n.startsWith("127.");
-}
-
-/**
- * Returns true if the request is safely from loopback.
- *
- * Logic:
- * - If X-Forwarded-For or X-Real-IP is present (a proxy is in front), require
- *   the leftmost client IP to be a loopback address.
- * - Otherwise, assume direct connection to the Node server. We trust this
- *   because Next.js dev binds to localhost by default; if the operator passed
- *   `-H 0.0.0.0`, they've opted into remote exposure but first-run should
- *   still be locally reachable for legitimate setup. We also check NextRequest.ip
- *   when available for an extra signal.
- */
-function isLoopbackRequest(request: Request): boolean {
-  const xff = request.headers.get("x-forwarded-for");
-  const xri = request.headers.get("x-real-ip");
-  if (xff) {
-    const leftmost = xff.split(",")[0]?.trim() || "";
-    return isLoopbackCandidate(leftmost);
-  }
-  if (xri) {
-    return isLoopbackCandidate(xri);
-  }
-  // No proxy headers — inspect NextRequest.ip if available.
-  const ip = (request as unknown as NextRequest & { ip?: string }).ip;
-  if (ip) return isLoopbackCandidate(ip);
-  // Fall back to trusting direct Node connections (typical `next dev`).
-  return true;
-}
+import { isLoopbackRequest } from "@/core/request-utils";
 
 /**
  * POST /api/setup/save

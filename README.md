@@ -4,7 +4,7 @@
 </p>
 
 <p align="center">
-  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fmymcp&env=MCP_AUTH_TOKEN&envDescription=Required%20env%20vars%20for%20MyMCP&envLink=https%3A%2F%2Fgithub.com%2FYassinello%2Fmymcp%23configuration"><img src="https://vercel.com/button" alt="Deploy with Vercel" /></a>
+  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fmymcp&project-name=mymcp-me&repository-name=mymcp-me"><img src="https://vercel.com/button" alt="Deploy with Vercel" /></a>
 </p>
 
 <p align="center">
@@ -126,10 +126,10 @@ At the end you get a working `.env`, installed dependencies, and an `upstream` r
 ### Option 3: Deploy to Vercel
 
 1. Click the **Deploy with Vercel** button at the top of this page
-2. Choose a name for your private repo copy (e.g. `my-mcp-instance`)
-3. Set `MCP_AUTH_TOKEN` — generate one with `openssl rand -hex 32`
-4. Add credentials for the connectors you want (see [Configuration](#configuration))
-5. Click **Deploy** — your endpoint is live at `https://your-app.vercel.app/api/mcp`
+2. Pick a name (default: `mymcp-me`) and click **Deploy** — no env vars to fill in
+3. Once Vercel finishes (~60s), open the deployed URL — you'll land on `/welcome`
+4. Click **Initialize this instance** to mint your permanent `MCP_AUTH_TOKEN`, copy it, then paste it into Vercel's env vars and trigger a redeploy
+5. Add connector credentials at `/config/connectors` once the dashboard is reachable
 
 ---
 

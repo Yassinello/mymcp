@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { parseTokens, tokenId, checkMcpAuth } from "./auth";
+import { parseTokens, tokenId, checkMcpAuth, checkAdminAuth } from "./auth";
+import { __resetFirstRunForTests, getOrCreateClaim } from "./first-run";
 
 // ── parseTokens ──────────────────────────────────────────────────────
 
@@ -151,5 +152,54 @@ describe("checkMcpAuth", () => {
     expect(e1).toBeNull();
     const { error: e2 } = checkMcpAuth(makeRequest("tokenB1234567890"));
     expect(e2).toBeNull();
+  });
+});
+
+// ── checkAdminAuth (first-run security) ──────────────────────────────
+
+describe("checkAdminAuth — first-run mode", () => {
+  const originalMcp = process.env.MCP_AUTH_TOKEN;
+  const originalAdmin = process.env.ADMIN_AUTH_TOKEN;
+
+  beforeEach(() => {
+    delete process.env.MCP_AUTH_TOKEN;
+    delete process.env.ADMIN_AUTH_TOKEN;
+    __resetFirstRunForTests();
+  });
+
+  afterEach(() => {
+    if (originalMcp === undefined) delete process.env.MCP_AUTH_TOKEN;
+    else process.env.MCP_AUTH_TOKEN = originalMcp;
+    if (originalAdmin === undefined) delete process.env.ADMIN_AUTH_TOKEN;
+    else process.env.ADMIN_AUTH_TOKEN = originalAdmin;
+    __resetFirstRunForTests();
+  });
+
+  it("allows loopback requests when no token is configured", () => {
+    // No proxy headers → treated as direct (loopback).
+    const req = new Request("http://localhost/api/admin/status");
+    expect(checkAdminAuth(req)).toBeNull();
+  });
+
+  it("blocks a non-loopback request with no token and no claim cookie", () => {
+    const req = new Request("http://example.com/api/admin/status", {
+      headers: { "x-forwarded-for": "8.8.8.8" },
+    });
+    const result = checkAdminAuth(req);
+    expect(result).not.toBeNull();
+    expect((result as Response).status).toBe(401);
+  });
+
+  it("allows a non-loopback request that holds a valid first-run claim cookie", () => {
+    const claim = getOrCreateClaim(
+      new Request("http://example.com/api/welcome/claim", {
+        headers: { "x-forwarded-for": "8.8.8.8" },
+      })
+    );
+    const cookie = `mymcp_firstrun_claim=${encodeURIComponent(claim.cookieToSet || "")}`;
+    const req = new Request("http://example.com/api/admin/status", {
+      headers: { "x-forwarded-for": "8.8.8.8", cookie },
+    });
+    expect(checkAdminAuth(req)).toBeNull();
   });
 });

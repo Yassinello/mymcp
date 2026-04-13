@@ -19,7 +19,10 @@ export default function HomePage() {
     if (process.env.MCP_AUTH_TOKEN) {
       redirect("/config");
     }
-    redirect("/setup");
+    // Zero-config flow: send first-time visitors to the welcome page which
+    // generates a token via the in-memory bridge. The legacy /setup wizard
+    // remains reachable for filesystem dev.
+    redirect("/welcome");
   }
 
   return <LandingPage />;
