@@ -73,6 +73,7 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
         "Read a note from the Obsidian vault. Returns the markdown body, parsed frontmatter (via js-yaml), and the file SHA (reusable for vault_write updates).",
       schema: vaultReadSchema,
       handler: async (params) => handleVaultRead(params as { path: string }),
+      destructive: false,
     },
     {
       name: "vault_search",
@@ -83,6 +84,7 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
         handleVaultSearch(
           params as { query: string; folder?: string; limit?: number; page?: number }
         ),
+      destructive: false,
     },
     {
       name: "vault_list",
@@ -90,6 +92,7 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
         "List notes and folders in a vault directory. Useful for browsing the vault structure.",
       schema: vaultListSchema,
       handler: async (params) => handleVaultList(params as { folder?: string }),
+      destructive: false,
     },
     {
       name: "vault_delete",
@@ -133,6 +136,7 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
         "Read multiple notes in a single call (max 20). Returns all contents with parsed frontmatter and SHA. Perfect for weekly reviews, daily digests, or loading context from several notes at once.",
       schema: vaultBatchReadSchema,
       handler: async (params) => handleVaultBatchRead(params as { paths: string[] }),
+      destructive: false,
     },
     {
       name: "vault_recent",
@@ -141,6 +145,7 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
       schema: vaultRecentSchema,
       handler: async (params) =>
         handleVaultRecent(params as { n?: number; folder?: string; since?: string }),
+      destructive: false,
     },
     {
       name: "vault_stats",
@@ -148,6 +153,7 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
         "Get vault statistics: total notes, notes per folder, inbox count, total size. Useful for housekeeping and understanding vault structure at a glance.",
       schema: vaultStatsSchema,
       handler: async (params) => handleVaultStats(params as { folder?: string }),
+      destructive: false,
     },
     {
       name: "vault_backlinks",
@@ -155,6 +161,7 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
         "Find all notes that link to a given note via [[wikilinks]]. Also returns forward links from the target note. Enables graph-of-knowledge navigation.",
       schema: vaultBacklinksSchema,
       handler: async (params) => handleVaultBacklinks(params as { path: string }),
+      destructive: false,
     },
     {
       name: "vault_due",
@@ -162,6 +169,7 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
         "Find notes with a 'resurface' frontmatter field whose date has passed. Supports resurface: YYYY-MM-DD (date-based) and resurface: when_relevant (always included). Use for spaced repetition, reminders, and resurfacing forgotten insights.",
       schema: vaultDueSchema,
       handler: async (params) => handleVaultDue(params as { before?: string; folder?: string }),
+      destructive: false,
     },
     {
       name: "my_context",
@@ -169,6 +177,7 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
         "Get personal context (role, active projects, priorities, tech stack). Reads from a configurable path in the vault (default: System/context.md).",
       schema: {},
       handler: async () => handleMyContext(),
+      destructive: false,
     },
   ],
 };

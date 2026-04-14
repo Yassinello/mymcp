@@ -34,6 +34,7 @@ Two accounts:
       schema: webBrowseSchema,
       handler: async (params) =>
         handleWebBrowse(params as { url: string; scroll_count?: number; context_name?: string }),
+      destructive: false,
     },
     {
       name: "web_extract",
@@ -49,6 +50,7 @@ Two accounts:
             context_name?: string;
           }
         ),
+      destructive: false,
     },
     {
       name: "web_act",
@@ -65,6 +67,7 @@ Two accounts:
         "Read your LinkedIn feed. Returns recent posts with author, content text, engagement metrics (likes, comments), and relative date. Automatically uses saved LinkedIn session. Rate limited to 3 calls per day.",
       schema: linkedinFeedSchema,
       handler: async (params) => handleLinkedinFeed(params as { max_posts?: number }),
+      destructive: false,
     },
   ],
 };

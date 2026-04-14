@@ -53,6 +53,7 @@ export const paywallConnector: ConnectorManifest = {
           "Read a paywalled article from a supported source (Medium, Substack) and return clean markdown. Uses your stored session cookie to bypass the paywall via a simple HTTP fetch + Readability extraction. Fast and cheap — try this first.",
         schema: readPaywalledSchema,
         handler: async (params) => handleReadPaywalled(params as { url: string }),
+        destructive: false,
       },
     ];
     if (isBrowserPackConfigured()) {
@@ -63,6 +64,7 @@ export const paywallConnector: ConnectorManifest = {
         schema: readPaywalledHardSchema,
         handler: async (params: Record<string, unknown>) =>
           handleReadPaywalledHard(params as { url: string }),
+        destructive: false,
       });
     }
     return tools;

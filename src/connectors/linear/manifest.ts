@@ -56,6 +56,7 @@ A [Linear](https://linear.app) account. The API key acts on your behalf, so perm
             limit?: number;
           }
         ),
+      destructive: false,
     },
     {
       name: "linear_get_issue",
@@ -69,6 +70,7 @@ A [Linear](https://linear.app) account. The API key acts on your behalf, so perm
             include_comments?: boolean;
           }
         ),
+      destructive: false,
     },
     {
       name: "linear_search_issues",
@@ -81,6 +83,7 @@ A [Linear](https://linear.app) account. The API key acts on your behalf, so perm
             limit?: number;
           }
         ),
+      destructive: false,
     },
     {
       name: "linear_list_projects",
@@ -94,6 +97,7 @@ A [Linear](https://linear.app) account. The API key acts on your behalf, so perm
             limit?: number;
           }
         ),
+      destructive: false,
     },
     {
       name: "linear_create_issue",

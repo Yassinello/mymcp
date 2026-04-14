@@ -61,12 +61,14 @@ An Airtable account with access to at least one base. Free plans work fine.
         "List all Airtable bases accessible with the current API key, including IDs and permission levels.",
       schema: airtableListBasesSchema,
       handler: async (params) => handleAirtableListBases(params as Record<string, unknown>),
+      destructive: false,
     },
     {
       name: "airtable_list_tables",
       description: "List all tables in an Airtable base, including fields and views.",
       schema: airtableListTablesSchema,
       handler: async (params) => handleAirtableListTables(params as { base_id: string }),
+      destructive: false,
     },
     {
       name: "airtable_list_records",
@@ -85,6 +87,7 @@ An Airtable account with access to at least one base. Free plans work fine.
             limit?: number;
           }
         ),
+      destructive: false,
     },
     {
       name: "airtable_get_record",
@@ -92,6 +95,7 @@ An Airtable account with access to at least one base. Free plans work fine.
       schema: airtableGetRecordSchema,
       handler: async (params) =>
         handleAirtableGetRecord(params as { base_id: string; table: string; record_id: string }),
+      destructive: false,
     },
     {
       name: "airtable_create_record",
@@ -135,6 +139,7 @@ An Airtable account with access to at least one base. Free plans work fine.
             limit?: number;
           }
         ),
+      destructive: false,
     },
   ],
 };

@@ -56,6 +56,7 @@ A GitHub account and at least one repository. Works with both personal and org r
             limit?: number;
           }
         ),
+      destructive: false,
     },
     {
       name: "github_get_issue",
@@ -69,6 +70,7 @@ A GitHub account and at least one repository. Works with both personal and org r
             include_comments?: boolean;
           }
         ),
+      destructive: false,
     },
     {
       name: "github_create_issue",
@@ -135,6 +137,7 @@ A GitHub account and at least one repository. Works with both personal and org r
             limit?: number;
           }
         ),
+      destructive: false,
     },
   ],
 };

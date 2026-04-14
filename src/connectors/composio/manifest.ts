@@ -59,6 +59,7 @@ A Composio account. You'll connect each target app _inside_ the Composio dashboa
         "List available Composio actions for a specific app. Use this to discover what actions you can perform.",
       schema: composioListSchema,
       handler: async (params) => handleComposioList(params as { app: string }),
+      destructive: false,
     },
   ],
 };

@@ -59,6 +59,7 @@ A Google account and a Google Cloud project where you can create an OAuth client
       schema: gmailInboxSchema,
       handler: async (params) =>
         handleGmailInbox(params as { max_results?: number; query?: string }),
+      destructive: false,
     },
     {
       name: "gmail_read",
@@ -66,6 +67,7 @@ A Google account and a Google Cloud project where you can create an OAuth client
         "Read the full content of an email (body, headers, attachments list). Use the message ID from gmail_inbox.",
       schema: gmailReadSchema,
       handler: async (params) => handleGmailRead(params as { message_id: string }),
+      destructive: false,
     },
     {
       name: "gmail_send",
@@ -116,6 +118,7 @@ A Google account and a Google Cloud project where you can create an OAuth client
       schema: gmailSearchSchema,
       handler: async (params) =>
         handleGmailSearch(params as { query: string; max_results?: number }),
+      destructive: false,
     },
     {
       name: "gmail_draft",
@@ -141,6 +144,7 @@ A Google account and a Google Cloud project where you can create an OAuth client
       schema: gmailAttachmentSchema,
       handler: async (params) =>
         handleGmailAttachment(params as { message_id: string; attachment_id?: string }),
+      destructive: false,
     },
     {
       name: "calendar_events",
@@ -148,6 +152,7 @@ A Google account and a Google Cloud project where you can create an OAuth client
         "List upcoming events from all Google Calendars (personal, shared, etc.). Returns event title, time, calendar name, location, and Meet link.",
       schema: calendarEventsSchema,
       handler: async (params) => handleCalendarEvents(params as { days?: number }),
+      destructive: false,
     },
     {
       name: "calendar_create",
@@ -208,6 +213,7 @@ A Google account and a Google Cloud project where you can create an OAuth client
             start_date?: string;
           }
         ),
+      destructive: false,
     },
     {
       name: "calendar_rsvp",
@@ -231,6 +237,7 @@ A Google account and a Google Cloud project where you can create an OAuth client
       schema: contactsSearchSchema,
       handler: async (params) =>
         handleContactsSearch(params as { query: string; max_results?: number }),
+      destructive: false,
     },
     {
       name: "drive_search",
@@ -239,6 +246,7 @@ A Google account and a Google Cloud project where you can create an OAuth client
       schema: driveSearchSchema,
       handler: async (params) =>
         handleDriveSearch(params as { query: string; max_results?: number }),
+      destructive: false,
     },
     {
       name: "drive_read",
@@ -246,6 +254,7 @@ A Google account and a Google Cloud project where you can create an OAuth client
         "Read the content of a Google Drive file. Exports Google Docs as plain text, Sheets as CSV, Slides as text. For binary files (PDF, images), returns metadata with a link.",
       schema: driveReadSchema,
       handler: async (params) => handleDriveRead(params as { file_id: string }),
+      destructive: false,
     },
   ],
 };

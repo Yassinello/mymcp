@@ -38,11 +38,12 @@ export interface ToolDefinition {
   /** Deprecation notice — if set, tool is marked deprecated in dashboard + MCP description */
   deprecated?: string;
   /**
-   * Write-side-effect flag. When true, the sandbox and dashboard require
-   * explicit confirmation before invoking. Tool authors opt-in explicitly;
-   * no name-based regex is used. Read-only tools should leave this unset.
+   * Write-side-effect flag. REQUIRED — every tool must declare its intent
+   * explicitly. When true, the sandbox and dashboard require confirmation
+   * before invoking. When false, the tool is read-only / side-effect-free.
+   * No name-based regex is used; tool authors opt in explicitly.
    */
-  destructive?: boolean;
+  destructive: boolean;
 }
 
 /**
@@ -57,7 +58,7 @@ export interface TypedToolDefinition<TSchema extends z.ZodRawShape> {
   summary?: string;
   example?: string;
   deprecated?: string;
-  destructive?: boolean;
+  destructive: boolean;
 }
 
 /**

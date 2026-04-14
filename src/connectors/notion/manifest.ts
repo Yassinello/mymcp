@@ -46,6 +46,7 @@ A Notion workspace where you can install integrations. Notion integrations only 
         "Search Notion pages by title or content. Returns page title, URL, last edited date, and properties.",
       schema: notionSearchSchema,
       handler: async (params) => handleNotionSearch(params as { query: string; limit?: number }),
+      destructive: false,
     },
     {
       name: "notion_read",
@@ -53,6 +54,7 @@ A Notion workspace where you can install integrations. Notion integrations only 
         "Read the full content of a Notion page. Returns title and content as markdown (headings, paragraphs, lists, code blocks).",
       schema: notionReadSchema,
       handler: async (params) => handleNotionRead(params as { page_id: string }),
+      destructive: false,
     },
     {
       name: "notion_create",
@@ -92,6 +94,7 @@ A Notion workspace where you can install integrations. Notion integrations only 
             limit?: number;
           }
         ),
+      destructive: false,
     },
   ],
 };

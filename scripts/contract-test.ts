@@ -42,6 +42,7 @@ interface ToolContract {
   name: string;
   pack: string;
   schemaKeys: string[];
+  destructive: boolean;
 }
 
 function getCurrentContract(): ToolContract[] {
@@ -50,6 +51,7 @@ function getCurrentContract(): ToolContract[] {
       name: tool.name,
       pack: pack.id,
       schemaKeys: Object.keys(tool.schema).sort(),
+      destructive: tool.destructive,
     }))
   ).sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -114,6 +116,13 @@ function main() {
 
     if (cur.pack !== snap.pack) {
       console.error(`  MOVED: ${cur.name} — was in ${snap.pack} → now in ${cur.pack}`);
+      failures++;
+    }
+
+    if (cur.destructive !== snap.destructive) {
+      console.error(
+        `  DESTRUCTIVE FLAG CHANGED: ${cur.name} — was ${snap.destructive} → now ${cur.destructive}`
+      );
       failures++;
     }
   }

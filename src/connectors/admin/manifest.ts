@@ -15,6 +15,7 @@ export const adminConnector: ConnectorManifest = {
       schema: mcpLogsSchema,
       handler: async (params) =>
         handleMcpLogs(params as { count?: number; filter?: "all" | "errors" | "success" }),
+      destructive: false,
     },
   ],
 };

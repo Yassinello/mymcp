@@ -27,6 +27,10 @@ export function buildSkillTool(skill: Skill): ToolDefinition {
   return {
     name: toolName,
     description: desc,
+    // User-authored skills are rendered prompts, not write operations.
+    // Individual skills that invoke tools internally still get confirmation
+    // from those underlying tools' destructive flags.
+    destructive: false,
     schema: buildSchema(skill),
     handler: async (params): Promise<ToolResult> => {
       // Always re-read the latest skill from disk to pick up edits.

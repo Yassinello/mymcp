@@ -46,6 +46,7 @@ const WRAPPERS: WrapperDef[] = [
         "Scrapes a LinkedIn profile via Apify. Returns structured profile data (name, headline, experience, education, etc.). Takes ~10-30s.",
       schema: apifyLinkedinProfileSchema,
       handler: async (params) => handleApifyLinkedinProfile(params as { url: string }),
+      destructive: false,
     },
   },
   {
@@ -56,6 +57,7 @@ const WRAPPERS: WrapperDef[] = [
         "Scrapes a LinkedIn company page via Apify. Returns structured company data (name, size, industry, description, website). Takes ~10-30s.",
       schema: apifyLinkedinCompanySchema,
       handler: async (params) => handleApifyLinkedinCompany(params as { url: string }),
+      destructive: false,
     },
   },
   {
@@ -67,6 +69,7 @@ const WRAPPERS: WrapperDef[] = [
       schema: apifyLinkedinProfilePostsSchema,
       handler: async (params) =>
         handleApifyLinkedinProfilePosts(params as { url: string; maxPosts?: number }),
+      destructive: false,
     },
   },
   {
@@ -78,6 +81,7 @@ const WRAPPERS: WrapperDef[] = [
       schema: apifyLinkedinCompanyPostsSchema,
       handler: async (params) =>
         handleApifyLinkedinCompanyPosts(params as { url: string; maxPosts?: number }),
+      destructive: false,
     },
   },
   {
@@ -88,6 +92,7 @@ const WRAPPERS: WrapperDef[] = [
         "Scrapes a single LinkedIn post via Apify. Returns post content, author, reactions, and comments. Takes ~10-30s.",
       schema: apifyLinkedinPostSchema,
       handler: async (params) => handleApifyLinkedinPost(params as { url: string }),
+      destructive: false,
     },
   },
   {
@@ -98,6 +103,7 @@ const WRAPPERS: WrapperDef[] = [
         "Scrapes extended insights from a LinkedIn company page via Apify (growth signals, headcount trends, etc.). Takes ~10-30s.",
       schema: apifyLinkedinCompanyInsightsSchema,
       handler: async (params) => handleApifyLinkedinCompanyInsights(params as { url: string }),
+      destructive: false,
     },
   },
 ];
@@ -109,6 +115,7 @@ const ALWAYS_ON_TOOLS: ToolDefinition[] = [
       "Search for Apify actors by keyword. Returns your own actors and relevant public ones. Use this when no specific apify_* wrapper matches — then call apify_run_actor with the chosen ID.",
     schema: apifySearchActorsSchema,
     handler: async (params) => handleApifySearchActors(params as { query: string }),
+    destructive: false,
   },
   {
     name: "apify_run_actor",
