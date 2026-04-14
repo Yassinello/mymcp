@@ -1,5 +1,6 @@
 import type { ConnectorManifest, ConnectorState } from "./types";
 import { getEnabledPacksOverride } from "./config";
+import { on } from "./events";
 
 // Import all pack manifests — static, deterministic, no auto-discovery
 import { googleConnector } from "@/connectors/google/manifest";
@@ -32,6 +33,38 @@ export const ALL_CONNECTORS: ConnectorManifest[] = [
   adminConnector,
 ];
 
+// ── Cached registry resolution ──────────────────────────────────────
+//
+// `resolveRegistry()` is called on every dashboard render + every MCP
+// request. Prior to v0.5 phase 15 it iterated all 13 connectors and
+// re-scanned process.env every call. The cached wrapper reactively
+// invalidates via the events bus — subscribing to `env.changed` and
+// `connector.toggled` so hot env writes still take effect immediately
+// without a restart.
+//
+// Cache key is implicit (no args) — the function depends only on
+// process.env, which we re-scan on miss.
+
+let cachedRegistry: ConnectorState[] | null = null;
+
+function invalidateRegistryCache(): void {
+  cachedRegistry = null;
+}
+
+// Register once, idempotently. Subsequent imports are safe because the
+// module is evaluated once per process.
+on("env.changed", invalidateRegistryCache);
+on("connector.toggled", invalidateRegistryCache);
+
+/**
+ * Test-only escape hatch for resetting the registry cache between
+ * tests that mutate process.env directly. Production code should rely
+ * on emit("env.changed").
+ */
+export function __resetRegistryCacheForTests(): void {
+  cachedRegistry = null;
+}
+
 /**
  * Resolve which packs are enabled based on env vars.
  *
@@ -42,6 +75,13 @@ export const ALL_CONNECTORS: ConnectorManifest[] = [
  * 4. Otherwise → pack is inactive with reason
  */
 export function resolveRegistry(): ConnectorState[] {
+  if (cachedRegistry !== null) return cachedRegistry;
+  const state = resolveRegistryUncached();
+  cachedRegistry = state;
+  return state;
+}
+
+function resolveRegistryUncached(): ConnectorState[] {
   const enabledOverride = getEnabledPacksOverride();
 
   return ALL_CONNECTORS.map((pack) => {

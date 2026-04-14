@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { resolveRegistry } from "./registry";
+import { resolveRegistry, __resetRegistryCacheForTests } from "./registry";
 
 type EnvSnapshot = Record<string, string | undefined>;
 
@@ -76,6 +76,10 @@ function clearAll() {
 }
 
 function enabledIds(): string[] {
+  // Tests mutate process.env directly, bypassing the event bus that
+  // normally invalidates the registry cache. Force a reset on every
+  // query so the cache never lies.
+  __resetRegistryCacheForTests();
   return resolveRegistry()
     .filter((p) => p.enabled)
     .map((p) => p.manifest.id)

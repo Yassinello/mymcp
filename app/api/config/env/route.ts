@@ -67,6 +67,11 @@ export async function PUT(request: Request) {
   try {
     const store = getEnvStore();
     const result = await store.write(vars);
+    // Invalidate the registry cache so the next resolveRegistry() call
+    // re-scans process.env and sees any newly-satisfied connectors or
+    // force-disable toggles.
+    const { emit } = await import("@/core/events");
+    emit("env.changed");
     return NextResponse.json({ ok: true, kind: store.kind, ...result });
   } catch (err) {
     return NextResponse.json(

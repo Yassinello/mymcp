@@ -62,22 +62,34 @@ export function logToolCall(log: ToolLog) {
 }
 
 /** Aggregate stats from recent logs */
+function percentile(sortedValues: number[], p: number): number {
+  if (sortedValues.length === 0) return 0;
+  const idx = Math.ceil(sortedValues.length * p) - 1;
+  return sortedValues[Math.max(0, Math.min(idx, sortedValues.length - 1))];
+}
+
 export function getToolStats(): {
   totalCalls: number;
   errorCount: number;
   avgDurationMs: number;
-  byTool: Record<string, { calls: number; errors: number; avgMs: number }>;
+  p95DurationMs: number;
+  byTool: Record<
+    string,
+    { calls: number; errors: number; avgMs: number; p95Ms: number; errorRate: number }
+  >;
   byToken: Record<string, { calls: number; errors: number }>;
 } {
-  const byTool: Record<string, { calls: number; errors: number; totalMs: number }> = {};
+  const byTool: Record<string, { calls: number; errors: number; durations: number[] }> = {};
   const byToken: Record<string, { calls: number; errors: number }> = {};
+  const allDurations: number[] = [];
 
   for (const log of recentLogs) {
     if (!byTool[log.tool]) {
-      byTool[log.tool] = { calls: 0, errors: 0, totalMs: 0 };
+      byTool[log.tool] = { calls: 0, errors: 0, durations: [] };
     }
     byTool[log.tool].calls++;
-    byTool[log.tool].totalMs += log.durationMs;
+    byTool[log.tool].durations.push(log.durationMs);
+    allDurations.push(log.durationMs);
     if (log.status === "error") byTool[log.tool].errors++;
 
     if (log.tokenId) {
@@ -92,16 +104,28 @@ export function getToolStats(): {
   const totalCalls = recentLogs.length;
   const errorCount = recentLogs.filter((l) => l.status === "error").length;
   const totalMs = recentLogs.reduce((sum, l) => sum + l.durationMs, 0);
+  const sortedAll = [...allDurations].sort((a, b) => a - b);
 
   return {
     totalCalls,
     errorCount,
     avgDurationMs: totalCalls > 0 ? Math.round(totalMs / totalCalls) : 0,
+    p95DurationMs: percentile(sortedAll, 0.95),
     byTool: Object.fromEntries(
-      Object.entries(byTool).map(([tool, s]) => [
-        tool,
-        { calls: s.calls, errors: s.errors, avgMs: Math.round(s.totalMs / s.calls) },
-      ])
+      Object.entries(byTool).map(([tool, s]) => {
+        const sorted = [...s.durations].sort((a, b) => a - b);
+        const sum = s.durations.reduce((a, b) => a + b, 0);
+        return [
+          tool,
+          {
+            calls: s.calls,
+            errors: s.errors,
+            avgMs: Math.round(sum / s.calls),
+            p95Ms: percentile(sorted, 0.95),
+            errorRate: s.calls > 0 ? s.errors / s.calls : 0,
+          },
+        ];
+      })
     ),
     byToken,
   };
