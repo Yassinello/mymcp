@@ -27,21 +27,37 @@ interface StatusResponse {
   isBootstrap: boolean;
 }
 
-export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: boolean }) {
-  const [claim, setClaim] = useState<ClaimStatus>("loading");
-  const [token, setToken] = useState<string | null>(null);
-  const [instanceUrl, setInstanceUrl] = useState<string>("");
+interface WelcomeClientProps {
+  initialBootstrap: boolean;
+  previewMode?: boolean;
+  previewToken?: string;
+  previewInstanceUrl?: string;
+}
+
+export default function WelcomeClient({
+  initialBootstrap,
+  previewMode = false,
+  previewToken = "",
+  previewInstanceUrl = "",
+}: WelcomeClientProps) {
+  const [claim, setClaim] = useState<ClaimStatus>(previewMode ? "claimer" : "loading");
+  const [token, setToken] = useState<string | null>(previewMode ? previewToken : null);
+  const [instanceUrl, setInstanceUrl] = useState<string>(previewMode ? previewInstanceUrl : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [permanent, setPermanent] = useState(false);
+  const [permanent, setPermanent] = useState(previewMode);
   const [autoMagicState, setAutoMagicState] = useState<AutoMagicState | null>(null);
+  const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
+  const [testError, setTestError] = useState<string | null>(null);
+  const [skipTest, setSkipTest] = useState(false);
 
   // Step 1: claim the instance. If we re-enter with bootstrap already active
   // (user came back to /welcome before the redeploy), auto-call init so we
   // can re-display the token without forcing them to click again. /init is
   // idempotent and returns the existing token.
   useEffect(() => {
+    if (previewMode) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -78,10 +94,11 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
     return () => {
       cancelled = true;
     };
-  }, [initialBootstrap]);
+  }, [initialBootstrap, previewMode]);
 
   // Poll status to detect "permanent" state (env var set in Vercel + redeployed).
   useEffect(() => {
+    if (previewMode) return;
     if (permanent) return;
     const id = setInterval(async () => {
       try {
@@ -93,7 +110,7 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
       }
     }, 10_000);
     return () => clearInterval(id);
-  }, [permanent]);
+  }, [permanent, previewMode]);
 
   const initialize = useCallback(async () => {
     setBusy(true);
@@ -119,6 +136,29 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
       setBusy(false);
     }
   }, []);
+
+  const runMcpTest = useCallback(async () => {
+    if (!token) return;
+    setTestStatus("testing");
+    setTestError(null);
+    try {
+      const res = await fetch("/api/welcome/test-mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const data = (await res.json()) as { ok: boolean; error?: string };
+      if (data.ok) {
+        setTestStatus("ok");
+      } else {
+        setTestStatus("fail");
+        setTestError(data.error || "MCP test failed");
+      }
+    } catch {
+      setTestStatus("fail");
+      setTestError("Network error");
+    }
+  }, [token]);
 
   const copyToken = useCallback(async () => {
     if (!token) return;
@@ -208,6 +248,12 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
   // Token visible: either freshly minted or we re-entered with bootstrap active.
   return (
     <Shell wide>
+      {previewMode && (
+        <div className="mb-6 rounded-lg border border-purple-800 bg-purple-950/40 px-4 py-3 text-sm text-purple-200">
+          <strong className="font-semibold">Preview mode</strong> — read-only rendering against your
+          live instance. No state is mutated. Close this tab when done.
+        </div>
+      )}
       {permanent &&
         !(
           autoMagicState?.autoMagic &&
@@ -335,28 +381,131 @@ export default function WelcomeClient({ initialBootstrap }: { initialBootstrap: 
       {token && <TokenUsagePanel token={token} instanceUrl={instanceUrl} />}
       <MultiClientNote />
 
-      <a
-        href="/config"
-        className="inline-block bg-blue-500 hover:bg-blue-400 text-white px-6 py-3 rounded-lg font-semibold text-sm"
-      >
-        Continue to dashboard →
-      </a>
+      <TestMcpPanel
+        permanent={permanent}
+        testStatus={testStatus}
+        testError={testError}
+        runMcpTest={runMcpTest}
+      />
+
+      {(() => {
+        const canContinue = (permanent && testStatus === "ok") || skipTest;
+        return (
+          <div className="flex items-center gap-4">
+            <a
+              href={canContinue ? "/config" : undefined}
+              aria-disabled={!canContinue}
+              onClick={(e) => {
+                if (!canContinue) e.preventDefault();
+              }}
+              className={`inline-block px-6 py-3 rounded-lg font-semibold text-sm transition-colors ${
+                canContinue
+                  ? "bg-blue-500 hover:bg-blue-400 text-white cursor-pointer"
+                  : "bg-slate-800 text-slate-500 cursor-not-allowed"
+              }`}
+            >
+              Continue to dashboard →
+            </a>
+            {!canContinue && !skipTest && (
+              <button
+                type="button"
+                onClick={() => setSkipTest(true)}
+                className="text-xs text-slate-600 hover:text-slate-400 underline"
+              >
+                Skip test and continue anyway
+              </button>
+            )}
+          </div>
+        );
+      })()}
       <RecoveryFooter />
     </Shell>
   );
 }
 
+function TestMcpPanel({
+  permanent,
+  testStatus,
+  testError,
+  runMcpTest,
+}: {
+  permanent: boolean;
+  testStatus: "idle" | "testing" | "ok" | "fail";
+  testError: string | null;
+  runMcpTest: () => void;
+}) {
+  return (
+    <div className="mb-6 rounded-lg border border-slate-800 bg-slate-900/40 p-5">
+      <p className="text-sm font-semibold text-white mb-1">Verify your install</p>
+      <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
+        Test that your token authenticates against <code className="font-mono">/api/mcp</code> on
+        this instance. The dashboard unlocks only once the redeploy is live <em>and</em> the test
+        passes.
+      </p>
+
+      <ol className="space-y-2 mb-4 text-xs">
+        <li className="flex items-center gap-2">
+          <span aria-hidden>{permanent ? "✓" : "⏳"}</span>
+          <span className={permanent ? "text-emerald-300" : "text-amber-300"}>
+            {permanent
+              ? "Permanent token active in Vercel"
+              : "Waiting for Vercel redeploy (auto-polling)…"}
+          </span>
+        </li>
+        <li className="flex items-center gap-2">
+          <span aria-hidden>{testStatus === "ok" ? "✓" : testStatus === "fail" ? "✗" : "□"}</span>
+          <span
+            className={
+              testStatus === "ok"
+                ? "text-emerald-300"
+                : testStatus === "fail"
+                  ? "text-red-300"
+                  : "text-slate-400"
+            }
+          >
+            {testStatus === "idle" && "MCP endpoint not tested yet"}
+            {testStatus === "testing" && "Testing MCP endpoint…"}
+            {testStatus === "ok" && "MCP endpoint responded — install confirmed"}
+            {testStatus === "fail" && `Test failed: ${testError ?? "unknown error"}`}
+          </span>
+        </li>
+      </ol>
+
+      <button
+        type="button"
+        onClick={runMcpTest}
+        disabled={!permanent || testStatus === "testing"}
+        className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 px-4 py-2 rounded-md text-xs font-semibold transition-colors"
+      >
+        {testStatus === "testing"
+          ? "Testing…"
+          : testStatus === "ok"
+            ? "Re-run test"
+            : "Test MCP connection"}
+      </button>
+      {!permanent && (
+        <span className="ml-3 text-[11px] text-slate-600">
+          (enabled once the redeploy finishes)
+        </span>
+      )}
+    </div>
+  );
+}
+
+type UsageTab = "desktop-connector" | "desktop-config" | "code" | "other";
+
 function TokenUsagePanel({ token, instanceUrl }: { token: string; instanceUrl: string }) {
-  const [tab, setTab] = useState<"desktop" | "code" | "other">("desktop");
+  const [tab, setTab] = useState<UsageTab>("desktop-connector");
   const [copied, setCopied] = useState(false);
 
-  const url = `${instanceUrl || "https://YOUR-INSTANCE.vercel.app"}/api/mcp`;
+  const baseUrl = `${instanceUrl || "https://YOUR-INSTANCE.vercel.app"}/api/mcp`;
+  const urlWithToken = `${baseUrl}?token=${encodeURIComponent(token)}`;
 
-  const desktopSnippet = JSON.stringify(
+  const desktopConfigSnippet = JSON.stringify(
     {
       mcpServers: {
         mymcp: {
-          url,
+          url: baseUrl,
           headers: { Authorization: `Bearer ${token}` },
         },
       },
@@ -365,14 +514,21 @@ function TokenUsagePanel({ token, instanceUrl }: { token: string; instanceUrl: s
     2
   );
 
-  const codeSnippet = `claude mcp add --transport http mymcp ${url} \\\n  --header "Authorization: Bearer ${token}"`;
+  const codeSnippet = `claude mcp add --transport http mymcp ${baseUrl} \\\n  --header "Authorization: Bearer ${token}"`;
 
   const desktopPath =
     typeof navigator !== "undefined" && /Mac/i.test(navigator.platform)
       ? "~/Library/Application Support/Claude/claude_desktop_config.json"
       : "%APPDATA%\\Claude\\claude_desktop_config.json";
 
-  const snippet = tab === "desktop" ? desktopSnippet : tab === "code" ? codeSnippet : url;
+  const snippet =
+    tab === "desktop-connector"
+      ? urlWithToken
+      : tab === "desktop-config"
+        ? desktopConfigSnippet
+        : tab === "code"
+          ? codeSnippet
+          : baseUrl;
 
   const copySnippet = async () => {
     try {
@@ -388,10 +544,11 @@ function TokenUsagePanel({ token, instanceUrl }: { token: string; instanceUrl: s
     <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900/40 p-5">
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-semibold text-white">How to use this token</p>
-        <div className="flex items-center gap-1 bg-slate-950 rounded-md p-0.5 border border-slate-800">
+        <div className="flex items-center gap-1 bg-slate-950 rounded-md p-0.5 border border-slate-800 flex-wrap">
           {(
             [
-              ["desktop", "Claude Desktop"],
+              ["desktop-connector", "Desktop (Connector)"],
+              ["desktop-config", "Desktop (Config file)"],
               ["code", "Claude Code"],
               ["other", "Other"],
             ] as const
@@ -410,10 +567,20 @@ function TokenUsagePanel({ token, instanceUrl }: { token: string; instanceUrl: s
         </div>
       </div>
 
-      {tab === "desktop" && (
+      {tab === "desktop-connector" && (
         <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
-          Open <code className="font-mono text-slate-400">{desktopPath}</code> (create it if it
-          doesn&apos;t exist), paste the snippet below, then restart Claude Desktop.
+          In Claude Desktop: <strong className="text-slate-300">Settings → Connectors →</strong>{" "}
+          <em>Add custom connector</em>. Set <code className="font-mono text-slate-400">Name</code>{" "}
+          to <code className="font-mono text-slate-400">MyMCP</code> and paste the URL below into{" "}
+          <code className="font-mono text-slate-400">Remote MCP server URL</code>. Leave OAuth
+          fields empty — the token travels in the query string.
+        </p>
+      )}
+
+      {tab === "desktop-config" && (
+        <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
+          Alternative: open <code className="font-mono text-slate-400">{desktopPath}</code> (create
+          it if missing), paste the snippet below, then restart Claude Desktop.
         </p>
       )}
 
@@ -451,7 +618,7 @@ function TokenUsagePanel({ token, instanceUrl }: { token: string; instanceUrl: s
       </div>
 
       <p className="text-[10px] text-slate-600 mt-3">
-        Endpoint: <code className="font-mono text-slate-500">{url}</code>
+        Endpoint: <code className="font-mono text-slate-500">{baseUrl}</code>
       </p>
     </div>
   );
