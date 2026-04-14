@@ -169,6 +169,11 @@ export function checkCsrf(request: Request): Response | null {
  * Also runs the Origin-header CSRF check for mutating methods — cheaper
  * than requiring every individual route to call checkCsrf() separately,
  * and impossible to forget.
+ *
+ * Multi-token aware: `ADMIN_AUTH_TOKEN` / `MCP_AUTH_TOKEN` can be a
+ * comma-separated list so one deployment can hand different tokens to
+ * different clients. Fix shipped in v0.5 phase 13 after route tests
+ * caught that the prior single-string compare broke multi-token setups.
  */
 export function checkAdminAuth(request: Request): Response | null {
   // CSRF first — doesn't depend on token state, so no info leak.
@@ -176,8 +181,9 @@ export function checkAdminAuth(request: Request): Response | null {
   if (csrfError) return csrfError;
 
   warnAdminTokenFallback();
-  const token = (process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN)?.trim();
-  if (!token) {
+  const adminRaw = process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN;
+  const tokens = parseTokens(adminRaw);
+  if (tokens.length === 0) {
     // First-run mode (no token configured anywhere). We must NOT silently
     // grant admin access to the public internet — that would let anyone seize
     // a fresh Vercel deploy. Allow access only when:
@@ -190,7 +196,11 @@ export function checkAdminAuth(request: Request): Response | null {
   }
 
   const provided = extractToken(request);
-  if (provided && safeCompare(provided, token)) return null;
+  if (provided) {
+    for (const t of tokens) {
+      if (safeCompare(provided, t)) return null;
+    }
+  }
 
   return new Response("Unauthorized", { status: 401 });
 }

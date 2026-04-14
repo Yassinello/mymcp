@@ -6,7 +6,7 @@
  * Requires: .env with at least MCP_AUTH_TOKEN set
  */
 
-import { execSync, spawn } from "child_process";
+import { spawn } from "child_process";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 

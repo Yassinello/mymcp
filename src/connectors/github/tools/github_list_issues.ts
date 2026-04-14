@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubFetch, resolveRepo, formatIssue, GitHubIssue } from "../lib/github-api";
+import { githubFetch, resolveRepo, GitHubIssue } from "../lib/github-api";
 
 export const githubListIssuesSchema = {
   repo: z

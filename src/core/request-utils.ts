@@ -19,15 +19,23 @@ function isLoopbackCandidate(ip: string): boolean {
 /**
  * Returns true if the request safely originates from loopback.
  *
- * - If X-Forwarded-For or X-Real-IP is set (proxy in front), require the
- *   leftmost client IP to be loopback.
- * - Otherwise inspect NextRequest.ip if available.
- * - Fall back to trusting direct Node connections (typical `next dev`).
+ * Priority:
+ * 1. On Vercel, never — hard guard against any misconfiguration granting
+ *    first-run admin access in production.
+ * 2. If `x-forwarded-for` / `x-real-ip` is set (proxy in front), require
+ *    the leftmost IP to be loopback.
+ * 3. If `NextRequest.ip` is available (older Next versions), check it.
+ * 4. Fall back to inspecting the URL hostname — trust the request only
+ *    when the destination itself is a loopback name (`localhost`, `127.x`,
+ *    `::1`). This handles `next dev` via `http://localhost:3000` without
+ *    false-positives for Docker/custom deploys behind a proxy that
+ *    forgets to set `x-forwarded-for`.
+ *
+ * Previous behavior fell through to `return true` which silently granted
+ * admin access to any unproxied request on non-Vercel deploys. Fixed in
+ * v0.5 phase 13 after API route tests caught the regression.
  */
 export function isLoopbackRequest(request: Request): boolean {
-  // Hard guard: on Vercel we are NEVER loopback. This prevents the fallback
-  // below from accidentally granting first-run admin access if proxy headers
-  // are missing for any reason during an edge case.
   if (process.env.VERCEL === "1") return false;
 
   const xff = request.headers.get("x-forwarded-for");
@@ -41,7 +49,14 @@ export function isLoopbackRequest(request: Request): boolean {
   }
   const ip = (request as unknown as NextRequest & { ip?: string }).ip;
   if (ip) return isLoopbackCandidate(ip);
-  return true;
+
+  // Last resort: check the URL hostname. Only trust loopback destinations.
+  try {
+    const urlHost = new URL(request.url).hostname.toLowerCase();
+    return isLoopbackCandidate(urlHost);
+  } catch {
+    return false;
+  }
 }
 
 /**
