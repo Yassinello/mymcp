@@ -31,10 +31,13 @@ function renderInline(text: string): string {
     return `<a href="${escapeHtml(safeUrl)}" class="text-accent hover:underline" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
   });
 
-  // Bold **text**
+  // Bold **text** — run before italic so the non-greedy italic regex
+  // doesn't eat `**` boundaries.
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  // Italic *text*
-  out = out.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, "$1<em>$2</em>");
+  // Italic *text* — lookbehind avoids consuming the char before `*`
+  // (the old `(^|[^*])` approach ate the leading char and broke
+  // consecutive italic runs like `*a* *b*` → only the first rendered).
+  out = out.replace(/(?<![*\w])\*([^*\n]+)\*(?!\*)/g, "<em>$1</em>");
 
   return out;
 }

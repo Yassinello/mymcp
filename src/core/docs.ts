@@ -9,6 +9,7 @@
 
 import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { cache } from "react";
 import { parseFrontmatter } from "./frontmatter";
 
 export interface DocEntry {
@@ -21,7 +22,16 @@ export interface DocEntry {
 
 const DOCS_DIR = resolve(process.cwd(), "content", "docs");
 
-export function loadDocs(): DocEntry[] {
+/**
+ * React.cache memoization — `loadDocs()` is called from a server
+ * component (`app/config/page.tsx`). Wrapping with `cache()` ensures
+ * the filesystem read runs at most once per render tree, even if the
+ * page logic branches and asks for docs from multiple places.
+ *
+ * Cache key is implicit (no args), so this is effectively a singleton
+ * for the current request — perfect for static in-repo content.
+ */
+export const loadDocs = cache((): DocEntry[] => {
   if (!existsSync(DOCS_DIR)) return [];
   let files: string[];
   try {
@@ -67,4 +77,4 @@ export function loadDocs(): DocEntry[] {
   }
 
   return docs.sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug));
-}
+});

@@ -219,40 +219,52 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
               </div>
 
               {(() => {
-                // Compute the list of missing required env vars to show in the
-                // tooltip when the toggle is disabled.
+                // Compute the list of missing required env vars and translate
+                // them to human labels (from the setup wizard's per-var labels)
+                // so a non-developer tooltip is actually useful. Fall back to
+                // the raw key name if we don't have a mapping for it.
                 const missingVars = pack.requiredEnvVars.filter((k) => {
                   const v = envVars[k] ?? "";
                   return v === "" || v === undefined;
                 });
-                const disabledTooltip = missingVars.length
-                  ? `Set required env vars first: ${missingVars.join(", ")}`
-                  : "";
+                const labelFor = (key: string): string => {
+                  const def = packDef?.vars.find((v) => v.key === key);
+                  return def?.label || key;
+                };
+                const missingLabels = missingVars.map(labelFor);
+                const disabledTooltip = missingLabels.length
+                  ? `Missing credentials: ${missingLabels.join(", ")} — click to open the configuration form`
+                  : "Add credentials before enabling — click to open the configuration form";
                 return (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (!isConfigured) return;
+                      if (!isConfigured) {
+                        // L7: clicking a disabled toggle expands the card to
+                        // reveal the credential form instead of silently
+                        // swallowing the click.
+                        setExpanded(pack.id);
+                        return;
+                      }
                       togglePack(pack.id, !pack.enabled);
                     }}
-                    disabled={!isConfigured}
                     className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ${
                       pack.enabled
                         ? "bg-accent"
                         : isConfigured
                           ? "bg-bg-muted border border-border"
-                          : "bg-bg-muted border border-border opacity-50 cursor-not-allowed"
+                          : "bg-bg-muted border border-border opacity-60"
                     }`}
                     title={
                       !isConfigured
-                        ? disabledTooltip || "Add credentials before enabling"
+                        ? disabledTooltip
                         : pack.enabled
                           ? "Disable connector"
                           : "Enable connector"
                     }
                     aria-label={
                       !isConfigured
-                        ? "Toggle disabled — credentials missing"
+                        ? "Toggle disabled — credentials missing. Click to configure."
                         : pack.enabled
                           ? "Disable connector"
                           : "Enable connector"

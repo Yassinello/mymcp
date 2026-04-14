@@ -54,6 +54,16 @@ describe("renderMarkdown", () => {
     expect(out).toContain("<em>italic</em>");
   });
 
+  it("renders consecutive italic runs without eating the separator (L1 regression)", () => {
+    const out = renderMarkdown("*one* *two* *three*");
+    // All three should render as italic — the old regex consumed the
+    // leading space and only rendered one per pass.
+    expect(out.match(/<em>/g)?.length).toBe(3);
+    expect(out).toContain("<em>one</em>");
+    expect(out).toContain("<em>two</em>");
+    expect(out).toContain("<em>three</em>");
+  });
+
   it("renders safe links", () => {
     const out = renderMarkdown("[Vercel](https://vercel.com)");
     expect(out).toContain('href="https://vercel.com"');

@@ -32,7 +32,7 @@ export function ContextFileField({
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [savedFlash, setSavedFlash] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Load current state from server
@@ -79,7 +79,11 @@ export function ContextFileField({
       });
       const data = await res.json();
       if (data.ok) {
-        setSavedAt(Date.now());
+        setSavedFlash(true);
+        // Auto-clear after 2.5s — previously used a timestamp comparison
+        // that only cleared on next render (so the banner stuck if the
+        // user didn't interact). Explicit timer is simpler.
+        setTimeout(() => setSavedFlash(false), 2500);
       } else {
         setError(data.error || "Save failed");
       }
@@ -163,9 +167,7 @@ export function ContextFileField({
         >
           {saving ? "Saving…" : "Save context"}
         </button>
-        {savedAt && Date.now() - savedAt < 2500 && (
-          <span className="text-xs text-green">Saved</span>
-        )}
+        {savedFlash && <span className="text-xs text-green">Saved</span>}
         {error && <span className="text-xs text-red-500">{error}</span>}
       </div>
     </div>

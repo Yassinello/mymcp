@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import type { InstanceConfig } from "@/core/types";
 import { ContextFileField } from "./settings/context-file-field";
 import { McpInstallPanel } from "./settings/mcp-install-panel";
@@ -45,7 +46,20 @@ export function SettingsTab({
   baseUrl: string;
   hasAuthToken: boolean;
 }) {
-  const [tab, setTab] = useState<SubTab>("user");
+  // Subtab state is reflected in the URL (?tab=settings&sub=user|mcp) so
+  // deep-linking and back/forward navigation work. Default to "user".
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const subFromUrl = searchParams.get("sub");
+  const initialSub: SubTab = subFromUrl === "mcp" ? "mcp" : "user";
+  const [tab, setTabState] = useState<SubTab>(initialSub);
+  const setTab = (next: SubTab) => {
+    setTabState(next);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "settings");
+    params.set("sub", next);
+    router.replace(`/config?${params.toString()}`, { scroll: false });
+  };
   const [values, setValues] = useState<Record<string, string>>({
     MYMCP_DISPLAY_NAME: config.displayName,
     MYMCP_TIMEZONE: config.timezone,

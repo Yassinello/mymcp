@@ -33,21 +33,39 @@ class FilesystemKV implements KVStore {
   kind = "filesystem" as const;
   private filePath: string;
   private writeQueue: Promise<void> = Promise.resolve();
+  // In-memory read cache. Dashboard page renders trigger ~10 get() calls
+  // per render and each one was re-parsing the full JSON map. 500ms TTL
+  // is aggressive enough to serve a single render tree but short enough
+  // that concurrent processes (dev + npm scripts sharing data/kv.json)
+  // still see each other's writes within a second. Invalidated on every
+  // local write.
+  private cache: { at: number; map: Record<string, string> } | null = null;
+  private static readonly CACHE_TTL_MS = 500;
 
   constructor(filePath: string) {
     this.filePath = filePath;
   }
 
   private async readAll(): Promise<Record<string, string>> {
+    const now = Date.now();
+    if (this.cache && now - this.cache.at < FilesystemKV.CACHE_TTL_MS) {
+      return this.cache.map;
+    }
     try {
       const buf = await fs.readFile(this.filePath, "utf-8");
       const parsed = JSON.parse(buf);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as Record<string, string>;
+        const map = parsed as Record<string, string>;
+        this.cache = { at: now, map };
+        return map;
       }
+      this.cache = { at: now, map: {} };
       return {};
     } catch (err: unknown) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") return {};
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        this.cache = { at: now, map: {} };
+        return {};
+      }
       return {};
     }
   }
@@ -57,6 +75,9 @@ class FilesystemKV implements KVStore {
     const tmp = `${this.filePath}.${randomBytes(4).toString("hex")}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(map, null, 2), "utf-8");
     await fs.rename(tmp, this.filePath);
+    // Refresh the in-memory cache after a local write so subsequent reads
+    // within the TTL window don't serve stale data.
+    this.cache = { at: Date.now(), map: { ...map } };
   }
 
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
@@ -69,11 +90,19 @@ class FilesystemKV implements KVStore {
   }
 
   async get(key: string): Promise<string | null> {
+    // Drain any in-flight writes before reading so the caller always
+    // sees the latest state. Matters for tests and for race-prone
+    // sequences like clearBootstrap() → immediate rehydrate.
+    await this.writeQueue;
     const map = await this.readAll();
     return map[key] ?? null;
   }
 
   async set(key: string, value: string): Promise<void> {
+    // Synchronously invalidate the cache so any concurrent reader that
+    // *hasn't yet entered the write queue* forces a fresh read instead
+    // of serving pre-write cached data.
+    this.cache = null;
     await this.enqueue(async () => {
       const map = await this.readAll();
       map[key] = value;
@@ -82,6 +111,7 @@ class FilesystemKV implements KVStore {
   }
 
   async delete(key: string): Promise<void> {
+    this.cache = null;
     await this.enqueue(async () => {
       const map = await this.readAll();
       if (key in map) {
@@ -92,6 +122,7 @@ class FilesystemKV implements KVStore {
   }
 
   async list(prefix?: string): Promise<string[]> {
+    await this.writeQueue;
     const map = await this.readAll();
     const keys = Object.keys(map);
     return prefix ? keys.filter((k) => k.startsWith(prefix)) : keys;

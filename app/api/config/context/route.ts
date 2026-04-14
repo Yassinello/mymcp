@@ -71,22 +71,36 @@ export async function PUT(request: Request) {
 
   const kv = getKVStore();
   await kv.set(KV_MODE, mode);
-  if (mode === "inline") {
-    await kv.set(KV_INLINE, inline);
-  }
 
-  // Mirror vault path to env var so the my_context tool can resolve it.
-  if (mode === "vault" && vaultPath) {
-    try {
-      const store = getEnvStore();
-      await store.write({ MYMCP_CONTEXT_PATH: vaultPath });
-    } catch (err) {
-      // Best-effort: don't fail the save just because env hot-write didn't
-      // land (e.g. read-only filesystem on Vercel without VERCEL_TOKEN).
-      console.warn(
-        "[/api/config/context] could not persist MYMCP_CONTEXT_PATH:",
-        err instanceof Error ? err.message : err
-      );
+  if (mode === "inline") {
+    // Active mode: inline. Persist the content. Best-effort: also clear
+    // the vault-mode env var so stale state doesn't pile up.
+    await kv.set(KV_INLINE, inline);
+    if (process.env.MYMCP_CONTEXT_PATH) {
+      try {
+        const store = getEnvStore();
+        await store.write({ MYMCP_CONTEXT_PATH: "" });
+      } catch (err) {
+        console.warn(
+          "[/api/config/context] could not clear stale MYMCP_CONTEXT_PATH:",
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+  } else {
+    // Active mode: vault. Mirror the path to env so the my_context tool
+    // can resolve it, and clear any stale inline KV content.
+    await kv.delete(KV_INLINE);
+    if (vaultPath) {
+      try {
+        const store = getEnvStore();
+        await store.write({ MYMCP_CONTEXT_PATH: vaultPath });
+      } catch (err) {
+        console.warn(
+          "[/api/config/context] could not persist MYMCP_CONTEXT_PATH:",
+          err instanceof Error ? err.message : err
+        );
+      }
     }
   }
 

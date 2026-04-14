@@ -42,6 +42,19 @@ export interface ToolDefinition {
    * explicitly. When true, the sandbox and dashboard require confirmation
    * before invoking. When false, the tool is read-only / side-effect-free.
    * No name-based regex is used; tool authors opt in explicitly.
+   *
+   * Policy (as of v0.5):
+   * - `true` when the tool MUTATES external state — creates, updates,
+   *   deletes, sends messages, posts comments, moves files, etc.
+   * - `false` when the tool reads / queries without modifying anything.
+   *
+   * NOT covered by this flag (future work, see TECH-IMPROVEMENTS report):
+   * - Paid APIs that cost money per call but don't mutate state (e.g.
+   *   Apify scrapers, Browserbase sessions). These are currently
+   *   `destructive: false`. A separate `paid: boolean` or `cost: "free" |
+   *   "paid"` flag is tracked for v0.6+.
+   * - Rate-limited APIs where the risk is quota exhaustion rather than
+   *   mutation — same bucket, same future work.
    */
   destructive: boolean;
 }
