@@ -1,19 +1,21 @@
 import { createMcpHandler } from "mcp-handler";
-import { z } from "zod";
 import { withLogging } from "@/core/logging";
 import { checkMcpAuth, extractToken } from "@/core/auth";
 import { isFirstRunMode } from "@/core/first-run";
 import { checkRateLimit } from "@/core/rate-limit";
 import { getEnabledPacks, logRegistryState } from "@/core/registry";
-import { listSkillsSync, getSkill } from "@/connectors/skills/store";
-import { renderSkill } from "@/connectors/skills/lib/render";
-import { maybeRefreshRemote } from "@/connectors/skills/lib/remote-fetcher";
 import { VERSION } from "@/core/version";
 
 /**
  * Build a fresh MCP handler that reflects the current registry state.
  * Called per-request so that hot-env edits (via /api/config/env) are
  * picked up without needing a restart.
+ *
+ * The transport is connector-agnostic: it iterates enabled connectors
+ * and registers their tools + optional prompts generically. Individual
+ * connectors that need non-tool primitives (e.g., Skills exposing MCP
+ * prompts) implement `ConnectorManifest.registerPrompts` — the transport
+ * never imports from specific connector modules.
  *
  * Cost: a few ms to re-scan process.env + rebuild the tool list.
  */
@@ -35,58 +37,31 @@ function buildHandler(callerTokenId?: string | null) {
             withLogging(tool.name, async (params) => tool.handler(params), callerTokenId)
           );
         }
-      }
 
-      // ── Skills → MCP prompts ──────────────────────────────────────────
-      // Each skill also registers as an MCP prompt so Claude Desktop can
-      // surface them as slash commands. The tool surface (skill_<id>)
-      // remains the universal fallback and works regardless.
-      try {
-        const skills = listSkillsSync();
-        for (const skill of skills) {
-          const argsSchema: Record<string, z.ZodType<string>> = {};
-          for (const arg of skill.arguments) {
-            argsSchema[arg.name] = arg.required
-              ? z.string().describe(arg.description || arg.name)
-              : (z
-                  .string()
-                  .optional()
-                  .describe(arg.description || arg.name) as unknown as z.ZodType<string>);
-          }
-
+        // Non-tool primitives (MCP prompts, resources) — optional per
+        // connector. Each connector handles its own registration logic.
+        if (pack.manifest.registerPrompts) {
           try {
-            server.prompt(
-              skill.id,
-              skill.description || skill.name,
-              argsSchema,
-              async (args: Record<string, string | undefined>) => {
-                const latest = (await getSkill(skill.id)) ?? skill;
-                const ready = await maybeRefreshRemote(latest);
-                const text = renderSkill(ready, args as Record<string, unknown>);
-                return {
-                  messages: [
-                    {
-                      role: "user" as const,
-                      content: { type: "text" as const, text },
-                    },
-                  ],
-                };
-              }
-            );
+            const maybePromise = pack.manifest.registerPrompts(server);
+            // Fire and forget if async — the transport is synchronous at
+            // this level; per-request rebuild tolerates late promise resolution.
+            if (maybePromise && typeof (maybePromise as Promise<void>).then === "function") {
+              (maybePromise as Promise<void>).catch((err) =>
+                console.info(
+                  `[MyMCP] ${pack.manifest.id}.registerPrompts rejected: ${
+                    err instanceof Error ? err.message : String(err)
+                  }`
+                )
+              );
+            }
           } catch (err) {
             console.info(
-              `[MyMCP] Skipping prompt registration for skill "${skill.id}": ${
+              `[MyMCP] ${pack.manifest.id}.registerPrompts threw: ${
                 err instanceof Error ? err.message : String(err)
               }`
             );
           }
         }
-      } catch (err) {
-        console.info(
-          `[MyMCP] Skills prompt registration unavailable: ${
-            err instanceof Error ? err.message : String(err)
-          }`
-        );
       }
     },
     {

@@ -84,4 +84,74 @@ export const skillsConnector: ConnectorManifest = {
       };
     }
   },
+  /**
+   * Register user-authored skills as MCP prompts so Claude Desktop can
+   * surface them as slash commands. The tool surface (`skill_<id>`)
+   * remains the universal fallback for clients that don't support MCP
+   * prompts — adding a skill always exposes both surfaces.
+   *
+   * Framework note: this is the ConnectorManifest.registerPrompts hook.
+   * The transport calls it for every enabled connector, so the transport
+   * itself has zero knowledge of skills-specific wiring.
+   */
+  registerPrompts: (serverUnknown) => {
+    // mcp-handler's server type isn't exported cleanly, so we narrow via
+    // a local shape that matches what we actually call. This keeps the
+    // core ConnectorManifest type independent of mcp-handler internals.
+    const server = serverUnknown as {
+      prompt: (
+        name: string,
+        description: string,
+        args: Record<string, z.ZodTypeAny>,
+        handler: (
+          args: Record<string, string | undefined>
+        ) => Promise<{ messages: { role: "user"; content: { type: "text"; text: string } }[] }>
+      ) => void;
+    };
+
+    try {
+      const skills = listSkillsSync();
+      for (const skill of skills) {
+        const argsSchema: Record<string, z.ZodTypeAny> = {};
+        for (const arg of skill.arguments) {
+          argsSchema[arg.name] = arg.required
+            ? z.string().describe(arg.description || arg.name)
+            : z.string().optional().describe(arg.description || arg.name);
+        }
+
+        try {
+          server.prompt(
+            skill.id,
+            skill.description || skill.name,
+            argsSchema,
+            async (args) => {
+              const latest = (await getSkill(skill.id)) ?? skill;
+              const ready = await maybeRefreshRemote(latest);
+              const text = renderSkill(ready, args as Record<string, unknown>);
+              return {
+                messages: [
+                  {
+                    role: "user" as const,
+                    content: { type: "text" as const, text },
+                  },
+                ],
+              };
+            }
+          );
+        } catch (err) {
+          console.info(
+            `[MyMCP] Skipping prompt registration for skill "${skill.id}": ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          );
+        }
+      }
+    } catch (err) {
+      console.info(
+        `[MyMCP] Skills prompt registration unavailable: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  },
 };

@@ -9,6 +9,7 @@
 
 import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { parseFrontmatter } from "./frontmatter";
 
 export interface DocEntry {
   slug: string;
@@ -19,24 +20,6 @@ export interface DocEntry {
 }
 
 const DOCS_DIR = resolve(process.cwd(), "content", "docs");
-
-function parseFrontmatter(raw: string): {
-  meta: Record<string, string>;
-  body: string;
-} {
-  const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
-  if (!match) return { meta: {}, body: raw };
-
-  const meta: Record<string, string> = {};
-  for (const line of match[1].split(/\r?\n/)) {
-    const colon = line.indexOf(":");
-    if (colon === -1) continue;
-    const key = line.slice(0, colon).trim();
-    const value = line.slice(colon + 1).trim().replace(/^["']|["']$/g, "");
-    if (key) meta[key] = value;
-  }
-  return { meta, body: match[2] };
-}
 
 export function loadDocs(): DocEntry[] {
   if (!existsSync(DOCS_DIR)) return [];
@@ -68,13 +51,19 @@ export function loadDocs(): DocEntry[] {
 
     const { meta, body } = parseFrontmatter(raw);
     const slug = file.replace(/\.md$/, "");
-    docs.push({
-      slug,
-      title: meta.title || slug.replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase()),
-      summary: meta.summary || "",
-      content: body.trim(),
-      order: meta.order ? parseInt(meta.order, 10) || 999 : 999,
-    });
+    const title =
+      typeof meta.title === "string" && meta.title
+        ? meta.title
+        : slug.replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+    const summary = typeof meta.summary === "string" ? meta.summary : "";
+    const orderRaw = meta.order;
+    const order =
+      typeof orderRaw === "number"
+        ? orderRaw
+        : typeof orderRaw === "string"
+          ? parseInt(orderRaw, 10) || 999
+          : 999;
+    docs.push({ slug, title, summary, content: body.trim(), order });
   }
 
   return docs.sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug));

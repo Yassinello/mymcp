@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { McpClientSnippets } from "../components/mcp-client-snippets";
 
 type ClaimStatus = "loading" | "new" | "claimer" | "claimed-by-other" | "already-initialized";
 
@@ -504,136 +505,13 @@ function TestMcpPanel({
   );
 }
 
-type UsageTab = "desktop-connector" | "desktop-config" | "code" | "other";
-
 function TokenUsagePanel({ token, instanceUrl }: { token: string; instanceUrl: string }) {
-  const [tab, setTab] = useState<UsageTab>("desktop-connector");
-  const [copied, setCopied] = useState(false);
-
-  const baseUrl = `${instanceUrl || "https://YOUR-INSTANCE.vercel.app"}/api/mcp`;
-  const urlWithToken = `${baseUrl}?token=${encodeURIComponent(token)}`;
-
-  const desktopConfigSnippet = JSON.stringify(
-    {
-      mcpServers: {
-        mymcp: {
-          url: baseUrl,
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      },
-    },
-    null,
-    2
-  );
-
-  const codeSnippet = `claude mcp add --transport http mymcp ${baseUrl} \\\n  --header "Authorization: Bearer ${token}"`;
-
-  const desktopPath =
-    typeof navigator !== "undefined" && /Mac/i.test(navigator.platform)
-      ? "~/Library/Application Support/Claude/claude_desktop_config.json"
-      : "%APPDATA%\\Claude\\claude_desktop_config.json";
-
-  const snippet =
-    tab === "desktop-connector"
-      ? urlWithToken
-      : tab === "desktop-config"
-        ? desktopConfigSnippet
-        : tab === "code"
-          ? codeSnippet
-          : urlWithToken;
-
-  const copySnippet = async () => {
-    try {
-      await navigator.clipboard.writeText(snippet);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // ignore
-    }
-  };
+  const baseUrl = instanceUrl || "https://YOUR-INSTANCE.vercel.app";
 
   return (
     <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900/40 p-5">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-semibold text-white">How to use this token</p>
-        <div className="flex items-center gap-1 bg-slate-950 rounded-md p-0.5 border border-slate-800 flex-wrap">
-          {(
-            [
-              ["desktop-connector", "Desktop (Connector)"],
-              ["desktop-config", "Desktop (Config file)"],
-              ["code", "Claude Code"],
-              ["other", "Other"],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setTab(k)}
-              className={`text-[11px] font-medium px-2.5 py-1 rounded transition-colors ${
-                tab === k ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-300"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {tab === "desktop-connector" && (
-        <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
-          In Claude Desktop: <strong className="text-slate-300">Settings → Connectors →</strong>{" "}
-          <em>Add custom connector</em>. Set <code className="font-mono text-slate-400">Name</code>{" "}
-          to <code className="font-mono text-slate-400">MyMCP</code> and paste the URL below into{" "}
-          <code className="font-mono text-slate-400">Remote MCP server URL</code>. Leave OAuth
-          fields empty — the token travels in the query string.
-        </p>
-      )}
-
-      {tab === "desktop-config" && (
-        <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
-          Alternative: open <code className="font-mono text-slate-400">{desktopPath}</code> (create
-          it if missing), paste the snippet below, then restart Claude Desktop.
-        </p>
-      )}
-
-      {tab === "code" && (
-        <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
-          Run this in any terminal — registers MyMCP as an HTTP MCP server in your Claude Code
-          config.
-        </p>
-      )}
-
-      {tab === "other" && (
-        <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
-          For Cursor, ChatGPT desktop, n8n, or any other MCP client: paste the URL below (with the
-          token already embedded in the query string). If your client supports custom headers, you
-          can alternatively use the base URL{" "}
-          <code className="font-mono text-slate-400">{baseUrl}</code> and send the token as{" "}
-          <code className="font-mono text-slate-400">Authorization: Bearer &lt;token&gt;</code>.
-          Both work.
-        </p>
-      )}
-
-      <div className="relative">
-        <pre className="text-[11px] font-mono bg-slate-950 border border-slate-800 px-3 py-2.5 rounded-md text-slate-300 overflow-x-auto whitespace-pre-wrap break-all">
-          {snippet}
-        </pre>
-        <button
-          type="button"
-          onClick={copySnippet}
-          className={`absolute top-2 right-2 text-[10px] font-medium px-2 py-1 rounded transition-colors ${
-            copied
-              ? "bg-emerald-900/60 text-emerald-300"
-              : "bg-slate-800 hover:bg-slate-700 text-slate-300"
-          }`}
-        >
-          {copied ? "Copied!" : "Copy"}
-        </button>
-      </div>
-
-      <p className="text-[10px] text-slate-600 mt-3">
-        Endpoint: <code className="font-mono text-slate-500">{baseUrl}</code>
-      </p>
+      <p className="text-sm font-semibold text-white mb-3">How to use this token</p>
+      <McpClientSnippets baseUrl={baseUrl} token={token} theme="welcome" />
     </div>
   );
 }

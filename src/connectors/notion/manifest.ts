@@ -1,4 +1,4 @@
-import type { ConnectorManifest } from "@/core/types";
+import { defineTool, type ConnectorManifest } from "@/core/types";
 import { notionSearchSchema, handleNotionSearch } from "./tools/notion-search";
 import { notionReadSchema, handleNotionRead } from "./tools/notion-read";
 import { notionCreateSchema, handleNotionCreate } from "./tools/notion-create";
@@ -39,62 +39,49 @@ A Notion workspace where you can install integrations. Notion integrations only 
       return { ok: false, message: err instanceof Error ? err.message : "Cannot reach Notion" };
     }
   },
+  // PILOT: defineTool() migration (v0.5 phase 12, T1). Notion was picked
+  // because it has 5 tools mixing read (notion_search/read/query) and
+  // write (notion_create/update), exercising both destructive flag values.
   tools: [
-    {
+    defineTool({
       name: "notion_search",
       description:
         "Search Notion pages by title or content. Returns page title, URL, last edited date, and properties.",
       schema: notionSearchSchema,
-      handler: async (params) => handleNotionSearch(params as { query: string; limit?: number }),
+      handler: async (args) => handleNotionSearch(args),
       destructive: false,
-    },
-    {
+    }),
+    defineTool({
       name: "notion_read",
       description:
         "Read the full content of a Notion page. Returns title and content as markdown (headings, paragraphs, lists, code blocks).",
       schema: notionReadSchema,
-      handler: async (params) => handleNotionRead(params as { page_id: string }),
+      handler: async (args) => handleNotionRead(args),
       destructive: false,
-    },
-    {
+    }),
+    defineTool({
       name: "notion_create",
       description:
         "Create a new page in a Notion database. Provide the database ID, title, and optional content.",
       schema: notionCreateSchema,
-      handler: async (params) =>
-        handleNotionCreate(params as { database_id: string; title: string; content?: string }),
+      handler: async (args) => handleNotionCreate(args),
       destructive: true,
-    },
-    {
+    }),
+    defineTool({
       name: "notion_update",
       description:
         "Update an existing Notion page. Can update properties (Status, Priority, etc.) and/or append content to the page body.",
       schema: notionUpdateSchema,
-      handler: async (params) =>
-        handleNotionUpdate(
-          params as {
-            page_id: string;
-            properties?: Record<string, string | number | boolean>;
-            append_content?: string;
-          }
-        ),
+      handler: async (args) => handleNotionUpdate(args),
       destructive: true,
-    },
-    {
+    }),
+    defineTool({
       name: "notion_query",
       description:
         "Query a Notion database with optional filters and sorting. Use notion_search to find the database ID first.",
       schema: notionQuerySchema,
-      handler: async (params) =>
-        handleNotionQuery(
-          params as {
-            database_id: string;
-            filter?: Record<string, string | number | boolean>;
-            sort?: string;
-            limit?: number;
-          }
-        ),
+      handler: async (args) => handleNotionQuery(args),
       destructive: false,
-    },
+    }),
   ],
 };

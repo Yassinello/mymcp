@@ -109,6 +109,18 @@ export interface ConnectorManifest {
    * integration.
    */
   core?: boolean;
+  /**
+   * Optional hook for registering non-tool MCP primitives (prompts,
+   * resources) on the MCP server instance. Called by the transport
+   * after tool registration for every enabled connector.
+   *
+   * The `server` parameter is typed loosely as `unknown` to avoid
+   * leaking the `mcp-handler` internals into the core types — connector
+   * authors cast it to the specific shape they need. This keeps the
+   * framework-level primitive independent of any one transport
+   * implementation.
+   */
+  registerPrompts?: (server: unknown) => void | Promise<void>;
 }
 
 /** Resolved state of a pack at runtime */

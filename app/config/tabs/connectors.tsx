@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { ConnectorSummary } from "../tabs";
 import { PACKS, CredentialInput, normalizeGitHubRepo } from "../../setup/wizard";
+import { renderMarkdown } from "@/core/markdown-lite";
 
 export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }) {
   const [envVars, setEnvVars] = useState<Record<string, string>>({});
@@ -390,100 +391,21 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
   );
 }
 
-// ── Lightweight markdown renderer for per-pack guides ─────────────────
-// We intentionally avoid pulling in a full markdown library. The guide
-// strings are authored by the framework (not user input), so we only
-// need to support a tiny subset: headings, bold, inline code, links,
-// ordered lists, italics, and paragraphs. Everything is escaped first.
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function renderInline(text: string): string {
-  let out = escapeHtml(text);
-  // links: [label](url)
-  out = out.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">$1</a>'
-  );
-  // inline code `x`
-  out = out.replace(
-    /`([^`]+)`/g,
-    '<code class="text-[11px] bg-bg-muted px-1 py-0.5 rounded">$1</code>'
-  );
-  // bold **x**
-  out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  // italic _x_
-  out = out.replace(/(^|\s)_([^_]+)_/g, '$1<em class="text-text-dim">$2</em>');
-  return out;
-}
-
+/**
+ * Per-connector credential guide.
+ *
+ * Previously this had its own hand-rolled regex-based markdown renderer
+ * (no link-scheme validation, drifting from src/core/markdown-lite.ts).
+ * Now delegates to the shared renderer so the security surface is a
+ * single audited code path.
+ */
 function PackGuide({ markdown }: { markdown: string }) {
-  const lines = markdown.split("\n");
-  const blocks: ReactNode[] = [];
-  let listBuffer: string[] = [];
-  let key = 0;
-
-  const flushList = () => {
-    if (listBuffer.length === 0) return;
-    const items = listBuffer.slice();
-    listBuffer = [];
-    blocks.push(
-      <ol
-        key={`list-${key++}`}
-        className="list-decimal list-inside space-y-1 text-xs text-text-dim"
-      >
-        {items.map((item, i) => (
-          <li key={i} dangerouslySetInnerHTML={{ __html: renderInline(item) }} />
-        ))}
-      </ol>
-    );
-  };
-
-  for (const raw of lines) {
-    const line = raw.trimEnd();
-    const listMatch = line.match(/^\s*\d+\.\s+(.*)$/);
-    if (listMatch) {
-      listBuffer.push(listMatch[1]);
-      continue;
-    }
-    flushList();
-
-    if (line.trim() === "") continue;
-
-    const h3 = line.match(/^###\s+(.*)$/);
-    if (h3) {
-      blocks.push(
-        <h4 key={`h-${key++}`} className="text-sm font-semibold mt-3">
-          {h3[1]}
-        </h4>
-      );
-      continue;
-    }
-    blocks.push(
-      <p
-        key={`p-${key++}`}
-        className="text-xs text-text-dim leading-relaxed"
-        dangerouslySetInnerHTML={{ __html: renderInline(line) }}
-      />
-    );
-  }
-  flushList();
-
   return (
     <div className="rounded-md border border-border bg-bg-muted/40 px-4 py-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-          Credential guide
-        </p>
-      </div>
-      {blocks}
+      <div
+        className="text-xs text-text-dim leading-relaxed space-y-2"
+        dangerouslySetInnerHTML={{ __html: renderMarkdown(markdown) }}
+      />
     </div>
   );
 }
