@@ -15,8 +15,17 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  if (process.env.INSTANCE_MODE === "personal") {
-    if (process.env.MCP_AUTH_TOKEN) {
+  // Any deploy with a configured MCP_AUTH_TOKEN is, by definition, a personal
+  // instance — showing the marketing landing on someone's real MCP server
+  // would be confusing. The landing is reserved for showcase deploys (e.g.
+  // mymcp-home) which intentionally set INSTANCE_MODE=showcase OR leave
+  // MCP_AUTH_TOKEN unset.
+  const hasToken = !!process.env.MCP_AUTH_TOKEN;
+  const mode = process.env.INSTANCE_MODE;
+  const isShowcase = mode === "showcase";
+
+  if (!isShowcase && (mode === "personal" || hasToken)) {
+    if (hasToken) {
       redirect("/config");
     }
     // Zero-config flow: send first-time visitors to the welcome page which

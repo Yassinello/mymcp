@@ -342,7 +342,12 @@ export default function WelcomeClient({
                 <span className="text-slate-300">Token generated</span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="text-slate-500 mt-0.5">□</span>
+                <span
+                  className={permanent ? "text-emerald-400 mt-0.5" : "text-slate-500 mt-0.5"}
+                  aria-hidden
+                >
+                  {permanent ? "✓" : "□"}
+                </span>
                 <span className="text-slate-300">
                   Add token to Vercel as <code className="text-blue-300">MCP_AUTH_TOKEN</code> →{" "}
                   <a
@@ -356,7 +361,12 @@ export default function WelcomeClient({
                 </span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="text-slate-500 mt-0.5">□</span>
+                <span
+                  className={permanent ? "text-emerald-400 mt-0.5" : "text-slate-500 mt-0.5"}
+                  aria-hidden
+                >
+                  {permanent ? "✓" : "□"}
+                </span>
                 <span className="text-slate-300">
                   Redeploy from the Deployments tab →{" "}
                   <a
@@ -528,7 +538,7 @@ function TokenUsagePanel({ token, instanceUrl }: { token: string; instanceUrl: s
         ? desktopConfigSnippet
         : tab === "code"
           ? codeSnippet
-          : baseUrl;
+          : urlWithToken;
 
   const copySnippet = async () => {
     try {
@@ -593,10 +603,12 @@ function TokenUsagePanel({ token, instanceUrl }: { token: string; instanceUrl: s
 
       {tab === "other" && (
         <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
-          For Cursor, ChatGPT desktop, n8n, or any other MCP client: point it at the URL below and
-          send your token as a <code className="font-mono text-slate-400">Bearer</code> header in
-          the <code className="font-mono text-slate-400">Authorization</code> field. The exact UI
-          varies per client.
+          For Cursor, ChatGPT desktop, n8n, or any other MCP client: paste the URL below (with the
+          token already embedded in the query string). If your client supports custom headers, you
+          can alternatively use the base URL{" "}
+          <code className="font-mono text-slate-400">{baseUrl}</code> and send the token as{" "}
+          <code className="font-mono text-slate-400">Authorization: Bearer &lt;token&gt;</code>.
+          Both work.
         </p>
       )}
 
