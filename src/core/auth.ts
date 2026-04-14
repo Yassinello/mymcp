@@ -121,8 +121,60 @@ export function checkMcpAuth(request: Request): { error: Response | null; tokenI
   return { error: new Response("Unauthorized", { status: 401 }), tokenId: null };
 }
 
-/** Check admin dashboard auth. Returns error Response or null if OK. */
+/**
+ * Origin-header CSRF check for state-mutating admin routes.
+ *
+ * Defense-in-depth on top of SameSite=Strict — ensures that even if the
+ * browser leaks the admin cookie cross-site (misconfigured proxy, buggy
+ * future browser, etc.), the request's Origin header must still match
+ * the server's host.
+ *
+ * Rules:
+ * - GET/HEAD/OPTIONS are exempt (CSRF only matters for mutations)
+ * - Missing Origin → allow (older clients, curl, server-to-server)
+ * - Origin host must equal request host
+ * - Returns null on success, 403 Response on mismatch.
+ *
+ * The Origin header is set by every browser on cross-site requests and
+ * cannot be spoofed by JavaScript. curl/server-side requests don't set
+ * it, which is why we allow the "missing" case.
+ */
+export function checkCsrf(request: Request): Response | null {
+  const method = request.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return null;
+
+  const origin = request.headers.get("origin");
+  if (!origin) return null; // non-browser caller
+
+  const host = request.headers.get("host");
+  if (!host) return null; // should not happen in practice
+
+  try {
+    const originHost = new URL(origin).host;
+    if (originHost !== host) {
+      return new Response(
+        `CSRF check failed — Origin ${originHost} does not match host ${host}`,
+        { status: 403 }
+      );
+    }
+  } catch {
+    return new Response("CSRF check failed — malformed Origin", { status: 403 });
+  }
+  return null;
+}
+
+/**
+ * Check admin dashboard auth. Returns error Response or null if OK.
+ *
+ * Also runs the Origin-header CSRF check for mutating methods — cheaper
+ * than requiring every individual route to call checkCsrf() separately,
+ * and impossible to forget.
+ */
 export function checkAdminAuth(request: Request): Response | null {
+  // CSRF first — doesn't depend on token state, so no info leak.
+  const csrfError = checkCsrf(request);
+  if (csrfError) return csrfError;
+
   warnAdminTokenFallback();
   const token = (process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN)?.trim();
   if (!token) {

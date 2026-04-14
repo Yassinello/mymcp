@@ -80,7 +80,11 @@ export function proxy(request: NextRequest) {
       const res = NextResponse.next();
       res.cookies.set("mymcp_admin_token", adminToken, {
         httpOnly: true,
-        sameSite: "lax",
+        // Strict: the dashboard is never legitimately loaded by following a
+        // link from another site. Blocks the CSRF vector on PUT /api/config/env
+        // even without a CSRF token.
+        sameSite: "strict",
+        secure: true,
         path: "/",
         maxAge: 60 * 60 * 24 * 7,
       });

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { parseTokens, tokenId, checkMcpAuth, checkAdminAuth } from "./auth";
+import { parseTokens, tokenId, checkMcpAuth, checkAdminAuth, checkCsrf } from "./auth";
 import { __resetFirstRunForTests, getOrCreateClaim } from "./first-run";
 
 // ── parseTokens ──────────────────────────────────────────────────────
@@ -169,6 +169,58 @@ describe("checkMcpAuth", () => {
     expect(e1).toBeNull();
     const { error: e2 } = checkMcpAuth(makeRequest("tokenB1234567890"));
     expect(e2).toBeNull();
+  });
+});
+
+// ── checkCsrf ────────────────────────────────────────────────────────
+
+describe("checkCsrf", () => {
+  function mutatingRequest(headers: Record<string, string>): Request {
+    return new Request("http://mymcp.example.com/api/config/env", {
+      method: "PUT",
+      headers,
+    });
+  }
+
+  it("allows GET regardless of Origin", () => {
+    const req = new Request("http://mymcp.example.com/api/config/env", {
+      method: "GET",
+      headers: { origin: "https://evil.com", host: "mymcp.example.com" },
+    });
+    expect(checkCsrf(req)).toBeNull();
+  });
+
+  it("allows request with no Origin header (non-browser caller)", () => {
+    const req = mutatingRequest({ host: "mymcp.example.com" });
+    expect(checkCsrf(req)).toBeNull();
+  });
+
+  it("allows request with same-origin Origin", () => {
+    const req = mutatingRequest({
+      origin: "http://mymcp.example.com",
+      host: "mymcp.example.com",
+    });
+    expect(checkCsrf(req)).toBeNull();
+  });
+
+  it("rejects request with cross-origin Origin", () => {
+    const req = mutatingRequest({
+      origin: "https://evil.com",
+      host: "mymcp.example.com",
+    });
+    const result = checkCsrf(req);
+    expect(result).not.toBeNull();
+    expect((result as Response).status).toBe(403);
+  });
+
+  it("rejects request with malformed Origin", () => {
+    const req = mutatingRequest({
+      origin: "not-a-url",
+      host: "mymcp.example.com",
+    });
+    const result = checkCsrf(req);
+    expect(result).not.toBeNull();
+    expect((result as Response).status).toBe(403);
   });
 });
 

@@ -1,14 +1,47 @@
 import { NextResponse } from "next/server";
+import { isClaimer } from "@/core/first-run";
+import { isLoopbackRequest, getClientIP } from "@/core/request-utils";
+import { checkRateLimit } from "@/core/rate-limit";
 
 /**
  * POST /api/setup/test
  * Test a single credential by making a lightweight API call.
  * Only works during first-time setup (no MCP_AUTH_TOKEN).
  * Returns { ok, message, detail? } — detail contains the full error for debugging.
+ *
+ * Auth during first-run:
+ * 1. Loopback requests are always allowed (local dev convenience).
+ * 2. Non-loopback requests must carry the first-run claim cookie — proof
+ *    that the caller successfully claimed this instance via /welcome.
+ * 3. Per-IP rate limit: 10 requests per minute per client IP, scoped to
+ *    "setup" so legitimate /welcome probes don't exhaust the tool-call
+ *    budget.
+ *
+ * After MCP_AUTH_TOKEN is configured, this route returns 403 pointing at
+ * /api/admin/verify (the post-onboarding equivalent).
  */
 export async function POST(request: Request) {
   if (process.env.MCP_AUTH_TOKEN) {
     return NextResponse.json({ error: "Use /api/admin/verify instead" }, { status: 403 });
+  }
+
+  // First-run auth: loopback OR claimer cookie
+  if (!isLoopbackRequest(request) && !isClaimer(request)) {
+    return NextResponse.json(
+      { error: "Unauthorized — claim this instance via /welcome first" },
+      { status: 401 }
+    );
+  }
+
+  // Per-IP rate limit (10 rpm, "setup" scope — much tighter than the
+  // default MCP budget so abuse of the first-run window is bounded).
+  const ip = getClientIP(request);
+  const rl = await checkRateLimit(`ip:${ip}`, { scope: "setup", limit: 10 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded — try again in a minute" },
+      { status: 429, headers: { "Retry-After": "60" } }
+    );
   }
 
   const body = (await request.json()) as { pack: string; credentials: Record<string, string> };

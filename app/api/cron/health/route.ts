@@ -1,17 +1,39 @@
 import { resolveRegistry } from "@/core/registry";
+import { isLoopbackRequest } from "@/core/request-utils";
 
 /**
  * Hourly cron health check (Vercel Cron).
  * Runs diagnose() on all enabled packs.
  * If MYMCP_ERROR_WEBHOOK_URL is set, alerts on degraded packs.
- * Protected by CRON_SECRET (Vercel sets this automatically for cron jobs).
+ *
+ * Auth (fail-closed):
+ * - If CRON_SECRET is set → must match Authorization: Bearer <secret>
+ * - If CRON_SECRET is unset → only loopback requests are allowed, so the
+ *   endpoint can't be publicly called by an attacker to probe which
+ *   connectors are configured (the response reveals connector labels and
+ *   error messages).
+ * - Vercel Cron also injects `x-vercel-cron: 1` header; we accept it as a
+ *   secondary path when deployed on Vercel.
  */
 export async function GET(request: Request) {
-  // Verify cron secret (Vercel injects this for cron jobs)
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return new Response("Unauthorized", { status: 401 });
+  const vercelCronHeader = request.headers.get("x-vercel-cron");
+
+  if (cronSecret) {
+    const authorized = authHeader === `Bearer ${cronSecret}`;
+    const fromVercelCron = process.env.VERCEL === "1" && vercelCronHeader;
+    if (!authorized && !fromVercelCron) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+  } else {
+    // Fail-closed when CRON_SECRET is not configured
+    if (!isLoopbackRequest(request)) {
+      return new Response(
+        "CRON_SECRET not configured — cron endpoint is locked to loopback",
+        { status: 503 }
+      );
+    }
   }
 
   const registry = resolveRegistry();

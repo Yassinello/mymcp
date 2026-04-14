@@ -14,17 +14,26 @@ function hashToken(token: string): string {
 /**
  * Sliding-window (fixed per-minute bucket) rate limiter.
  *
- * KV key: `ratelimit:{tokenHash}:{minuteBucket}`
- * Limit controlled by MYMCP_RATE_LIMIT_RPM env var (default 60).
+ * KV key: `ratelimit:{scope}:{identifierHash}:{minuteBucket}`
+ * Default limit controlled by MYMCP_RATE_LIMIT_RPM env var (default 60).
  * KV failures are treated as allow (fail open).
+ *
+ * Use `scope` to partition limits — e.g. "mcp" for the tool endpoint vs
+ * "setup" for the first-run credential tester, which should have much
+ * tighter budgets.
  */
-export async function checkRateLimit(token: string): Promise<RateLimitResult> {
-  const limit = Math.max(1, parseInt(process.env.MYMCP_RATE_LIMIT_RPM ?? "60", 10) || 60);
+export async function checkRateLimit(
+  identifier: string,
+  options: { scope?: string; limit?: number } = {}
+): Promise<RateLimitResult> {
+  const scope = options.scope || "mcp";
+  const defaultLimit = Math.max(1, parseInt(process.env.MYMCP_RATE_LIMIT_RPM ?? "60", 10) || 60);
+  const limit = options.limit ?? defaultLimit;
   const now = Date.now();
   const minuteBucket = Math.floor(now / 60_000);
   const resetAt = (minuteBucket + 1) * 60_000;
-  const tokenHash = hashToken(token);
-  const key = `ratelimit:${tokenHash}:${minuteBucket}`;
+  const idHash = hashToken(identifier);
+  const key = `ratelimit:${scope}:${idHash}:${minuteBucket}`;
 
   const kv = getKVStore();
 

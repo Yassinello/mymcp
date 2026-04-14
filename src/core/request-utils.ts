@@ -43,3 +43,26 @@ export function isLoopbackRequest(request: Request): boolean {
   if (ip) return isLoopbackCandidate(ip);
   return true;
 }
+
+/**
+ * Best-effort client IP extraction for per-IP rate limiting.
+ *
+ * Priority: x-forwarded-for leftmost → x-real-ip → NextRequest.ip → "unknown".
+ * Only trust x-forwarded-for when running behind Vercel (VERCEL=1) — otherwise
+ * a malicious client could spoof it.
+ */
+export function getClientIP(request: Request): string {
+  const isVercel = process.env.VERCEL === "1";
+  if (isVercel) {
+    const xff = request.headers.get("x-forwarded-for");
+    if (xff) {
+      const leftmost = xff.split(",")[0]?.trim();
+      if (leftmost) return leftmost;
+    }
+    const xri = request.headers.get("x-real-ip");
+    if (xri) return xri.trim();
+  }
+  const ip = (request as unknown as NextRequest & { ip?: string }).ip;
+  if (ip) return ip;
+  return "unknown";
+}
