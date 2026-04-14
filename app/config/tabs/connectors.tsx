@@ -217,33 +217,54 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                 </p>
               </div>
 
-              {isConfigured ? (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    togglePack(pack.id, !pack.enabled);
-                  }}
-                  className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ${
-                    pack.enabled ? "bg-accent" : "bg-bg-muted border border-border"
-                  }`}
-                  title={pack.enabled ? "Disable connector" : "Enable connector"}
-                  aria-label={pack.enabled ? "Disable connector" : "Enable connector"}
-                >
-                  <div
-                    className={`w-4 h-4 rounded-full bg-white shadow-sm absolute top-1 transition-all ${
-                      pack.enabled ? "left-6" : "left-1"
+              {(() => {
+                // Compute the list of missing required env vars to show in the
+                // tooltip when the toggle is disabled.
+                const missingVars = pack.requiredEnvVars.filter((k) => {
+                  const v = envVars[k] ?? "";
+                  return v === "" || v === undefined;
+                });
+                const disabledTooltip = missingVars.length
+                  ? `Set required env vars first: ${missingVars.join(", ")}`
+                  : "";
+                return (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isConfigured) return;
+                      togglePack(pack.id, !pack.enabled);
+                    }}
+                    disabled={!isConfigured}
+                    className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ${
+                      pack.enabled
+                        ? "bg-accent"
+                        : isConfigured
+                          ? "bg-bg-muted border border-border"
+                          : "bg-bg-muted border border-border opacity-50 cursor-not-allowed"
                     }`}
-                  />
-                </button>
-              ) : (
-                <span
-                  aria-hidden
-                  className="text-[11px] font-medium px-2.5 py-1 rounded-md text-accent bg-accent/10 shrink-0"
-                  title="Click the card to add credentials"
-                >
-                  Setup {isOpen ? "▲" : "▼"}
-                </span>
-              )}
+                    title={
+                      !isConfigured
+                        ? disabledTooltip || "Add credentials before enabling"
+                        : pack.enabled
+                          ? "Disable connector"
+                          : "Enable connector"
+                    }
+                    aria-label={
+                      !isConfigured
+                        ? "Toggle disabled — credentials missing"
+                        : pack.enabled
+                          ? "Disable connector"
+                          : "Enable connector"
+                    }
+                  >
+                    <div
+                      className={`w-4 h-4 rounded-full bg-white shadow-sm absolute top-1 transition-all ${
+                        pack.enabled ? "left-6" : "left-1"
+                      }`}
+                    />
+                  </button>
+                );
+              })()}
             </div>
 
             <div
@@ -254,7 +275,17 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
               {packDef ? (
                 <div className="border-t border-border bg-bg px-5 py-4 space-y-4">
                   {pack.guide ? (
-                    <PackGuide markdown={pack.guide} />
+                    <details className="group">
+                      <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-text-muted hover:text-text select-none list-none flex items-center gap-1.5">
+                        <span className="inline-block transition-transform group-open:rotate-90">
+                          ▶
+                        </span>
+                        Credential guide
+                      </summary>
+                      <div className="mt-3">
+                        <PackGuide markdown={pack.guide} />
+                      </div>
+                    </details>
                   ) : (
                     <p className="text-xs text-text-muted italic">
                       No guide available yet — see the README for setup instructions.
@@ -302,17 +333,28 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                       </span>
                     )}
                   </div>
-                  {test && !test.ok && test.detail && (
-                    <div className="bg-red-bg border border-red/20 rounded-md p-3 text-xs font-mono text-red break-all">
-                      {test.detail}
-                    </div>
+                  {test && !test.ok && (test.detail || test.message) && (
+                    <details className="bg-red-bg border border-red/20 rounded-md p-3 group">
+                      <summary className="cursor-pointer text-xs font-semibold text-red select-none list-none flex items-center gap-1.5">
+                        <span className="inline-block transition-transform group-open:rotate-90">
+                          ▶
+                        </span>
+                        Show error details
+                      </summary>
+                      <pre className="mt-2 text-[11px] font-mono text-red break-all whitespace-pre-wrap">
+                        {test.detail || test.message}
+                      </pre>
+                    </details>
                   )}
                   {pack.tools.length > 0 && (
-                    <div className="pt-3 border-t border-border">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-2">
+                    <details className="pt-3 border-t border-border group">
+                      <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-text-muted hover:text-text select-none list-none flex items-center gap-1.5">
+                        <span className="inline-block transition-transform group-open:rotate-90">
+                          ▶
+                        </span>
                         Tools provided ({pack.tools.length})
-                      </p>
-                      <ul className="space-y-1.5">
+                      </summary>
+                      <ul className="mt-2 space-y-1.5">
                         {pack.tools.map((t) => (
                           <li key={t.name} className="text-xs">
                             <code className="text-[11px] font-mono text-text">{t.name}</code>
@@ -330,7 +372,7 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                           </li>
                         ))}
                       </ul>
-                    </div>
+                    </details>
                   )}
                 </div>
               ) : (

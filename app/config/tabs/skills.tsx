@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { InfoTooltip } from "./settings/info-tooltip";
+import { ImportSkillModal } from "./skills-import-modal";
 
 interface SkillArgument {
   name: string;
@@ -59,6 +61,7 @@ export function SkillsTab() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -230,15 +233,35 @@ export function SkillsTab() {
             </span>
           )}
           {!draft && (
-            <button
-              onClick={startCreate}
-              className="text-xs font-medium text-accent hover:underline px-3 py-1.5 border border-accent/20 rounded-md"
-            >
-              + New skill
-            </button>
+            <>
+              <button
+                onClick={() => setImportOpen(true)}
+                className="text-xs font-medium text-text-dim hover:text-text px-3 py-1.5 border border-border rounded-md"
+              >
+                ↓ Import from URL
+              </button>
+              <button
+                onClick={startCreate}
+                className="text-xs font-medium text-accent hover:underline px-3 py-1.5 border border-accent/20 rounded-md"
+              >
+                + New skill
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {importOpen && (
+        <ImportSkillModal
+          onClose={() => setImportOpen(false)}
+          onImported={async () => {
+            setImportOpen(false);
+            setFlash("Skill imported");
+            setTimeout(() => setFlash(null), 2500);
+            await reload();
+          }}
+        />
+      )}
 
       {draft && (
         <DraftForm
@@ -365,29 +388,47 @@ function DraftForm({
       </div>
 
       <div>
-        <label className="text-sm font-medium block mb-1.5">Name</label>
+        <div className="flex items-center gap-2 mb-1.5">
+          <label className="text-sm font-medium">Name</label>
+          <InfoTooltip
+            title="Skill name"
+            body="Short slug used to derive the MCP tool name (lowercase, dashes only). Becomes skill_<name> when exposed to clients. Example: 'weekly-status' → tool 'skill_weekly-status'. Pick something memorable — the LLM picks tools partly by name."
+          />
+        </div>
         <input
           type="text"
           value={draft.name}
           onChange={(e) => set({ name: e.target.value })}
-          placeholder="Summarize article"
+          placeholder="weekly-status"
           className="w-full bg-bg-muted border border-border rounded-md px-3 py-2 text-sm focus:border-accent focus:outline-none"
         />
       </div>
 
       <div>
-        <label className="text-sm font-medium block mb-1.5">Description</label>
+        <div className="flex items-center gap-2 mb-1.5">
+          <label className="text-sm font-medium">Description</label>
+          <InfoTooltip
+            title="What the LLM sees"
+            body="One-line summary the LLM reads when picking which tool to call. Be precise — vague descriptions get ignored. Bad: 'helps with status reports'. Good: 'Drafts a Wins/Blockers/Next weekly status report from raw notes; takes a single notes argument'."
+          />
+        </div>
         <input
           type="text"
           value={draft.description}
           onChange={(e) => set({ description: e.target.value })}
-          placeholder="Produces a tight TLDR with key quotes"
+          placeholder="Drafts a weekly status report from raw notes"
           className="w-full bg-bg-muted border border-border rounded-md px-3 py-2 text-sm focus:border-accent focus:outline-none"
         />
       </div>
 
       <div>
-        <label className="text-sm font-medium block mb-1.5">Source</label>
+        <div className="flex items-center gap-2 mb-1.5">
+          <label className="text-sm font-medium">Source</label>
+          <InfoTooltip
+            title="Inline vs Remote"
+            body="Inline = the prompt body lives in MyMCP's KV store; edit it from this form anytime. Remote = MyMCP fetches the markdown from a URL on each invocation (with caching). Use Remote for skills shared across deployments; use Inline for personal skills you tweak often."
+          />
+        </div>
         <div className="flex gap-2">
           {(["inline", "remote"] as const).map((m) => (
             <button
@@ -408,12 +449,16 @@ function DraftForm({
 
       {draft.mode === "inline" ? (
         <div>
-          <label className="text-sm font-medium block mb-1.5">
-            Content{" "}
-            <span className="text-text-muted font-normal">
-              (markdown, use {`{{arg}}`} placeholders)
+          <div className="flex items-center gap-2 mb-1.5">
+            <label className="text-sm font-medium">Content</label>
+            <InfoTooltip
+              title="Skill body"
+              body="The prompt body that gets rendered when the skill is called. Use {{arg_name}} placeholders to inject argument values. Example: 'Summarize the following: {{notes}}'. Keep it short — skills are templates, not full conversations."
+            />
+            <span className="text-text-muted text-xs font-normal">
+              markdown · use {`{{arg}}`} placeholders
             </span>
-          </label>
+          </div>
           <textarea
             value={draft.content}
             onChange={(e) => set({ content: e.target.value })}
@@ -440,7 +485,13 @@ function DraftForm({
 
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <label className="text-sm font-medium">Arguments</label>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">Arguments</label>
+            <InfoTooltip
+              title="Typed inputs the skill accepts"
+              body="Each argument has a name (mustache placeholder), a description (shown to the LLM in the tool schema), and a required flag. The LLM picks values for required arguments before invoking. Example: name='notes', description='Raw notes for the week', required=true → the skill body can use {{notes}}."
+            />
+          </div>
           <button type="button" onClick={addArg} className="text-xs text-accent hover:underline">
             + Add arg
           </button>

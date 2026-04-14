@@ -3,6 +3,7 @@ import { getInstanceConfig } from "@/core/config";
 import { resolveRegistry } from "@/core/registry";
 import { getRecentLogs } from "@/core/logging";
 import { isFirstRunMode } from "@/core/first-run";
+import { loadDocs } from "@/core/docs";
 import { ConfigTabs } from "./tabs";
 import { DryRunBanner } from "./dry-run-banner";
 
@@ -14,6 +15,7 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   tools: { title: "Tools", subtitle: "Browse and run any registered tool." },
   skills: { title: "Skills", subtitle: "Create and manage user-defined skills." },
   logs: { title: "Logs", subtitle: "Recent tool invocations." },
+  documentation: { title: "Documentation", subtitle: "Guides and reference for MyMCP." },
   settings: { title: "Settings", subtitle: "Server-wide configuration." },
 };
 
@@ -60,6 +62,13 @@ export default async function ConfigPage({
   // exploring before minting a token.
   const dryRunMode = isFirstRunMode();
 
+  const vaultEnabled = registry.some((p) => p.manifest.id === "vault" && p.enabled);
+  const docs = loadDocs();
+  // First token from MCP_AUTH_TOKEN (might be a comma-separated list).
+  // We only surface this on the Settings → MCP subtab where the operator
+  // is already admin-authed; the token is masked by default in the UI.
+  const authToken = (process.env.MCP_AUTH_TOKEN || "").split(",")[0]?.trim() || null;
+
   return (
     <AppShell title={meta.title} subtitle={meta.subtitle} displayName={config.displayName}>
       {dryRunMode && <DryRunBanner />}
@@ -71,6 +80,9 @@ export default async function ConfigPage({
         logs={logs}
         baseUrl={baseUrl}
         config={config}
+        docs={docs}
+        vaultEnabled={vaultEnabled}
+        authToken={authToken}
       />
     </AppShell>
   );

@@ -8,6 +8,7 @@ import { ToolsTab } from "./tabs/tools";
 import { SkillsTab } from "./tabs/skills";
 import { LogsTab } from "./tabs/logs";
 import { SettingsTab } from "./tabs/settings";
+import { DocumentationTab, type DocEntry } from "./tabs/documentation";
 
 export interface ConnectorSummary {
   id: string;
@@ -19,7 +20,7 @@ export interface ConnectorSummary {
   requiredEnvVars: string[];
   guide?: string;
   core?: boolean;
-  tools: { name: string; description: string; deprecated?: string; destructive?: boolean }[];
+  tools: { name: string; description: string; deprecated?: string; destructive: boolean }[];
 }
 
 export function ConfigTabs({
@@ -30,6 +31,9 @@ export function ConfigTabs({
   logs,
   baseUrl,
   config,
+  docs,
+  vaultEnabled,
+  authToken,
 }: {
   activeTab: string;
   connectors: ConnectorSummary[];
@@ -38,6 +42,9 @@ export function ConfigTabs({
   logs: ToolLog[];
   baseUrl: string;
   config: InstanceConfig;
+  docs: DocEntry[];
+  vaultEnabled: boolean;
+  authToken: string | null;
 }) {
   switch (activeTab) {
     case "connectors":
@@ -48,8 +55,17 @@ export function ConfigTabs({
       return <SkillsTab />;
     case "logs":
       return <LogsTab initialLogs={logs} />;
+    case "documentation":
+      return <DocumentationTab docs={docs} />;
     case "settings":
-      return <SettingsTab config={config} />;
+      return (
+        <SettingsTab
+          config={config}
+          vaultEnabled={vaultEnabled}
+          baseUrl={baseUrl}
+          authToken={authToken}
+        />
+      );
     case "overview":
     default:
       return (

@@ -5,12 +5,16 @@ import pkg from "../package.json";
 
 const VERSION = `v${pkg.version}`;
 
-const NAV = [
+const PRIMARY_NAV = [
   { href: "/config", tab: "overview", label: "Overview", icon: "grid" },
   { href: "/config?tab=connectors", tab: "connectors", label: "Connectors", icon: "package" },
   { href: "/config?tab=tools", tab: "tools", label: "Tools", icon: "terminal" },
   { href: "/config?tab=skills", tab: "skills", label: "Skills", icon: "sparkles" },
   { href: "/config?tab=logs", tab: "logs", label: "Logs", icon: "activity" },
+];
+
+const SECONDARY_NAV = [
+  { href: "/config?tab=documentation", tab: "documentation", label: "Documentation", icon: "book" },
   { href: "/config?tab=settings", tab: "settings", label: "Settings", icon: "settings" },
 ];
 
@@ -22,6 +26,7 @@ const ICONS: Record<string, string> = {
   sparkles:
     "M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8",
   activity: "M22 12h-4l-3 9L9 3l-3 9H2",
+  book: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z",
   settings:
     "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
 };
@@ -42,6 +47,38 @@ function Icon({ name }: { name: string }) {
     >
       <path d={d} />
     </svg>
+  );
+}
+
+function renderNavItem(
+  item: { href: string; tab: string; label: string; icon: string },
+  pathname: string | null,
+  currentTab: string,
+  setupMode: boolean
+) {
+  const active = pathname === "/config" && currentTab === item.tab;
+  const disabled = setupMode && pathname !== "/setup";
+  return (
+    <li key={item.href}>
+      <a
+        href={disabled ? undefined : item.href}
+        className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors ${
+          active
+            ? "bg-accent/10 text-accent font-medium"
+            : disabled
+              ? "text-text-muted cursor-not-allowed opacity-50"
+              : "text-text-dim hover:bg-bg-muted hover:text-text"
+        }`}
+      >
+        <Icon name={item.icon} />
+        <span className="flex-1">{item.label}</span>
+        {disabled && (
+          <span className="text-[9px] bg-bg-muted text-text-muted px-1.5 py-0.5 rounded uppercase tracking-wide">
+            Locked
+          </span>
+        )}
+      </a>
+    </li>
   );
 }
 
@@ -87,35 +124,15 @@ export function Sidebar({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 overflow-y-auto">
+      <nav className="flex-1 px-4 overflow-y-auto flex flex-col">
         <ul className="space-y-0.5">
-          {NAV.map((item) => {
-            const active = pathname === "/config" && currentTab === item.tab;
-            const disabled = setupMode && pathname !== "/setup";
-            return (
-              <li key={item.href}>
-                <a
-                  href={disabled ? undefined : item.href}
-                  className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors ${
-                    active
-                      ? "bg-accent/10 text-accent font-medium"
-                      : disabled
-                        ? "text-text-muted cursor-not-allowed opacity-50"
-                        : "text-text-dim hover:bg-bg-muted hover:text-text"
-                  }`}
-                >
-                  <Icon name={item.icon} />
-                  <span className="flex-1">{item.label}</span>
-                  {disabled && (
-                    <span className="text-[9px] bg-bg-muted text-text-muted px-1.5 py-0.5 rounded uppercase tracking-wide">
-                      Locked
-                    </span>
-                  )}
-                </a>
-              </li>
-            );
-          })}
+          {PRIMARY_NAV.map((item) => renderNavItem(item, pathname, currentTab, setupMode))}
         </ul>
+        <div className="mt-auto pt-4">
+          <ul className="space-y-0.5 border-t border-border pt-3">
+            {SECONDARY_NAV.map((item) => renderNavItem(item, pathname, currentTab, setupMode))}
+          </ul>
+        </div>
       </nav>
 
       {/* Footer: user profile */}

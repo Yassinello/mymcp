@@ -1,0 +1,41 @@
+---
+title: FAQ
+summary: Common questions about MyMCP
+order: 50
+---
+
+## Is this multi-user?
+
+No. MyMCP is intentionally a personal tool. One deployment, one user, one set of credentials. Multi-user / RBAC is explicitly out of scope — see PROJECT.md.
+
+## Can I run multiple MyMCP instances against the same Vercel account?
+
+Yes. Each instance is a separate Vercel project with its own URL, env vars, and `MCP_AUTH_TOKEN`. Use one per persona (work, side projects, family) if you want hard separation.
+
+## Does MyMCP store my credentials?
+
+Credentials live as env vars on Vercel (or in `.env.local` for local dev). MyMCP itself never persists credentials anywhere — it reads them at request time. Skill content and personal context live in the KV store (Upstash if configured, filesystem otherwise).
+
+## What happens to my data on Vercel cold starts?
+
+In-memory state (recent logs, runtime caches) is wiped. Persistent state (skills, context, env vars) survives because it lives in the KV store and the Vercel env var system.
+
+## Can I run MyMCP without Vercel?
+
+Yes — Docker is supported. `docker build -t mymcp .` and run with env vars passed via `-e` or `--env-file`. Local dev (`npm run dev`) works the same.
+
+## Is MyMCP open source?
+
+Yes — MIT licensed, see [github.com/Yassinello/mymcp](https://github.com/Yassinello/mymcp). Forks and PRs welcome.
+
+## How do I add a new connector?
+
+Create `src/connectors/<name>/manifest.ts` exporting a `ConnectorManifest`, register it in `src/core/registry.ts`, document required env vars in `.env.example`. The framework picks it up automatically.
+
+## How do I revoke access for a single MCP client?
+
+Use multiple comma-separated tokens in `MCP_AUTH_TOKEN`: `MCP_AUTH_TOKEN=token-a,token-b,token-c`. Hand each client a different token. To revoke one, remove it from the env var and redeploy.
+
+## What's the difference between `prompts` and `tools` in skills?
+
+MCP defines two primitives a server can expose: **prompts** (named templates the user explicitly invokes) and **tools** (functions the LLM calls autonomously). Skills appear as both. Use the prompt primitive in clients that support it (Claude Desktop, Claude Code) and rely on the tool primitive in clients that don't.
