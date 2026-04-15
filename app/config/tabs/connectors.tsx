@@ -181,7 +181,7 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                   handleCardClick();
                 }
               }}
-              className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-bg-muted/40 transition-colors"
+              className="flex items-center gap-3 px-3 sm:px-5 py-4 cursor-pointer hover:bg-bg-muted/40 transition-colors"
             >
               <div
                 className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm ${
@@ -286,7 +286,7 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
               }`}
             >
               {packDef ? (
-                <div className="border-t border-border bg-bg px-5 py-4 space-y-4">
+                <div className="border-t border-border bg-bg px-3 sm:px-5 py-4 space-y-4">
                   {pack.guide ? (
                     <details className="group">
                       <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-text-muted hover:text-text select-none list-none flex items-center gap-1.5">
@@ -389,7 +389,7 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                   )}
                 </div>
               ) : (
-                <div className="border-t border-border bg-bg px-5 py-4">
+                <div className="border-t border-border bg-bg px-3 sm:px-5 py-4">
                   <p className="text-xs text-text-muted italic">
                     No configuration form registered for this connector.
                   </p>

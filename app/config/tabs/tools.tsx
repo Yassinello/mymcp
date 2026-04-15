@@ -116,7 +116,11 @@ export function ToolsTab({ connectors }: { connectors: ConnectorSummary[] }) {
         {filtered.length} of {allTools.length} tools
       </p>
 
-      <div className="border border-border rounded-lg divide-y divide-border">
+      {/* MOBILE-03: outer scroll container so the fixed-width tool name
+          and pack badge columns don't push the whole layout off the
+          right edge of a 375px viewport. The expanded inline form
+          (Arguments, Run, Result) still flows normally inside each row. */}
+      <div className="border border-border rounded-lg divide-y divide-border overflow-x-auto">
         {filtered.map((tool) => {
           const isOpen = expanded === tool.name;
           const result = results[tool.name];
@@ -125,7 +129,7 @@ export function ToolsTab({ connectors }: { connectors: ConnectorSummary[] }) {
             <div key={tool.name}>
               <button
                 onClick={() => setExpanded(isOpen ? null : tool.name)}
-                className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-bg-muted/50 transition-colors"
+                className="w-full flex items-center gap-3 px-3 sm:px-5 py-3 text-left hover:bg-bg-muted/50 transition-colors whitespace-nowrap min-w-max"
               >
                 <span className="font-mono text-xs text-accent w-40 truncate shrink-0">
                   {tool.name}

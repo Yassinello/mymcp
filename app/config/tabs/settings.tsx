@@ -94,8 +94,9 @@ export function SettingsTab({
 
   return (
     <div className="max-w-2xl">
-      {/* Subtabs */}
-      <div className="flex items-center gap-1 mb-5 border-b border-border">
+      {/* Subtabs — MOBILE-04: larger tap targets and horizontal scroll
+          fallback if labels ever overflow on a narrow viewport. */}
+      <div className="flex items-center gap-1 mb-5 border-b border-border overflow-x-auto">
         {(
           [
             ["user", "User settings"],
@@ -106,7 +107,7 @@ export function SettingsTab({
             key={k}
             type="button"
             onClick={() => setTab(k)}
-            className={`text-sm font-medium px-4 py-2 -mb-px border-b-2 transition-colors ${
+            className={`text-sm font-medium px-4 py-3 sm:py-2 min-h-11 sm:min-h-0 -mb-px border-b-2 transition-colors whitespace-nowrap ${
               tab === k
                 ? "border-accent text-accent"
                 : "border-transparent text-text-dim hover:text-text"
@@ -145,10 +146,7 @@ export function SettingsTab({
                   body="A short markdown document that describes you (role, current projects, preferences). MCP clients can fetch it via the my_context tool to ground responses without you re-explaining everything every conversation. Two storage modes: store the markdown inline here (persists in the KV store), or point at a file inside your Obsidian vault if the Vault connector is active."
                 />
               </div>
-              <ContextFileField
-                vaultEnabled={vaultEnabled}
-                initialPath={config.contextPath}
-              />
+              <ContextFileField vaultEnabled={vaultEnabled} initialPath={config.contextPath} />
               <p className="text-xs text-text-muted mt-2">
                 Pick where this context lives. Inline = stored in MyMCP&apos;s KV store. Vault = a
                 file inside your Obsidian vault, fetched on demand.
@@ -169,9 +167,7 @@ export function SettingsTab({
         </>
       )}
 
-      {tab === "mcp" && (
-        <McpInstallPanel baseUrl={baseUrl} hasToken={hasAuthToken} />
-      )}
+      {tab === "mcp" && <McpInstallPanel baseUrl={baseUrl} hasToken={hasAuthToken} />}
     </div>
   );
 }
