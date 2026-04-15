@@ -106,6 +106,16 @@ describe("renderMarkdown XSS corpus", () => {
     "<script>alert(1)</script>",
     "<SCRIPT>alert(1)</SCRIPT>",
     "<script\nsrc='//evil'>",
+    // NIT-02: self-closing variants and attribute-divider tricks.
+    // Some hand-rolled regex sanitizers only match `<script>` / `<script `
+    // and miss `<script/>`, `<script/src=`, etc. (the slash counts as a
+    // valid attribute name terminator per HTML5 parser rules).
+    "<script/>alert(1)</script>",
+    "<script/src='//evil'></script>",
+    "<svg/onload=alert(1)>",
+    "<svg/onload=alert(1)//>",
+    "<img/src=x/onerror=alert(1)>",
+    "<iframe/src='javascript:alert(1)'>",
     // Link injections
     "[click](javascript:alert(1))",
     "[click](JAVASCRIPT:alert(1))",
@@ -124,7 +134,7 @@ describe("renderMarkdown XSS corpus", () => {
     "<body onload=alert(1)>",
     // Attribute injection through link label
     "[<img src=x onerror=alert(1)>](https://example.com)",
-    "[normal](https://example.com\" onclick=\"alert(1))",
+    '[normal](https://example.com" onclick="alert(1))',
     // HTML comments
     "<!-- <script>alert(1)</script> -->",
     // Polyglot
@@ -144,14 +154,17 @@ describe("renderMarkdown XSS corpus", () => {
   // is always carried by a raw `<tag ...>` opening, which the tag-opening
   // patterns already catch.
   const BANNED_PATTERNS = [
-    /<script[\s>]/i,
-    /<iframe[\s>]/i,
-    /<object[\s>]/i,
-    /<embed[\s>]/i,
-    /<svg[\s>]/i,
-    /<math[\s>]/i,
-    /<body[\s>]/i,
-    /<img[\s>]/i,
+    // Match `<tag` followed by whitespace, `>`, or `/` — the slash form
+    // is the NIT-02 expansion that hand-rolled regex sanitizers commonly
+    // miss but the HTML5 parser still treats as a valid tag opening.
+    /<script[\s>/]/i,
+    /<iframe[\s>/]/i,
+    /<object[\s>/]/i,
+    /<embed[\s>/]/i,
+    /<svg[\s>/]/i,
+    /<math[\s>/]/i,
+    /<body[\s>/]/i,
+    /<img[\s>/]/i,
     // Dangerous URL scheme at the very start of an href attribute value.
     /href=["']\s*javascript:/i,
     /href=["']\s*vbscript:/i,
