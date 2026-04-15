@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { getKVStore } from "@/core/kv-store";
-import { getEnvStore } from "@/core/env-store";
+import { getInstanceConfigAsync, saveInstanceConfig } from "@/core/config";
 
 /**
  * GET /api/config/context
@@ -30,19 +30,24 @@ export async function GET(request: Request) {
   if (authError) return authError;
 
   const kv = getKVStore();
-  const [storedMode, storedInline] = await Promise.all([kv.get(KV_MODE), kv.get(KV_INLINE)]);
+  const [storedMode, storedInline, cfg] = await Promise.all([
+    kv.get(KV_MODE),
+    kv.get(KV_INLINE),
+    getInstanceConfigAsync(),
+  ]);
 
+  const hasVaultPath = !!cfg.contextPath && cfg.contextPath !== "System/context.md";
   const mode: "inline" | "vault" =
     storedMode === "vault" || storedMode === "inline"
       ? storedMode
-      : process.env.MYMCP_CONTEXT_PATH
+      : hasVaultPath
         ? "vault"
         : "inline";
 
   return NextResponse.json({
     mode,
     inline: storedInline ?? "",
-    vaultPath: process.env.MYMCP_CONTEXT_PATH ?? "",
+    vaultPath: cfg.contextPath ?? "",
   } satisfies ContextState);
 }
 
@@ -73,34 +78,16 @@ export async function PUT(request: Request) {
   await kv.set(KV_MODE, mode);
 
   if (mode === "inline") {
-    // Active mode: inline. Persist the content. Best-effort: also clear
-    // the vault-mode env var so stale state doesn't pile up.
+    // Active mode: inline. Persist the content. Reset the KV-backed
+    // contextPath to the default so stale vault paths don't pile up.
     await kv.set(KV_INLINE, inline);
-    if (process.env.MYMCP_CONTEXT_PATH) {
-      try {
-        const store = getEnvStore();
-        await store.write({ MYMCP_CONTEXT_PATH: "" });
-      } catch (err) {
-        console.warn(
-          "[/api/config/context] could not clear stale MYMCP_CONTEXT_PATH:",
-          err instanceof Error ? err.message : err
-        );
-      }
-    }
+    await saveInstanceConfig({ contextPath: "System/context.md" });
   } else {
-    // Active mode: vault. Mirror the path to env so the my_context tool
-    // can resolve it, and clear any stale inline KV content.
+    // Active mode: vault. Mirror the path into the KV-backed setting so
+    // the my_context tool can resolve it, and clear any stale inline KV.
     await kv.delete(KV_INLINE);
     if (vaultPath) {
-      try {
-        const store = getEnvStore();
-        await store.write({ MYMCP_CONTEXT_PATH: vaultPath });
-      } catch (err) {
-        console.warn(
-          "[/api/config/context] could not persist MYMCP_CONTEXT_PATH:",
-          err instanceof Error ? err.message : err
-        );
-      }
+      await saveInstanceConfig({ contextPath: vaultPath });
     }
   }
 

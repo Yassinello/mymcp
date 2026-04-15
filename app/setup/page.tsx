@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { SetupWizard } from "./wizard";
 import { AppShell } from "../sidebar";
-import { getInstanceConfig } from "@/core/config";
+import { getInstanceConfigAsync } from "@/core/config";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ export default async function SetupPage({
   const hasToken = !!process.env.MCP_AUTH_TOKEN;
   const isFirstTime = !hasToken;
   const isVercel = !!process.env.VERCEL;
-  const config = getInstanceConfig();
+  const config = await getInstanceConfigAsync();
 
   // Post-first-run: /setup without `add` query param redirects to /config.
   // `add` present (even empty) means "add-pack mode".

@@ -1,5 +1,5 @@
 import { AppShell } from "../sidebar";
-import { getInstanceConfig } from "@/core/config";
+import { getInstanceConfigAsync } from "@/core/config";
 import { resolveRegistry } from "@/core/registry";
 import { getRecentLogs } from "@/core/logging";
 import { isFirstRunMode } from "@/core/first-run";
@@ -27,7 +27,7 @@ export default async function ConfigPage({
   const params = await searchParams;
   const tab = params.tab || "overview";
   const meta = PAGE_META[tab] || PAGE_META.overview;
-  const config = getInstanceConfig();
+  const config = await getInstanceConfigAsync();
 
   const registry = resolveRegistry();
   const logs = getRecentLogs(100);

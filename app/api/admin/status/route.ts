@@ -1,6 +1,6 @@
 import { checkAdminAuth } from "@/core/auth";
 import { resolveRegistry } from "@/core/registry";
-import { getInstanceConfig } from "@/core/config";
+import { getInstanceConfigAsync } from "@/core/config";
 import { getRecentLogs } from "@/core/logging";
 import { VERSION } from "@/core/version";
 
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   if (authError) return authError;
 
   const registry = resolveRegistry();
-  const config = getInstanceConfig();
+  const config = await getInstanceConfigAsync();
   const logs = getRecentLogs();
 
   // Run diagnose() on enabled packs that have it
