@@ -10,9 +10,11 @@ import { checkAdminAuth } from "@/core/auth";
  * into HTML view-source even when the UI shows it masked).
  *
  * Auth: same as other admin routes — admin cookie or Authorization header.
- * Returns 404 (not 200 with empty body) when no token is configured, so
- * an attacker who manages to bypass auth still has to differentiate
- * "token-less server" from "wrong creds" without an oracle.
+ *
+ * v0.6 NIT-01: previously returned 404 for "no token configured" and 401
+ * for "wrong creds" — that's an oracle (an attacker could differentiate
+ * "token-less server" from "wrong token"). Both states now return 401 so
+ * an unauthorized caller cannot tell them apart.
  */
 export async function GET(request: Request) {
   const authError = checkAdminAuth(request);
@@ -20,7 +22,7 @@ export async function GET(request: Request) {
 
   const token = (process.env.MCP_AUTH_TOKEN || "").split(",")[0]?.trim();
   if (!token) {
-    return NextResponse.json({ ok: false, error: "No token configured" }, { status: 404 });
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
   return NextResponse.json({ ok: true, token });
 }

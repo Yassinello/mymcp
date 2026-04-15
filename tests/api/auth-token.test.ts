@@ -4,9 +4,9 @@
  * reveal it without server-rendering it into the HTML payload.
  *
  * Regressions we care about:
- * - 401/403 without auth (CSRF or missing token)
- * - 404 when no token is configured (differentiate "wrong creds" from
- *   "no token at all" so an attacker can't oracle)
+ * - 401 without auth (CSRF or missing token) — collapsed in v0.6 NIT-01
+ *   so "no token configured" and "wrong creds" return the same status,
+ *   eliminating the oracle.
  * - 200 with the first token when multiple comma-separated tokens set
  */
 
@@ -82,9 +82,10 @@ describe("GET /api/config/auth-token", () => {
     expect(data.token).toBe("primary-token-123456");
   });
 
-  it("returns 404 when the auth path is fine but MCP_AUTH_TOKEN is actually unset (admin fallback)", async () => {
+  it("returns 401 when the auth path is fine but MCP_AUTH_TOKEN is actually unset (admin fallback)", async () => {
     // Edge case: ADMIN_AUTH_TOKEN set without MCP_AUTH_TOKEN. Admin auth
     // succeeds but there's no MCP token to return.
+    // v0.6 NIT-01: collapsed from 404 → 401 to remove the oracle.
     process.env.ADMIN_AUTH_TOKEN = "admin-only-token-1234567890";
     const req = makeRequest("GET", "/api/config/auth-token", {
       headers: {
@@ -93,7 +94,7 @@ describe("GET /api/config/auth-token", () => {
       },
     });
     const res = await GET(req);
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(401);
   });
 
   it("GET requests don't need to pass the CSRF check (safe method)", async () => {

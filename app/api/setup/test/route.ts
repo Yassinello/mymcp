@@ -20,8 +20,11 @@ import { withTimeout } from "@/core/timeout";
 const TEST_TIMEOUT_MS = 8_000;
 
 export async function POST(request: Request) {
+  // v0.6 NIT-01: collapsed from 403 to 401 — both "instance already
+  // claimed" and "no first-run claim" return 401 so an unauthenticated
+  // caller cannot distinguish setup state via status code.
   if (process.env.MCP_AUTH_TOKEN) {
-    return NextResponse.json({ error: "Use /api/admin/verify instead" }, { status: 403 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   if (!isLoopbackRequest(request) && !isClaimer(request)) {

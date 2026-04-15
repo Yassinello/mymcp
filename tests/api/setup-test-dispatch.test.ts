@@ -30,10 +30,10 @@ describe("POST /api/setup/test (v0.6 dispatcher)", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns 403 once MCP_AUTH_TOKEN is set", async () => {
+  it("returns 401 once MCP_AUTH_TOKEN is set (NIT-01: collapsed from 403)", async () => {
     process.env.MCP_AUTH_TOKEN = "sekret";
     const res = await POST(makeReq({ pack: "notion", credentials: {} }));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it("returns 400 on missing pack", async () => {
