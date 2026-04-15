@@ -1,4 +1,4 @@
-import type { ConnectorManifest, ToolDefinition } from "@/core/types";
+import { defineTool, type ConnectorManifest, type ToolDefinition } from "@/core/types";
 import {
   apifyLinkedinProfileSchema,
   handleApifyLinkedinProfile,
@@ -40,92 +40,89 @@ interface WrapperDef {
 const WRAPPERS: WrapperDef[] = [
   {
     actorId: APIFY_LINKEDIN_PROFILE_ACTOR,
-    tool: {
+    tool: defineTool({
       name: "apify_linkedin_profile",
       description:
         "Scrapes a LinkedIn profile via Apify. Returns structured profile data (name, headline, experience, education, etc.). Takes ~10-30s.",
       schema: apifyLinkedinProfileSchema,
-      handler: async (params) => handleApifyLinkedinProfile(params as { url: string }),
+      handler: async (args) => handleApifyLinkedinProfile(args),
       destructive: false,
-    },
+    }),
   },
   {
     actorId: APIFY_LINKEDIN_COMPANY_ACTOR,
-    tool: {
+    tool: defineTool({
       name: "apify_linkedin_company",
       description:
         "Scrapes a LinkedIn company page via Apify. Returns structured company data (name, size, industry, description, website). Takes ~10-30s.",
       schema: apifyLinkedinCompanySchema,
-      handler: async (params) => handleApifyLinkedinCompany(params as { url: string }),
+      handler: async (args) => handleApifyLinkedinCompany(args),
       destructive: false,
-    },
+    }),
   },
   {
     actorId: APIFY_LINKEDIN_PROFILE_POSTS_ACTOR,
-    tool: {
+    tool: defineTool({
       name: "apify_linkedin_profile_posts",
       description:
         "Scrapes recent posts from a LinkedIn profile via Apify. Returns an array of posts with text, reactions, and comments. Takes ~10-30s.",
       schema: apifyLinkedinProfilePostsSchema,
-      handler: async (params) =>
-        handleApifyLinkedinProfilePosts(params as { url: string; maxPosts?: number }),
+      handler: async (args) => handleApifyLinkedinProfilePosts(args),
       destructive: false,
-    },
+    }),
   },
   {
     actorId: APIFY_LINKEDIN_COMPANY_POSTS_ACTOR,
-    tool: {
+    tool: defineTool({
       name: "apify_linkedin_company_posts",
       description:
         "Scrapes recent posts from a LinkedIn company page via Apify. Returns an array of posts with text, reactions, and comments. Takes ~10-30s.",
       schema: apifyLinkedinCompanyPostsSchema,
-      handler: async (params) =>
-        handleApifyLinkedinCompanyPosts(params as { url: string; maxPosts?: number }),
+      handler: async (args) => handleApifyLinkedinCompanyPosts(args),
       destructive: false,
-    },
+    }),
   },
   {
     actorId: APIFY_LINKEDIN_POST_ACTOR,
-    tool: {
+    tool: defineTool({
       name: "apify_linkedin_post",
       description:
         "Scrapes a single LinkedIn post via Apify. Returns post content, author, reactions, and comments. Takes ~10-30s.",
       schema: apifyLinkedinPostSchema,
-      handler: async (params) => handleApifyLinkedinPost(params as { url: string }),
+      handler: async (args) => handleApifyLinkedinPost(args),
       destructive: false,
-    },
+    }),
   },
   {
     actorId: APIFY_LINKEDIN_COMPANY_INSIGHTS_ACTOR,
-    tool: {
+    tool: defineTool({
       name: "apify_linkedin_company_insights",
       description:
         "Scrapes extended insights from a LinkedIn company page via Apify (growth signals, headcount trends, etc.). Takes ~10-30s.",
       schema: apifyLinkedinCompanyInsightsSchema,
-      handler: async (params) => handleApifyLinkedinCompanyInsights(params as { url: string }),
+      handler: async (args) => handleApifyLinkedinCompanyInsights(args),
       destructive: false,
-    },
+    }),
   },
 ];
 
 const ALWAYS_ON_TOOLS: ToolDefinition[] = [
-  {
+  defineTool({
     name: "apify_search_actors",
     description:
       "Search for Apify actors by keyword. Returns your own actors and relevant public ones. Use this when no specific apify_* wrapper matches — then call apify_run_actor with the chosen ID.",
     schema: apifySearchActorsSchema,
-    handler: async (params) => handleApifySearchActors(params as { query: string }),
+    handler: async (args) => handleApifySearchActors(args),
     destructive: false,
-  },
-  {
+  }),
+  defineTool({
     name: "apify_run_actor",
     description:
       "Run any Apify actor by ID. Use ONLY if no specific apify_linkedin_* wrapper matches your need. Prefer the specialized wrappers for better reliability and input validation.",
     schema: apifyRunActorSchema,
-    handler: async (params) =>
-      handleApifyRunActor(params as { actorId: string; input: Record<string, unknown> }),
+    handler: async (args) => handleApifyRunActor(args),
     destructive: true,
-  },
+  }),
 ];
 
 function parseAllowlist(env: NodeJS.ProcessEnv): Set<string> | null {
