@@ -3,6 +3,7 @@ import { mcpLogsSchema, handleMcpLogs } from "./tools/mcp-logs";
 import { cacheEvictSchema, handleCacheEvict } from "./tools/cache-evict";
 import { backupExportSchema, handleBackupExport } from "./tools/backup-export";
 import { backupImportSchema, handleBackupImport } from "./tools/backup-import";
+import { streamTestSchema, handleStreamTest } from "./tools/stream-test";
 
 export const adminConnector: ConnectorManifest = {
   id: "admin",
@@ -46,6 +47,14 @@ export const adminConnector: ConnectorManifest = {
       schema: backupImportSchema,
       handler: async (args) => handleBackupImport(args),
       destructive: true,
+    }),
+    defineTool({
+      name: "admin_stream_test",
+      description:
+        "Diagnostic tool that streams chunks with configurable delays. Verifies the streaming tool result pipeline works end-to-end.",
+      schema: streamTestSchema,
+      handler: async (args) => handleStreamTest(args),
+      destructive: false,
     }),
   ],
 };

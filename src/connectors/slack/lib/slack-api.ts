@@ -1,4 +1,5 @@
 import { McpToolError, ErrorCode } from "@/core/errors";
+import { SlackRateLimitError, SlackAuthError } from "@/core/connector-errors";
 
 const SLACK_API = "https://slack.com/api";
 
@@ -43,14 +44,20 @@ async function slackFetch<T extends SlackResponse>(
       slackError === "not_authed" ||
       slackError === "invalid_auth" ||
       slackError === "token_revoked";
+    const isRateLimit = slackError === "ratelimited";
+
+    if (isRateLimit) {
+      throw new SlackRateLimitError(method);
+    }
+    if (isAuth) {
+      throw new SlackAuthError(slackError);
+    }
     throw new McpToolError({
-      code: isAuth ? ErrorCode.AUTH_FAILED : ErrorCode.EXTERNAL_API_ERROR,
+      code: ErrorCode.EXTERNAL_API_ERROR,
       toolName: "slack",
       message: `Slack API error: ${slackError}`,
-      userMessage: isAuth
-        ? `Slack authentication failed (${slackError}). Check your SLACK_BOT_TOKEN.`
-        : `Slack API error: ${slackError}`,
-      retryable: slackError === "ratelimited",
+      userMessage: `Slack API error: ${slackError}`,
+      retryable: false,
     });
   }
   return data;
@@ -259,14 +266,18 @@ export async function searchMessages(
     };
   };
 
-  if (!data.ok)
+  if (!data.ok) {
+    if (data.error === "ratelimited") {
+      throw new SlackRateLimitError("search.messages");
+    }
     throw new McpToolError({
       code: ErrorCode.EXTERNAL_API_ERROR,
       toolName: "slack",
       message: `Slack search error: ${data.error}`,
       userMessage: `Slack search failed: ${data.error}`,
-      retryable: data.error === "ratelimited",
+      retryable: false,
     });
+  }
 
   return (data.messages?.matches || []).map((m) => ({
     text: m.text,

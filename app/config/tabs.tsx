@@ -39,6 +39,7 @@ export function ConfigTabs({
   version,
   commitSha,
   tenantId,
+  disabledTools,
 }: {
   activeTab: string;
   connectors: ConnectorSummary[];
@@ -53,6 +54,8 @@ export function ConfigTabs({
   version: string;
   commitSha?: string;
   tenantId?: string | null;
+  /** Server-fetched disabled tool names — avoids client-side loading spinner. */
+  disabledTools?: string[];
 }) {
   let tab: React.ReactNode;
   let section: string;
@@ -64,7 +67,7 @@ export function ConfigTabs({
       break;
     case "tools":
       section = "Tools";
-      tab = <ToolsTab connectors={connectors} />;
+      tab = <ToolsTab connectors={connectors} initialDisabledTools={disabledTools} />;
       break;
     case "skills":
       section = "Skills";

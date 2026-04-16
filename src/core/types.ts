@@ -12,6 +12,15 @@ export interface ToolResult {
   isError?: boolean;
   /** Machine-readable error code from McpToolError — present on error responses only */
   errorCode?: string;
+  /**
+   * If set, the transport will stream chunks to the client instead of
+   * returning the full content at once. When the MCP SDK does not support
+   * native streaming tool results, `withLogging` collects chunks into a
+   * buffer and sends the full result when the stream ends. This still
+   * allows tools to produce data progressively without holding everything
+   * in memory.
+   */
+  stream?: AsyncIterable<string>;
 }
 
 /** Single tool definition — the unit of functionality.

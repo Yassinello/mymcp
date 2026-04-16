@@ -1,5 +1,14 @@
 [
   {
+    "name": "admin_stream_test",
+    "pack": "admin",
+    "schemaKeys": [
+      "chunks",
+      "delayMs"
+    ],
+    "destructive": false
+  },
+  {
     "name": "airtable_create_record",
     "pack": "airtable",
     "schemaKeys": [

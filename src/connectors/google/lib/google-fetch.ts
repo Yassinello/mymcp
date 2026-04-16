@@ -1,5 +1,6 @@
 import { getGoogleAccessToken } from "./google-auth";
 import { McpToolError, ErrorCode } from "@/core/errors";
+import { GoogleAuthError, GoogleRateLimitError } from "@/core/connector-errors";
 
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 500;
@@ -50,13 +51,7 @@ export async function googleFetch(url: string, opts: GoogleFetchOpts = {}): Prom
       }
 
       if (res.status === 429) {
-        throw new McpToolError({
-          code: ErrorCode.RATE_LIMITED,
-          toolName: "google",
-          message: `Google API rate limited: ${url}`,
-          userMessage: "Google API rate limit reached. Please try again in a moment.",
-          retryable: true,
-        });
+        throw new GoogleRateLimitError(`Google API rate limited: ${url}`);
       }
 
       // Surface 4xx errors clearly (except 404 which callers may handle)
@@ -69,13 +64,7 @@ export async function googleFetch(url: string, opts: GoogleFetchOpts = {}): Prom
         } catch {
           /* not JSON */
         }
-        throw new McpToolError({
-          code: ErrorCode.AUTH_FAILED,
-          toolName: "google",
-          message: `Google API ${res.status}: ${detail}`,
-          userMessage: `Google authentication failed (${res.status}). Check your credentials.`,
-          retryable: false,
-        });
+        throw new GoogleAuthError(`Google API ${res.status}: ${detail}`);
       }
 
       if (res.status >= 400 && res.status !== 404) {

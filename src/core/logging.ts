@@ -10,6 +10,12 @@ export interface ToolLog {
   error?: string;
   errorCode?: string;
   retryable?: boolean;
+  /** Actionable recovery hint from connector-specific errors. */
+  recovery?: string;
+  /** Number of streamed chunks (present when tool returned a stream). */
+  streamChunks?: number;
+  /** Total byte size of streamed content. */
+  streamBytes?: number;
   timestamp: string;
   tokenId?: string;
 }
@@ -184,6 +190,38 @@ export function withLogging<TParams>(
     const start = Date.now();
     try {
       const result = await handler(params);
+
+      // STREAM-01..04: When a tool returns a stream, collect chunks into
+      // the content buffer so the MCP SDK receives a complete response.
+      // This lets tools produce data progressively without holding
+      // everything in memory until the stream ends.
+      if (result.stream) {
+        const stream = result.stream as AsyncIterable<string>;
+        const chunks: string[] = [];
+        let totalBytes = 0;
+        for await (const chunk of stream) {
+          chunks.push(chunk);
+          totalBytes += chunk.length;
+        }
+        const durationMs = Date.now() - start;
+        endToolSpan(span, "ok", durationMs);
+        logToolCall({
+          tool: toolName,
+          durationMs,
+          status: "success",
+          streamChunks: chunks.length,
+          streamBytes: totalBytes,
+          timestamp: new Date().toISOString(),
+          ...(callerTokenId ? { tokenId: callerTokenId } : {}),
+        });
+        // Replace the stream with the collected content
+        const { stream: _stream, ...rest } = result;
+        return {
+          ...rest,
+          content: [{ type: "text" as const, text: chunks.join("") }],
+        };
+      }
+
       const durationMs = Date.now() - start;
       endToolSpan(span, "ok", durationMs);
       logToolCall({
@@ -207,11 +245,17 @@ export function withLogging<TParams>(
           error: error.message,
           errorCode: error.code,
           retryable: error.retryable,
+          recovery: error.recovery,
           timestamp,
           ...(callerTokenId ? { tokenId: callerTokenId } : {}),
         });
+        // Include recovery hint in the MCP response so the LLM can
+        // act on it (e.g., suggest re-auth or retry after a delay).
+        const userText = error.recovery
+          ? `${error.userMessage}\n\nRecovery: ${error.recovery}`
+          : error.userMessage;
         return {
-          content: [{ type: "text", text: error.userMessage }],
+          content: [{ type: "text", text: userText }],
           isError: true,
           errorCode: error.code,
         };

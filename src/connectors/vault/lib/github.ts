@@ -1,3 +1,5 @@
+import { VaultNotFoundError, VaultAuthError } from "@/core/connector-errors";
+
 const GITHUB_API = "https://api.github.com";
 const FETCH_TIMEOUT = 10_000; // 10 seconds
 
@@ -119,7 +121,9 @@ export async function vaultRead(path: string): Promise<VaultFile> {
   );
 
   if (!res.ok) {
-    if (res.status === 404) throw new Error(`Note not found: ${path}`);
+    if (res.status === 404) throw new VaultNotFoundError(path);
+    if (res.status === 401 || res.status === 403)
+      throw new VaultAuthError(`GitHub API ${res.status} for ${path}`);
     throw new Error(`GitHub API error: ${res.status}`);
   }
 
@@ -196,7 +200,9 @@ export async function vaultDelete(
   if (!sha) {
     const getRes = await fetchWithTimeout(url, { headers: headers(pat) });
     if (!getRes.ok) {
-      if (getRes.status === 404) throw new Error(`Note not found: ${path}`);
+      if (getRes.status === 404) throw new VaultNotFoundError(path);
+      if (getRes.status === 401 || getRes.status === 403)
+        throw new VaultAuthError(`GitHub API ${getRes.status} for ${path}`);
       throw new Error(`GitHub API error: ${getRes.status}`);
     }
     const existing = (await getRes.json()) as GitHubContentResponse;
@@ -231,7 +237,9 @@ export async function vaultList(folder?: string): Promise<VaultListEntry[]> {
   });
 
   if (!res.ok) {
-    if (res.status === 404) throw new Error(`Folder not found: ${folder || "/"}`);
+    if (res.status === 404) throw new VaultNotFoundError(folder || "/");
+    if (res.status === 401 || res.status === 403)
+      throw new VaultAuthError(`GitHub API ${res.status} for ${folder || "/"}`);
     throw new Error(`GitHub API error: ${res.status}`);
   }
 

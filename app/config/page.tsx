@@ -4,6 +4,7 @@ import { resolveRegistry } from "@/core/registry";
 import { getRecentLogs } from "@/core/logging";
 import { isFirstRunMode } from "@/core/first-run";
 import { loadDocs } from "@/core/docs";
+import { getDisabledTools } from "@/core/tool-toggles";
 import { ConfigTabs } from "./tabs";
 import { DryRunBanner } from "./dry-run-banner";
 import { cookies } from "next/headers";
@@ -84,6 +85,11 @@ export default async function ConfigPage({
   const version = packageJson.version;
   const commitSha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) || undefined;
 
+  // RSC-01: Fetch disabled tools server-side so the Tools tab renders
+  // instantly without a loading spinner / client-side fetch.
+  const disabledToolsSet = await getDisabledTools();
+  const disabledTools = Array.from(disabledToolsSet);
+
   return (
     <AppShell title={meta.title} subtitle={meta.subtitle} displayName={config.displayName}>
       {dryRunMode && <DryRunBanner />}
@@ -101,6 +107,7 @@ export default async function ConfigPage({
         version={version}
         commitSha={commitSha}
         tenantId={tenantId}
+        disabledTools={disabledTools}
       />
     </AppShell>
   );

@@ -21,6 +21,8 @@ export class McpToolError extends Error {
   readonly toolName: string;
   readonly userMessage: string;
   readonly retryable: boolean;
+  /** Actionable recovery hint surfaced to the LLM so it can self-heal. */
+  readonly recovery?: string;
 
   constructor(opts: {
     code: ErrorCodeType;
@@ -29,6 +31,7 @@ export class McpToolError extends Error {
     userMessage?: string;
     retryable?: boolean;
     cause?: Error;
+    recovery?: string;
   }) {
     super(opts.message, { cause: opts.cause });
     this.name = "McpToolError";
@@ -36,5 +39,6 @@ export class McpToolError extends Error {
     this.toolName = opts.toolName;
     this.userMessage = opts.userMessage ?? opts.message;
     this.retryable = opts.retryable ?? false;
+    this.recovery = opts.recovery;
   }
 }

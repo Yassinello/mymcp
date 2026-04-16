@@ -13,7 +13,14 @@ interface ToolRow {
   disabled?: boolean;
 }
 
-export function ToolsTab({ connectors }: { connectors: ConnectorSummary[] }) {
+export function ToolsTab({
+  connectors,
+  initialDisabledTools,
+}: {
+  connectors: ConnectorSummary[];
+  /** Server-fetched disabled tool names — avoids client-side loading spinner. */
+  initialDisabledTools?: string[];
+}) {
   const packs = connectors;
   const [search, setSearch] = useState("");
   const [packFilter, setPackFilter] = useState<string>("all");
@@ -23,11 +30,14 @@ export function ToolsTab({ connectors }: { connectors: ConnectorSummary[] }) {
     Record<string, { ok: boolean; data?: unknown; error?: string; durationMs?: number }>
   >({});
   const [running, setRunning] = useState<string | null>(null);
-  const [disabledTools, setDisabledTools] = useState<Set<string>>(new Set());
+  const [disabledTools, setDisabledTools] = useState<Set<string>>(
+    new Set(initialDisabledTools ?? [])
+  );
   const [toggling, setToggling] = useState<string | null>(null);
 
-  // Load disabled tools on mount
+  // RSC-01: Only fetch client-side if no server data was provided (backward compat).
   useEffect(() => {
+    if (initialDisabledTools) return; // Already have server data
     fetch("/api/config/tool-toggle-list", { credentials: "include" })
       .then((r) => r.json())
       .then((d: { ok?: boolean; disabled?: string[] }) => {
@@ -36,7 +46,7 @@ export function ToolsTab({ connectors }: { connectors: ConnectorSummary[] }) {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [initialDisabledTools]);
 
   const toggleTool = async (toolName: string, currentlyDisabled: boolean) => {
     setToggling(toolName);
