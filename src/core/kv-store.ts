@@ -158,13 +158,36 @@ class FilesystemKV implements KVStore {
   // filesystem backend — dev-only path, and the rate limiter treats TTL
   // as a best-effort hint anyway. Callers relying on eviction should
   // prefer Upstash in prod.
-  async incr(key: string, _opts?: { ttlSeconds?: number }): Promise<number> {
+  //
+  // TECH-06 lazy prune: after incrementing, scan for `ratelimit:*` keys
+  // whose bucket timestamp is older than 2× ttlSeconds ago. This runs
+  // inside the write queue so it's serialized. O(keys) but fine for dev.
+  async incr(key: string, opts?: { ttlSeconds?: number }): Promise<number> {
     this.cache = null;
     return this.enqueue(async () => {
       const map = await this.readAll();
       const prev = parseInt(map[key] ?? "0", 10);
       const next = Number.isFinite(prev) ? prev + 1 : 1;
       map[key] = String(next);
+
+      // Lazy prune stale ratelimit buckets
+      if (opts?.ttlSeconds && opts.ttlSeconds > 0) {
+        const nowMs = Date.now();
+        const windowMs = 60_000; // rate limiter uses 1-minute buckets
+        const currentBucket = Math.floor(nowMs / windowMs);
+        // A bucket is stale if its timestamp is older than 2× the TTL window
+        const staleBefore = currentBucket - Math.ceil((opts.ttlSeconds * 1000) / windowMs);
+        for (const k of Object.keys(map)) {
+          if (!k.startsWith("ratelimit:")) continue;
+          const parts = k.split(":");
+          const bucketStr = parts[parts.length - 1];
+          const bucket = parseInt(bucketStr, 10);
+          if (Number.isFinite(bucket) && bucket < staleBefore) {
+            delete map[k];
+          }
+        }
+      }
+
       await this.writeAll(map);
       return next;
     });

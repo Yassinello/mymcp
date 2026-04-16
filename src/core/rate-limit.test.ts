@@ -64,7 +64,7 @@ describe("checkRateLimit", () => {
   });
 
   it("sweeps stale buckets on the first request of a new minute window", async () => {
-    // Seed an old bucket directly so the sweep has something to clean.
+    // Seed old buckets directly so the sweep/prune has something to clean.
     const kv = getKVStore();
     const idHash = "0123456789abcdef";
     await kv.set(`ratelimit:test:${idHash}:1000000`, "5");
@@ -74,18 +74,16 @@ describe("checkRateLimit", () => {
     const beforeKeys = await kv.list(`ratelimit:test:${idHash}:`);
     expect(beforeKeys.length).toBe(2);
 
-    // Calling checkRateLimit with the same idHash won't happen because
-    // the function hashes internally. Instead, we directly exercise the
-    // listing behavior — a fresh call under the same scope should not
-    // touch our seeded keys (which use a fake idHash), but ensure the
-    // function doesn't throw on the sweep path.
+    // Calling checkRateLimit triggers the atomic incr path which now
+    // includes TECH-06 lazy prune — it scans ALL ratelimit:* keys and
+    // prunes those with bucket timestamps older than 2× the TTL window.
+    // Since buckets 1000000 and 1000001 are ancient, they will be pruned.
     await checkRateLimit("user-d", { scope: "test", limit: 3 });
 
-    // The seeded buckets for the fake idHash remain because the sweep is
-    // keyed by the caller's own identifier hash. This is by design —
-    // cleanup is per-caller, not global.
+    // TECH-06: stale buckets are now pruned globally by the lazy prune
+    // in FilesystemKV.incr (which scans all ratelimit:* keys).
     const afterKeys = await kv.list(`ratelimit:test:${idHash}:`);
-    expect(afterKeys.length).toBe(2);
+    expect(afterKeys.length).toBe(0);
   });
 });
 
@@ -156,6 +154,60 @@ describe("checkRateLimit — MemoryKV atomic path", () => {
     expect(spy).toHaveBeenCalledTimes(1);
     const opts = spy.mock.calls[0][1];
     expect(opts?.ttlSeconds).toBe(120);
+  });
+});
+
+describe("FilesystemKV.incr — lazy prune (TECH-06)", () => {
+  let kvDir: string;
+  let savedCwd: string;
+
+  beforeEach(() => {
+    savedCwd = process.cwd();
+    kvDir = mkdtempSync(join(tmpdir(), "mymcp-prune-test-"));
+    process.chdir(kvDir);
+    resetKVStoreCache();
+  });
+
+  afterEach(() => {
+    process.chdir(savedCwd);
+    resetKVStoreCache();
+    try {
+      rmSync(kvDir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  it("prunes stale ratelimit buckets during incr", async () => {
+    const kv = getKVStore();
+    expect(kv.kind).toBe("filesystem");
+
+    // Seed stale buckets — bucket timestamp far in the past
+    await kv.set("ratelimit:test:abc123:1000", "5");
+    await kv.set("ratelimit:test:abc123:1001", "3");
+    // And a non-ratelimit key that must NOT be pruned
+    await kv.set("other:key", "keep-me");
+
+    // Current minute bucket (very large number compared to 1000/1001)
+    const currentBucket = Math.floor(Date.now() / 60_000);
+    const freshKey = `ratelimit:test:abc123:${currentBucket}`;
+
+    // incr with ttlSeconds=120 (2 minutes) — staleBefore will be much larger than 1000/1001
+    await kv.incr!(freshKey, { ttlSeconds: 120 });
+
+    // Stale keys should be pruned
+    const stale1 = await kv.get("ratelimit:test:abc123:1000");
+    const stale2 = await kv.get("ratelimit:test:abc123:1001");
+    expect(stale1).toBeNull();
+    expect(stale2).toBeNull();
+
+    // Fresh key should exist
+    const fresh = await kv.get(freshKey);
+    expect(fresh).toBe("1");
+
+    // Non-ratelimit key should be untouched
+    const other = await kv.get("other:key");
+    expect(other).toBe("keep-me");
   });
 });
 

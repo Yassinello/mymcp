@@ -33,6 +33,8 @@
     "test:e2e": "npx tsx scripts/e2e-test.ts",
     "test:unit": "vitest run",
     "test:watch": "vitest",
+    "test:csp-e2e": "npx tsx scripts/csp-e2e-check.ts",
+    "test:stress": "vitest run tests/stress/",
     "test": "vitest run && npm run test:registry && npm run test:contract",
     "update": "git fetch upstream && git merge upstream/main",
     "prepare": "husky"

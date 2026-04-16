@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
-import { getRecentLogs, type ToolLog } from "@/core/logging";
+import { getRecentLogs, getDurableLogs } from "@/core/logging";
 import { getLogStore } from "@/core/log-store";
 
 /**
- * GET /api/config/logs?count=100
+ * GET /api/config/logs?count=100&filter=all|errors|success
  *
  * Returns recent tool logs. When `MYMCP_DURABLE_LOGS=true` the payload
  * is sourced from the pluggable LogStore (O1) — Upstash list in prod,
  * filesystem JSONL in dev, in-memory fallback on Vercel without
  * Upstash. Otherwise falls back to the in-process ring buffer.
+ *
+ * TECH-07: unified with mcp-logs tool — both now call the same
+ * `getDurableLogs()` helper which reads from `getLogStore().recent()`
+ * and handles the meta → ToolLog unwrap + filtering.
  *
  * Admin-auth-gated.
  */
@@ -20,16 +24,12 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const count = parseInt(url.searchParams.get("count") || "100", 10);
   const n = Number.isFinite(count) ? count : 100;
+  const filter = (url.searchParams.get("filter") as "all" | "errors" | "success") || "all";
 
   if (process.env.MYMCP_DURABLE_LOGS === "true") {
     try {
       const store = getLogStore();
-      const entries = await store.recent(n);
-      // Unwrap meta (which holds the original ToolLog shape) so the
-      // dashboard keeps rendering with the same field names.
-      const logs: ToolLog[] = entries
-        .map((e) => e.meta as unknown as ToolLog)
-        .filter((l): l is ToolLog => !!l && typeof l.tool === "string");
+      const logs = await getDurableLogs(n, filter);
       return NextResponse.json({ ok: true, logs, source: store.kind });
     } catch (err) {
       // Fall through to the in-memory ring buffer so the dashboard
@@ -41,6 +41,11 @@ export async function GET(request: Request) {
     }
   }
 
-  const logs = getRecentLogs(n);
+  let logs = getRecentLogs(n);
+  if (filter === "errors") {
+    logs = logs.filter((l) => l.status === "error");
+  } else if (filter === "success") {
+    logs = logs.filter((l) => l.status === "success");
+  }
   return NextResponse.json({ ok: true, logs, source: "memory" });
 }
