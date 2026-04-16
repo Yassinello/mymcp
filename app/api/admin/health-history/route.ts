@@ -1,12 +1,15 @@
 import { checkAdminAuth } from "@/core/auth";
-import { getLogStore } from "@/core/log-store";
+import { getKVStore } from "@/core/kv-store";
 
 /**
  * GET /api/admin/health-history — admin-gated.
  *
- * Returns health-check sample history from the LogStore. Each sample is
- * written by the deep health check (`GET /api/health?deep=1`) and
- * contains per-connector ok/latency data.
+ * Returns health-check sample history from dedicated KV keys.
+ * Each sample is written by the deep health check (`GET /api/health?deep=1`)
+ * at `health:sample:<timestamp>`.
+ *
+ * MEDIUM-2: Reads directly from KV with prefix scan instead of loading
+ * all LogStore entries and filtering. Much more efficient.
  *
  * Query params:
  * - `days` — retention window (default: MYMCP_HEALTH_SAMPLE_RETENTION_DAYS or 7)
@@ -23,19 +26,45 @@ export async function GET(request: Request) {
   );
   const cutoff = Date.now() - days * 86_400_000;
 
-  const store = getLogStore();
-  const entries = await store.since(cutoff);
+  const kv = getKVStore();
+  const keys = await kv.list("health:sample:");
 
-  const samples = entries
-    .filter((e) => e.meta && (e.meta as Record<string, unknown>).type === "health-sample")
-    .map((e) => ({
-      ts: e.ts,
-      overall: (e.meta as Record<string, unknown>).overall,
-      connectors: (e.meta as Record<string, unknown>).connectors,
-    }));
+  // Batch-read values in parallel (groups of 10)
+  const BATCH_SIZE = 10;
+  interface HealthSample {
+    ts: number;
+    overall: string;
+    connectors: Record<string, { ok: boolean; latencyMs: number }>;
+  }
+  const samples: HealthSample[] = [];
 
-  // Entries from `since()` come newest-first; reverse to chronological.
-  samples.reverse();
+  for (let i = 0; i < keys.length; i += BATCH_SIZE) {
+    const batch = keys.slice(i, i + BATCH_SIZE);
+    const values = await Promise.all(batch.map((k) => kv.get(k)));
+    for (const raw of values) {
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw) as HealthSample;
+        if (parsed.ts >= cutoff) {
+          samples.push(parsed);
+        }
+      } catch {
+        // skip malformed entries
+      }
+    }
+  }
+
+  // Sort chronologically (oldest first)
+  samples.sort((a, b) => a.ts - b.ts);
+
+  // Clean up old samples beyond retention (fire-and-forget)
+  const staleKeys = keys.filter((k) => {
+    const ts = parseInt(k.replace("health:sample:", ""), 10);
+    return Number.isFinite(ts) && ts < cutoff;
+  });
+  if (staleKeys.length > 0) {
+    Promise.all(staleKeys.map((k) => kv.delete(k))).catch(() => {});
+  }
 
   return Response.json(samples);
 }
