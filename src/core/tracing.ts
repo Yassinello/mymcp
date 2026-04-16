@@ -106,7 +106,12 @@ function isTracingEnabled(): boolean {
  * Returns a no-op sentinel when tracing is disabled (no env var set) or
  * when `@opentelemetry/api` is not available.
  */
-export function startToolSpan(toolName: string, connectorId: string, argKeys: string[]): ToolSpan {
+export function startToolSpan(
+  toolName: string,
+  connectorId: string,
+  argKeys: string[],
+  requestId?: string | null
+): ToolSpan {
   if (!isTracingEnabled()) return NOOP_SPAN;
 
   try {
@@ -120,6 +125,7 @@ export function startToolSpan(toolName: string, connectorId: string, argKeys: st
         "mymcp.tool.name": toolName,
         "mymcp.connector.id": connectorId,
         "mymcp.args.keys": JSON.stringify(argKeys),
+        ...(requestId ? { "mymcp.request.id": requestId } : {}),
       },
     });
     return span;

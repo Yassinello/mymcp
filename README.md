@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">MyMCP</h1>
-  <p align="center"><strong>Your personal AI backend. One endpoint. 84+ tools. Deploy in 5 minutes.</strong></p>
+  <p align="center"><strong>Your personal AI backend. One endpoint. 86+ tools. Deploy in 5 minutes.</strong></p>
 </p>
 
 <p align="center">
@@ -41,7 +41,7 @@
 │  ┌──────────┐ ┌────────┐ ┌────────┐ ┌───────┐ ┌────────┐ ┌─────────┐ ┌──────┐         │
 │  │  GitHub   │ │ Linear │ │Airtable│ │Paywall│ │Webhook │ │ Skills  │ │Admin │         │
 │  │  Issues   │ │ Issues │ │ Bases  │ │Reader │ │Receiver│ │Composer │ │ Logs │         │
-│  │  6 tools  │ │6 tools │ │7 tools │ │2 tools│ │2 tools │ │ dynamic │ │4 tool│         │
+│  │  6 tools  │ │6 tools │ │7 tools │ │2 tools│ │3 tools │ │ dynamic │ │5 tool│         │
 │  └──────────┘ └────────┘ └────────┘ └───────┘ └────────┘ └─────────┘ └──────┘         │
 │                                                                                         │
 │  Registry ← Connector Manifests ← Env vars (auto-activation) ← Per-tool toggles        │
@@ -56,7 +56,7 @@ I built MyMCP because I wanted a single MCP server that works everywhere (Claude
 
 Most MCP setups require running 5 separate servers, each with their own config. Or paying for a hosted platform that controls your data.
 
-MyMCP gives you **one server, one endpoint, 84+ tools** — deployed on Vercel's free tier (or Docker). You own everything.
+MyMCP gives you **one server, one endpoint, 86+ tools** — deployed on Vercel's free tier (or Docker). You own everything.
 
 | | MyMCP | Separate MCP servers | Hosted platforms |
 |---|---|---|---|
@@ -302,7 +302,7 @@ Equivalent to `git fetch upstream && git merge upstream/main`. Useful when you'r
 
 ## Connectors
 
-MyMCP ships **84+ production-ready tools** organized in 14 connectors. Each connector activates automatically when its credentials are present in env vars. Additionally, user-defined **Skills** create dynamic tools from prompt templates.
+MyMCP ships **86+ production-ready tools** organized in 14 connectors. Each connector activates automatically when its credentials are present in env vars. Additionally, user-defined **Skills** create dynamic tools from prompt templates.
 
 ### Google Workspace — 18 tools
 
@@ -427,12 +427,13 @@ Connect your apps in the [Composio dashboard](https://composio.dev), then use `c
 
 **Requires:** `COMPOSIO_API_KEY`
 
-### Webhook Receiver — 2 tools
+### Webhook Receiver — 3 tools
 
 | Tool | What it does |
 |------|-------------|
 | `webhook_last` | Retrieve the most recent payload for a named webhook |
 | `webhook_list` | List all webhooks that have received at least one payload |
+| `webhook_history` | Retrieve the last N payloads for a named webhook |
 
 **Requires:** `MYMCP_WEBHOOKS` (comma-separated list of webhook names, e.g. `stripe,github`)
 
@@ -442,7 +443,7 @@ Optional per-webhook HMAC-SHA256 validation via `MYMCP_WEBHOOK_SECRET_<NAME>`.
 
 User-defined prompt templates exposed as MCP tools and prompts. Create skills via the dashboard's **Skill Composer** (visual tool-wrapping wizard) or manually. Each skill becomes `skill_<name>` in your MCP client. Always active, no credentials needed.
 
-### Admin — 4 tools
+### Admin — 5 tools
 
 | Tool | What it does |
 |------|-------------|
@@ -450,6 +451,7 @@ User-defined prompt templates exposed as MCP tools and prompts. Create skills vi
 | `mcp_cache_evict` | Clear internal caches (KV, API response, etc.) |
 | `mcp_backup_export` | Export skills and settings as a JSON backup |
 | `mcp_backup_import` | Restore skills and settings from a backup |
+| `admin_stream_test` | Streaming transport diagnostic (verifies chunked transfer works end-to-end) |
 
 Always active, no credentials needed.
 
@@ -473,9 +475,9 @@ src/
     github/             ← GitHub Issues (6 tools)
     linear/             ← Linear Issues (6 tools)
     airtable/           ← Airtable Bases (7 tools)
-    webhook/            ← Webhook Receiver (2 tools)
+    webhook/            ← Webhook Receiver (3 tools)
     skills/             ← Skills — dynamic user-defined tools
-    admin/              ← Admin & Observability (4 tools)
+    admin/              ← Admin & Observability (5 tools)
 
 app/
   api/mcp               ← MCP endpoint (~30 lines — reads from registry)
@@ -545,6 +547,18 @@ MYMCP_ENABLED_PACKS=vault,admin    # Only listed connectors are considered
 ```
 
 ## What's New
+
+### v0.1.0 (Stabilization)
+
+- **OTel auto-bootstrap** — set `OTEL_SERVICE_NAME=mymcp` and spans flow to your collector, zero config
+- **API Playground** — test any tool from the dashboard with a mini-chat UI
+- **Skill Composer** — visual tool-wrapping wizard: pick tool, configure args, preview YAML, save
+- **Skill versioning** — edits create new versions, rollback supported from dashboard
+- **Health dashboard** — connector SLA sparklines, instance health widget, version display
+- **Per-tool toggle** — disable individual tools from the dashboard without removing connectors
+- **Multi-tenant auth** — per-tenant tokens with `x-mymcp-tenant` header routing
+- **Webhook connector** — receive and query external payloads (Stripe, GitHub, etc.)
+- **Request ID propagation** — `x-request-id` on every response, propagated to logs and OTel spans
 
 ### v0.7
 

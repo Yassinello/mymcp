@@ -39,7 +39,11 @@ type GlobalWithFlag = typeof globalThis & { [TRANSPORT_SUBSCRIBED]?: boolean };
  *
  * Cost: a few ms to re-scan process.env + rebuild the tool list.
  */
-async function buildHandler(callerTokenId?: string | null, tenantId?: string | null) {
+async function buildHandler(
+  callerTokenId?: string | null,
+  tenantId?: string | null,
+  requestId?: string | null
+) {
   return createMcpHandler(
     (server) => {
       const enabledPacks = getEnabledPacks();
@@ -88,7 +92,8 @@ async function buildHandler(callerTokenId?: string | null, tenantId?: string | n
                 );
               },
               callerTokenId,
-              pack.manifest.id
+              pack.manifest.id,
+              requestId
             )
           );
         }
@@ -144,6 +149,7 @@ async function handler(request: Request): Promise<Response> {
     );
   }
 
+  const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
   const { error: authError, tokenId, tenantId } = checkMcpAuth(request);
   if (authError) return authError;
 
@@ -164,8 +170,10 @@ async function handler(request: Request): Promise<Response> {
     }
   }
 
-  const mcpHandler = await buildHandler(tokenId, tenantId);
-  return mcpHandler(request);
+  const mcpHandler = await buildHandler(tokenId, tenantId, requestId);
+  const response = await mcpHandler(request);
+  response.headers.set("x-request-id", requestId);
+  return response;
 }
 
 export { handler as GET, handler as POST, handler as DELETE };

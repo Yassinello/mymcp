@@ -18,6 +18,8 @@ export interface ToolLog {
   streamBytes?: number;
   timestamp: string;
   tokenId?: string;
+  /** Request ID for correlating tool calls to HTTP requests. */
+  requestId?: string;
 }
 
 // In-memory ring buffer for recent logs (survives across requests in same serverless instance)
@@ -182,11 +184,12 @@ export function withLogging<TParams>(
   toolName: string,
   handler: (params: TParams) => Promise<ToolResult>,
   callerTokenId?: string | null,
-  connectorId?: string
+  connectorId?: string,
+  requestId?: string | null
 ): (params: TParams) => Promise<ToolResult> {
   return async (params: TParams) => {
     const argKeys = params && typeof params === "object" ? Object.keys(params as object) : [];
-    const span = startToolSpan(toolName, connectorId ?? "unknown", argKeys);
+    const span = startToolSpan(toolName, connectorId ?? "unknown", argKeys, requestId);
     const start = Date.now();
     try {
       const result = await handler(params);
@@ -232,6 +235,7 @@ export function withLogging<TParams>(
           streamBytes: totalBytes,
           timestamp: new Date().toISOString(),
           ...(callerTokenId ? { tokenId: callerTokenId } : {}),
+          ...(requestId ? { requestId } : {}),
         });
         // Replace the stream with the collected content
         const { stream: _stream, ...rest } = result;
@@ -250,6 +254,7 @@ export function withLogging<TParams>(
         status: "success",
         timestamp: new Date().toISOString(),
         ...(callerTokenId ? { tokenId: callerTokenId } : {}),
+        ...(requestId ? { requestId } : {}),
       });
       return result;
     } catch (error) {
@@ -273,6 +278,7 @@ export function withLogging<TParams>(
           recovery: error.internalRecovery ?? error.recovery,
           timestamp,
           ...(callerTokenId ? { tokenId: callerTokenId } : {}),
+          ...(requestId ? { requestId } : {}),
         });
         // Include generic recovery hint in the MCP response so the LLM can
         // act on it (e.g., suggest re-auth or retry after a delay).
@@ -295,6 +301,7 @@ export function withLogging<TParams>(
         error: message,
         timestamp,
         ...(callerTokenId ? { tokenId: callerTokenId } : {}),
+        ...(requestId ? { requestId } : {}),
       });
       throw error;
     }

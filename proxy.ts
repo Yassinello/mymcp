@@ -107,13 +107,16 @@ export function proxy(request: NextRequest) {
   // layout and passed to <Script nonce=…>).
   const nonce = generateNonce();
   const csp = buildCsp(nonce);
+  const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
 
-  // Build a request-headers delta so the app can read `x-nonce`.
+  // Build a request-headers delta so the app can read `x-nonce` and `x-request-id`.
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("x-request-id", requestId);
 
   const finalize = (res: NextResponse): NextResponse => {
     res.headers.set("Content-Security-Policy", csp);
+    res.headers.set("x-request-id", requestId);
     return res;
   };
   const passthrough = () => finalize(NextResponse.next({ request: { headers: requestHeaders } }));
