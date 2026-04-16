@@ -13,3 +13,4 @@ data/
 tests/visual/screenshots/
 test-results/
 playwright-report/
+coverage/
