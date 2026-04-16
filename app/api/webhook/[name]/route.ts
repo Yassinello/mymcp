@@ -1,5 +1,8 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, createHash, timingSafeEqual } from "crypto";
 import { getKVStore } from "@/core/kv-store";
+
+/** Maximum webhook payload size: 1 MB. */
+const MAX_PAYLOAD_BYTES = 1_048_576;
 
 /**
  * Webhook receiver endpoint.
@@ -28,11 +31,11 @@ function verifySignature(body: string, name: string, signature: string): boolean
   if (!secret) return false;
 
   const expected = createHmac("sha256", secret).update(body).digest("hex");
-  try {
-    return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-  } catch {
-    return false;
-  }
+  // Hash both sides to fixed length before comparing — prevents timing leak
+  // on length mismatch (timingSafeEqual throws on different-length buffers).
+  const expectedHash = createHash("sha256").update(expected).digest();
+  const providedHash = createHash("sha256").update(signature).digest();
+  return timingSafeEqual(expectedHash, providedHash);
 }
 
 export async function POST(
@@ -51,8 +54,49 @@ export async function POST(
     });
   }
 
-  // Read body
-  const body = await request.text();
+  // Enforce payload size limit — check Content-Length header first for
+  // a fast reject, then read in bounded chunks as a defense against
+  // missing/lying Content-Length headers.
+  const contentLength = request.headers.get("content-length");
+  if (contentLength && parseInt(contentLength, 10) > MAX_PAYLOAD_BYTES) {
+    return new Response(JSON.stringify({ error: "Payload too large" }), {
+      status: 413,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Read body with bounded approach
+  let body: string;
+  if (!request.body) {
+    body = "";
+  } else {
+    const reader = request.body.getReader();
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+    let totalBytes = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        totalBytes += value.byteLength;
+        if (totalBytes > MAX_PAYLOAD_BYTES) {
+          reader.cancel();
+          return new Response(JSON.stringify({ error: "Payload too large" }), {
+            status: 413,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        chunks.push(decoder.decode(value, { stream: true }));
+      }
+      chunks.push(decoder.decode()); // flush
+    } catch {
+      return new Response(JSON.stringify({ error: "Failed to read body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    body = chunks.join("");
+  }
 
   // Optional HMAC signature verification
   const secretEnvKey = `MYMCP_WEBHOOK_SECRET_${normalizedName.toUpperCase().replace(/-/g, "_")}`;

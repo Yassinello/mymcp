@@ -7,21 +7,24 @@ import { createHmac } from "crypto";
 // In-memory KV mock
 const mockKV: Record<string, string> = {};
 
-vi.mock("@/core/kv-store", () => ({
-  getKVStore: () => ({
-    kind: "filesystem" as const,
-    get: vi.fn(async (key: string) => mockKV[key] ?? null),
-    set: vi.fn(async (key: string, value: string) => {
-      mockKV[key] = value;
-    }),
-    delete: vi.fn(async (key: string) => {
-      delete mockKV[key];
-    }),
-    list: vi.fn(async (prefix?: string) => {
-      const keys = Object.keys(mockKV);
-      return prefix ? keys.filter((k) => k.startsWith(prefix)) : keys;
-    }),
+const mockKVInstance = {
+  kind: "filesystem" as const,
+  get: vi.fn(async (key: string) => mockKV[key] ?? null),
+  set: vi.fn(async (key: string, value: string) => {
+    mockKV[key] = value;
   }),
+  delete: vi.fn(async (key: string) => {
+    delete mockKV[key];
+  }),
+  list: vi.fn(async (prefix?: string) => {
+    const keys = Object.keys(mockKV);
+    return prefix ? keys.filter((k) => k.startsWith(prefix)) : keys;
+  }),
+};
+
+vi.mock("@/core/kv-store", () => ({
+  getKVStore: () => mockKVInstance,
+  getTenantKVStore: () => mockKVInstance,
 }));
 
 import { handleWebhookLast } from "@/connectors/webhook/tools/webhook-last";
@@ -174,6 +177,37 @@ describe("webhook API route", () => {
     });
     const resBad = await POST(reqBad, { params: Promise.resolve({ name: "stripe" }) });
     expect(resBad.status).toBe(401);
+  });
+
+  it("returns 413 when Content-Length exceeds 1 MB", async () => {
+    process.env.MYMCP_WEBHOOKS = "stripe";
+    const { POST } = await importRoute();
+    const req = new Request("http://localhost/api/webhook/stripe", {
+      method: "POST",
+      body: "{}",
+      headers: {
+        "Content-Length": "2000000",
+        "Content-Type": "application/json",
+      },
+    });
+    const res = await POST(req, { params: Promise.resolve({ name: "stripe" }) });
+    expect(res.status).toBe(413);
+    const body = await res.json();
+    expect(body.error).toBe("Payload too large");
+  });
+
+  it("returns 413 when streamed body exceeds 1 MB", async () => {
+    process.env.MYMCP_WEBHOOKS = "stripe";
+    const { POST } = await importRoute();
+    // Create a body larger than 1 MB without setting Content-Length
+    const bigPayload = "x".repeat(1_048_577);
+    const req = new Request("http://localhost/api/webhook/stripe", {
+      method: "POST",
+      body: bigPayload,
+    });
+    // Remove content-length to force streaming path
+    const res = await POST(req, { params: Promise.resolve({ name: "stripe" }) });
+    expect(res.status).toBe(413);
   });
 
   it("rejects when signature missing but secret is configured", async () => {
