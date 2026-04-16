@@ -31,11 +31,15 @@ import {
 import type { ToolResult } from "@/core/types";
 
 describe("connector-specific error classes", () => {
-  it("GoogleAuthError has correct code and recovery", () => {
+  it("GoogleAuthError has correct code and split recovery", () => {
     const err = new GoogleAuthError("token expired");
     expect(err).toBeInstanceOf(McpToolError);
     expect(err.code).toBe(ErrorCode.AUTH_FAILED);
-    expect(err.recovery).toContain("GOOGLE_CLIENT_ID");
+    // Generic recovery should NOT contain env var names
+    expect(err.recovery).not.toContain("GOOGLE_CLIENT_ID");
+    expect(err.recovery).toContain("dashboard");
+    // Internal recovery should contain env var names
+    expect(err.internalRecovery).toContain("GOOGLE_CLIENT_ID");
     expect(err.name).toBe("GoogleAuthError");
     expect(err.retryable).toBe(false);
   });
@@ -54,10 +58,12 @@ describe("connector-specific error classes", () => {
     expect(err.recovery).toContain("vault_list");
   });
 
-  it("VaultAuthError has GitHub-specific recovery", () => {
+  it("VaultAuthError has GitHub-specific internalRecovery", () => {
     const err = new VaultAuthError("401 unauthorized");
     expect(err.code).toBe(ErrorCode.AUTH_FAILED);
-    expect(err.recovery).toContain("GITHUB_PAT");
+    expect(err.recovery).not.toContain("GITHUB_PAT");
+    expect(err.recovery).toContain("dashboard");
+    expect(err.internalRecovery).toContain("GITHUB_PAT");
   });
 
   it("SlackRateLimitError includes method name", () => {
@@ -68,16 +74,20 @@ describe("connector-specific error classes", () => {
     expect(err.recovery).toContain("per-method");
   });
 
-  it("SlackAuthError references bot token", () => {
+  it("SlackAuthError has split recovery", () => {
     const err = new SlackAuthError("token_revoked");
     expect(err.code).toBe(ErrorCode.AUTH_FAILED);
-    expect(err.recovery).toContain("SLACK_BOT_TOKEN");
+    expect(err.recovery).not.toContain("SLACK_BOT_TOKEN");
+    expect(err.recovery).toContain("dashboard");
+    expect(err.internalRecovery).toContain("SLACK_BOT_TOKEN");
   });
 
-  it("NotionAuthError has Notion-specific recovery", () => {
+  it("NotionAuthError has split recovery", () => {
     const err = new NotionAuthError("unauthorized");
     expect(err.code).toBe(ErrorCode.AUTH_FAILED);
-    expect(err.recovery).toContain("NOTION_API_KEY");
+    expect(err.recovery).not.toContain("NOTION_API_KEY");
+    expect(err.recovery).toContain("dashboard");
+    expect(err.internalRecovery).toContain("NOTION_API_KEY");
   });
 
   it("WebhookNotFoundError includes webhook ID", () => {
@@ -88,7 +98,7 @@ describe("connector-specific error classes", () => {
 });
 
 describe("recovery hint flows through withLogging", () => {
-  it("includes recovery in MCP error response", async () => {
+  it("includes generic recovery in MCP response, not env var names", async () => {
     const handler = async (): Promise<ToolResult> => {
       throw new GoogleAuthError("refresh token expired");
     };
@@ -98,15 +108,18 @@ describe("recovery hint flows through withLogging", () => {
 
     expect(result.isError).toBe(true);
     expect(result.errorCode).toBe(ErrorCode.AUTH_FAILED);
-    // The response text should contain the recovery hint
+    // The response text should contain the generic recovery hint
     const text = result.content[0].text;
     expect(text).toContain("Recovery:");
-    expect(text).toContain("GOOGLE_CLIENT_ID");
+    expect(text).toContain("dashboard");
+    // Must NOT leak env var names to the client
+    expect(text).not.toContain("GOOGLE_CLIENT_ID");
+    expect(text).not.toContain("GOOGLE_REFRESH_TOKEN");
   });
 
-  it("logs recovery hint in ToolLog", async () => {
+  it("logs recovery hint in ToolLog (internalRecovery when available)", async () => {
     const handler = async (): Promise<ToolResult> => {
-      throw new VaultNotFoundError("test.md");
+      throw new VaultAuthError("401 unauthorized");
     };
 
     const wrapped = withLogging("test_vault_recovery", handler);
@@ -115,8 +128,9 @@ describe("recovery hint flows through withLogging", () => {
     const logs = getRecentLogs(10);
     const log = logs.find((l) => l.tool === "test_vault_recovery");
     expect(log).toBeDefined();
-    expect(log!.recovery).toContain("vault_list");
-    expect(log!.errorCode).toBe(ErrorCode.NOT_FOUND);
+    // Server-side log should contain the detailed internalRecovery
+    expect(log!.recovery).toContain("GITHUB_PAT");
+    expect(log!.errorCode).toBe(ErrorCode.AUTH_FAILED);
   });
 
   it("base McpToolError without recovery omits hint", async () => {

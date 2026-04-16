@@ -195,20 +195,39 @@ export function withLogging<TParams>(
       // the content buffer so the MCP SDK receives a complete response.
       // This lets tools produce data progressively without holding
       // everything in memory until the stream ends.
+      //
+      // Safety bounds (CRITICAL-1): cap at 10 MB / 55 s to stay within
+      // Vercel's 60 s serverless timeout and prevent unbounded memory growth.
       if (result.stream) {
+        const MAX_STREAM_BYTES = 10 * 1024 * 1024; // 10 MB
+        const MAX_STREAM_DURATION_MS = 55_000; // 55 s (under Vercel 60 s)
         const stream = result.stream as AsyncIterable<string>;
         const chunks: string[] = [];
         let totalBytes = 0;
+        let truncated: string | null = null;
+        const streamStart = Date.now();
         for await (const chunk of stream) {
           chunks.push(chunk);
           totalBytes += chunk.length;
+          if (totalBytes > MAX_STREAM_BYTES) {
+            truncated = "Stream truncated: exceeded 10 MB size limit";
+            break;
+          }
+          if (Date.now() - streamStart > MAX_STREAM_DURATION_MS) {
+            truncated = "Stream truncated: exceeded 55 s duration limit";
+            break;
+          }
+        }
+        if (truncated) {
+          chunks.push(`\n${truncated}`);
         }
         const durationMs = Date.now() - start;
-        endToolSpan(span, "ok", durationMs);
+        endToolSpan(span, truncated ? "error" : "ok", durationMs);
         logToolCall({
           tool: toolName,
           durationMs,
-          status: "success",
+          status: truncated ? "error" : "success",
+          ...(truncated ? { error: truncated } : {}),
           streamChunks: chunks.length,
           streamBytes: totalBytes,
           timestamp: new Date().toISOString(),
@@ -219,6 +238,7 @@ export function withLogging<TParams>(
         return {
           ...rest,
           content: [{ type: "text" as const, text: chunks.join("") }],
+          ...(truncated ? { isError: true } : {}),
         };
       }
 
@@ -238,6 +258,11 @@ export function withLogging<TParams>(
       endToolSpan(span, "error", durationMs);
 
       if (error instanceof McpToolError) {
+        // Log the detailed internalRecovery server-side (contains env var
+        // names etc.), but only surface the generic recovery to the client.
+        if (error.internalRecovery) {
+          console.log(`[MyMCP] Recovery detail (${toolName}): ${error.internalRecovery}`);
+        }
         logToolCall({
           tool: toolName,
           durationMs,
@@ -245,12 +270,13 @@ export function withLogging<TParams>(
           error: error.message,
           errorCode: error.code,
           retryable: error.retryable,
-          recovery: error.recovery,
+          recovery: error.internalRecovery ?? error.recovery,
           timestamp,
           ...(callerTokenId ? { tokenId: callerTokenId } : {}),
         });
-        // Include recovery hint in the MCP response so the LLM can
+        // Include generic recovery hint in the MCP response so the LLM can
         // act on it (e.g., suggest re-auth or retry after a delay).
+        // Never surface internalRecovery — it may contain env var names.
         const userText = error.recovery
           ? `${error.userMessage}\n\nRecovery: ${error.recovery}`
           : error.userMessage;

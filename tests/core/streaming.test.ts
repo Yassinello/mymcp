@@ -100,4 +100,63 @@ describe("streaming tool results", () => {
     expect(log).toBeDefined();
     expect(log!.streamChunks).toBeUndefined();
   });
+
+  it("truncates stream exceeding byte limit", async () => {
+    // Generate chunks that exceed 10 MB
+    const bigChunk = "x".repeat(1024 * 1024); // 1 MB each
+    async function* genHugeStream(): AsyncGenerator<string> {
+      for (let i = 0; i < 12; i++) {
+        yield bigChunk;
+      }
+    }
+
+    const handler = async (): Promise<ToolResult> => ({
+      content: [{ type: "text", text: "" }],
+      stream: genHugeStream(),
+    });
+
+    const wrapped = withLogging("test_stream_byte_limit", handler);
+    const result = await wrapped({});
+
+    expect(result.isError).toBe(true);
+    const text = result.content[0].text;
+    expect(text).toContain("Stream truncated: exceeded 10 MB size limit");
+  });
+
+  it("truncates stream exceeding duration limit", async () => {
+    // Simulate a stream that takes too long via a controllable async generator
+    let yieldCount = 0;
+    async function* genSlowStream(): AsyncGenerator<string> {
+      // We can't actually wait 55s in a test, so we mock Date.now to advance time
+      while (true) {
+        yieldCount++;
+        yield `chunk-${yieldCount}`;
+      }
+    }
+
+    // Mock Date.now to simulate time passing
+    const realDateNow = Date.now;
+    let mockTime = realDateNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => {
+      // After the stream starts, advance 56 seconds on each call
+      mockTime += 56_000;
+      return mockTime;
+    });
+
+    try {
+      const handler = async (): Promise<ToolResult> => ({
+        content: [{ type: "text", text: "" }],
+        stream: genSlowStream(),
+      });
+
+      const wrapped = withLogging("test_stream_duration_limit", handler);
+      const result = await wrapped({});
+
+      expect(result.isError).toBe(true);
+      const text = result.content[0].text;
+      expect(text).toContain("Stream truncated: exceeded 55 s duration limit");
+    } finally {
+      vi.spyOn(Date, "now").mockRestore();
+    }
+  });
 });

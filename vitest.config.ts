@@ -23,7 +23,7 @@ export default defineConfig({
       include: ["src/**/*.ts"],
       exclude: ["src/**/*.test.ts", "src/**/test-utils.ts"],
       thresholds: {
-        lines: 32,
+        lines: 33,
       },
     },
   },

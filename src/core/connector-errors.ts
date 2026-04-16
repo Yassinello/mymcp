@@ -1,9 +1,9 @@
 /**
  * Per-connector structured error classes.
  *
- * Each class extends McpToolError with a `recovery` hint that flows through
- * withLogging into the MCP error response, giving the LLM actionable guidance
- * on how to resolve the issue.
+ * Each class extends McpToolError with two recovery hints:
+ * - `recovery`: generic, safe to surface to the MCP client / LLM.
+ * - `internalRecovery`: contains env var names — logged server-side only.
  */
 
 import { McpToolError, ErrorCode } from "./errors";
@@ -20,6 +20,8 @@ export class GoogleAuthError extends McpToolError {
       retryable: false,
       cause: opts?.cause,
       recovery:
+        "Credentials may be expired or misconfigured. Check your Google connector settings in the dashboard.",
+      internalRecovery:
         "Check GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN env vars. " +
         "The refresh token may have expired — re-authorize via the OAuth flow in /config.",
     });
@@ -73,6 +75,8 @@ export class VaultAuthError extends McpToolError {
       retryable: false,
       cause: opts?.cause,
       recovery:
+        "Credentials may be expired or misconfigured. Check your Vault connector settings in the dashboard.",
+      internalRecovery:
         "Check GITHUB_PAT env var. The token needs `repo` scope. " +
         "Generate a new token at https://github.com/settings/tokens if expired.",
     });
@@ -108,10 +112,12 @@ export class SlackAuthError extends McpToolError {
       code: ErrorCode.AUTH_FAILED,
       toolName: "slack",
       message: `Slack authentication failed: ${slackError}`,
-      userMessage: `Slack authentication failed (${slackError}). Check your SLACK_BOT_TOKEN.`,
+      userMessage: `Slack authentication failed (${slackError}).`,
       retryable: false,
       cause: opts?.cause,
       recovery:
+        "Credentials may be expired or misconfigured. Check your Slack connector settings in the dashboard.",
+      internalRecovery:
         "Check SLACK_BOT_TOKEN env var. The token may have been revoked — " +
         "re-install the Slack app or generate a new bot token at https://api.slack.com/apps.",
     });
@@ -131,6 +137,8 @@ export class NotionAuthError extends McpToolError {
       retryable: false,
       cause: opts?.cause,
       recovery:
+        "Credentials may be expired or misconfigured. Check your Notion connector settings in the dashboard.",
+      internalRecovery:
         "Check NOTION_API_KEY env var. Ensure the integration has access to the " +
         "relevant pages/databases in Notion's sharing settings.",
     });
@@ -154,15 +162,3 @@ export class WebhookNotFoundError extends McpToolError {
     this.name = "WebhookNotFoundError";
   }
 }
-
-// ── Re-export convenience type for connector authors ────────────────
-
-export type ConnectorErrorClass =
-  | typeof GoogleAuthError
-  | typeof GoogleRateLimitError
-  | typeof VaultNotFoundError
-  | typeof VaultAuthError
-  | typeof SlackRateLimitError
-  | typeof SlackAuthError
-  | typeof NotionAuthError
-  | typeof WebhookNotFoundError;

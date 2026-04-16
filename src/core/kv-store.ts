@@ -324,7 +324,11 @@ class UpstashKV implements KVStore {
     cursor: string,
     opts?: { match?: string; count?: number }
   ): Promise<{ cursor: string; keys: string[] }> {
-    const args: (string | number)[] = ["SCAN", parseInt(cursor, 10) || 0];
+    const parsed = parseInt(cursor, 10);
+    if (Number.isNaN(parsed)) {
+      throw new Error(`Invalid SCAN cursor from Upstash: ${cursor}`);
+    }
+    const args: (string | number)[] = ["SCAN", parsed];
     if (opts?.match) {
       args.push("MATCH", opts.match);
     }
@@ -342,7 +346,9 @@ class UpstashKV implements KVStore {
   async mget(keys: string[]): Promise<(string | null)[]> {
     if (keys.length === 0) return [];
     const result = await this.call(["MGET", ...keys]);
-    if (!Array.isArray(result)) return keys.map(() => null);
+    if (!Array.isArray(result)) {
+      throw new Error(`Upstash MGET returned non-array result: ${typeof result}`);
+    }
     return (result as (string | null)[]).map((v) =>
       typeof v === "string" ? v : v == null ? null : String(v)
     );
@@ -488,12 +494,22 @@ export async function kvScanAll(kv: KVStore, match?: string): Promise<string[]> 
     return kv.list(prefix);
   }
 
+  // Safety: cap iterations to prevent infinite loops from a buggy backend
+  // that never returns cursor "0". 10 000 × 100 keys/page = 1M keys max.
+  const MAX_SCAN_ITERATIONS = 10_000;
   const all: string[] = [];
   let cursor = "0";
+  let iterations = 0;
   do {
     const result = await kv.scan(cursor, { match, count: 100 });
     all.push(...result.keys);
     cursor = result.cursor;
+    iterations++;
+    if (iterations >= MAX_SCAN_ITERATIONS) {
+      throw new Error(
+        `kvScanAll: exceeded ${MAX_SCAN_ITERATIONS} iterations — possible infinite cursor loop`
+      );
+    }
   } while (cursor !== "0");
   return all;
 }
@@ -511,9 +527,38 @@ class TenantKVStore implements KVStore {
   private inner: KVStore;
   private tenantId: string | null;
 
+  // HIGH-2: scan and mget are only defined when the inner store supports them.
+  // This prevents callers from seeing these methods as available when they aren't.
+  scan?: KVStore["scan"];
+  mget?: KVStore["mget"];
+
   constructor(inner: KVStore, tenantId: string | null) {
     this.inner = inner;
     this.tenantId = tenantId;
+
+    // Conditionally define scan/mget based on inner store capabilities
+    if (typeof inner.scan === "function") {
+      this.scan = async (
+        cursor: string,
+        opts?: { match?: string; count?: number }
+      ): Promise<{ cursor: string; keys: string[] }> => {
+        // Prefix the match pattern for the tenant namespace
+        const prefixedMatch = opts?.match ? this.pk(opts.match) : this.pk("*");
+        const result = await this.inner.scan!(cursor, { ...opts, match: prefixedMatch });
+        // Strip tenant prefix from returned keys
+        const tenantPrefix = this.tenantId ? `tenant:${this.tenantId}:` : "";
+        const keys = tenantPrefix
+          ? result.keys.map((k) => (k.startsWith(tenantPrefix) ? k.slice(tenantPrefix.length) : k))
+          : result.keys;
+        return { cursor: result.cursor, keys };
+      };
+    }
+
+    if (typeof inner.mget === "function") {
+      this.mget = async (keys: string[]): Promise<(string | null)[]> => {
+        return this.inner.mget!(keys.map((k) => this.pk(k)));
+      };
+    }
   }
 
   private pk(key: string): string {
@@ -534,32 +579,6 @@ class TenantKVStore implements KVStore {
 
   list(prefix?: string) {
     return this.inner.list(this.pk(prefix ?? ""));
-  }
-
-  async scan(
-    cursor: string,
-    opts?: { match?: string; count?: number }
-  ): Promise<{ cursor: string; keys: string[] }> {
-    if (!this.inner.scan) {
-      throw new Error("scan not supported");
-    }
-    // Prefix the match pattern for the tenant namespace
-    const prefixedMatch = opts?.match ? this.pk(opts.match) : this.pk("*");
-    const result = await this.inner.scan(cursor, { ...opts, match: prefixedMatch });
-    // Strip tenant prefix from returned keys
-    const tenantPrefix = this.tenantId ? `tenant:${this.tenantId}:` : "";
-    const keys = tenantPrefix
-      ? result.keys.map((k) => (k.startsWith(tenantPrefix) ? k.slice(tenantPrefix.length) : k))
-      : result.keys;
-    return { cursor: result.cursor, keys };
-  }
-
-  async mget(keys: string[]): Promise<(string | null)[]> {
-    if (this.inner.mget) {
-      return this.inner.mget(keys.map((k) => this.pk(k)));
-    }
-    // Fallback to sequential gets
-    return Promise.all(keys.map((k) => this.inner.get(this.pk(k))));
   }
 
   incr(key: string, opts?: { ttlSeconds?: number }) {

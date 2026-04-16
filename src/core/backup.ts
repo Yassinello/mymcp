@@ -113,7 +113,7 @@ export async function importBackup(
 
   // In "replace" mode, delete all existing keys not present in the backup
   if (mode === "replace") {
-    const existingKeys = await kv.list();
+    const existingKeys = await kvScanAll(kv, "*");
     const backupKeySet = new Set(Object.keys(entries));
     for (const key of existingKeys) {
       if (!backupKeySet.has(key)) {

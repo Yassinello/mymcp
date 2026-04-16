@@ -146,6 +146,26 @@ describe("kvScanAll", () => {
   });
 });
 
+describe("kvScanAll cycle guard", () => {
+  it("throws after MAX_SCAN_ITERATIONS", async () => {
+    // Create a mock KV store whose scan never returns cursor "0"
+    let callCount = 0;
+    const infiniteScanKv = {
+      kind: "filesystem" as const,
+      get: async () => null,
+      set: async () => {},
+      delete: async () => {},
+      list: async () => [],
+      scan: async (_cursor: string, _opts?: { match?: string; count?: number }) => {
+        callCount++;
+        return { cursor: String(callCount), keys: [`key-${callCount}`] };
+      },
+    };
+
+    await expect(kvScanAll(infiniteScanKv, "*")).rejects.toThrow("exceeded");
+  });
+});
+
 describe("backup.ts uses mget and kvScanAll", () => {
   it("exportBackup reads all keys via mget", async () => {
     const kv = getKVStore();

@@ -21,8 +21,13 @@ export class McpToolError extends Error {
   readonly toolName: string;
   readonly userMessage: string;
   readonly retryable: boolean;
-  /** Actionable recovery hint surfaced to the LLM so it can self-heal. */
+  /** Generic recovery hint safe to surface to the MCP client / LLM. */
   readonly recovery?: string;
+  /**
+   * Detailed recovery hint containing env var names or internal details.
+   * Logged server-side only — never sent to the MCP client.
+   */
+  readonly internalRecovery?: string;
 
   constructor(opts: {
     code: ErrorCodeType;
@@ -32,6 +37,7 @@ export class McpToolError extends Error {
     retryable?: boolean;
     cause?: Error;
     recovery?: string;
+    internalRecovery?: string;
   }) {
     super(opts.message, { cause: opts.cause });
     this.name = "McpToolError";
@@ -40,5 +46,6 @@ export class McpToolError extends Error {
     this.userMessage = opts.userMessage ?? opts.message;
     this.retryable = opts.retryable ?? false;
     this.recovery = opts.recovery;
+    this.internalRecovery = opts.internalRecovery;
   }
 }
