@@ -8,7 +8,7 @@ import { isClaimer } from "./first-run";
  * Two auth scopes:
  * - MCP auth: protects the /api/mcp endpoint (MCP_AUTH_TOKEN)
  *   Supports comma-separated list of tokens for multi-client deployments.
- * - Admin auth: protects the dashboard/setup UI (ADMIN_AUTH_TOKEN, falls back to MCP_AUTH_TOKEN)
+ * - Admin auth: protects the dashboard/welcome UI (ADMIN_AUTH_TOKEN, falls back to MCP_AUTH_TOKEN)
  *   Always single-token.
  */
 
@@ -152,10 +152,9 @@ export function checkCsrf(request: Request): Response | null {
   try {
     const originHost = new URL(origin).host;
     if (originHost !== host) {
-      return new Response(
-        `CSRF check failed — Origin ${originHost} does not match host ${host}`,
-        { status: 403 }
-      );
+      return new Response(`CSRF check failed — Origin ${originHost} does not match host ${host}`, {
+        status: 403,
+      });
     }
   } catch {
     return new Response("CSRF check failed — malformed Origin", { status: 403 });

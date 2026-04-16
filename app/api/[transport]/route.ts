@@ -6,6 +6,7 @@ import { checkRateLimit } from "@/core/rate-limit";
 import { getEnabledPacks, logRegistryState } from "@/core/registry";
 import { on } from "@/core/events";
 import { VERSION } from "@/core/version";
+import { getDisabledTools } from "@/core/tool-toggles";
 
 // NIT-03: Log the registry state once at module load, then re-log only
 // when env.changed fires. Previous behavior logged on every MCP request,
@@ -37,13 +38,19 @@ type GlobalWithFlag = typeof globalThis & { [TRANSPORT_SUBSCRIBED]?: boolean };
  *
  * Cost: a few ms to re-scan process.env + rebuild the tool list.
  */
-function buildHandler(callerTokenId?: string | null) {
+async function buildHandler(callerTokenId?: string | null) {
+  const disabledTools = await getDisabledTools();
+
   return createMcpHandler(
     (server) => {
       const enabledPacks = getEnabledPacks();
 
       for (const pack of enabledPacks) {
         for (const tool of pack.manifest.tools) {
+          // Per-tool disable via KV. Connector-level disable is already
+          // handled by getEnabledPacks() — this is the per-tool layer.
+          if (disabledTools.has(tool.name)) continue;
+
           const desc = tool.deprecated
             ? `[DEPRECATED: ${tool.deprecated}] ${tool.description}`
             : tool.description;
@@ -131,7 +138,7 @@ async function handler(request: Request): Promise<Response> {
     }
   }
 
-  const mcpHandler = buildHandler(tokenId);
+  const mcpHandler = await buildHandler(tokenId);
   return mcpHandler(request);
 }
 

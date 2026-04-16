@@ -33,10 +33,10 @@ A Google account and a Google Cloud project where you can create an OAuth client
 2. Enable these APIs: **Gmail**, **Google Calendar**, **People**, **Google Drive**
 3. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**, type **Desktop app**
 4. Copy the client ID into \`GOOGLE_CLIENT_ID\` and the secret into \`GOOGLE_CLIENT_SECRET\`
-5. Run the built-in wizard at **/setup** in your MyMCP dashboard — it walks you through the consent screen and stores the resulting \`GOOGLE_REFRESH_TOKEN\`. Alternatively, use the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground) with your own client and exchange an auth code for a refresh token manually.
+5. Open **/config → Connectors** in your MyMCP dashboard, expand Google Workspace, and enter your credentials. Alternatively, use the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground) with your own client and exchange an auth code for a refresh token manually.
 
 ### Troubleshooting
-- _invalid_grant_: the refresh token was revoked (password change, 6 months idle, or too many tokens) — re-run /setup.
+- _invalid_grant_: the refresh token was revoked (password change, 6 months idle, or too many tokens) — re-run the credential flow from /config.
 - _Insufficient scopes_: re-consent with all required scopes (gmail, calendar, drive, contacts).
 - _App not verified_: for personal use, add your own email as a **Test user** on the OAuth consent screen.`,
   requiredEnvVars: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"],

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { ConnectorSummary } from "../tabs";
-import { PACKS, CredentialInput, normalizeGitHubRepo } from "../../setup/wizard";
+import { PACKS, CredentialInput, normalizeGitHubRepo } from "../pack-defs";
 import { renderMarkdown } from "@/core/markdown-lite";
 
 export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }) {
@@ -143,12 +143,9 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
         <p className="text-sm text-text-dim">
           Click a connector to configure credentials, test, and toggle on or off.
         </p>
-        <a
-          href="/setup?add="
-          className="text-xs font-medium text-accent hover:underline px-3 py-1.5 border border-accent/20 rounded-md"
-        >
-          + Add connector
-        </a>
+        <span className="text-xs text-text-dim">
+          Expand a connector below to configure credentials
+        </span>
       </div>
 
       {visibleConnectors.map((pack) => {

@@ -480,6 +480,14 @@
     "destructive": false
   },
   {
+    "name": "mcp_cache_evict",
+    "pack": "admin",
+    "schemaKeys": [
+      "scope"
+    ],
+    "destructive": true
+  },
+  {
     "name": "mcp_logs",
     "pack": "admin",
     "schemaKeys": [

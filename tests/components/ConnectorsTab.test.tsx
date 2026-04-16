@@ -8,7 +8,7 @@ import { ConnectorsTab } from "../../app/config/tabs/connectors";
 import type { ConnectorSummary } from "../../app/config/tabs";
 
 // Mock the wizard module which ConnectorsTab imports for PACKS / CredentialInput
-vi.mock("../../app/setup/wizard", () => ({
+vi.mock("../../app/config/pack-defs", () => ({
   PACKS: [
     {
       id: "google",

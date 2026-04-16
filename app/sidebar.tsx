@@ -58,7 +58,7 @@ function renderNavItem(
   setupMode: boolean
 ) {
   const active = pathname === "/config" && currentTab === item.tab;
-  const disabled = setupMode && pathname !== "/setup";
+  const disabled = setupMode && pathname !== "/welcome";
   return (
     <li key={item.href}>
       <a

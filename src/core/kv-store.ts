@@ -363,3 +363,18 @@ export function getKVStore(): KVStore {
 export function resetKVStoreCache(): void {
   cached = null;
 }
+
+/**
+ * Clear the in-memory read cache of the current KVStore instance.
+ * For FilesystemKV this drops the parsed-JSON cache so the next read
+ * goes to disk. For UpstashKV this is a no-op (no local cache).
+ */
+export function clearKVReadCache(): void {
+  if (!cached) return;
+  // FilesystemKV stashes a `cache` field; UpstashKV does not.
+  // Use a duck-type check to avoid coupling to class internals.
+  const fs = cached as unknown as { cache: unknown };
+  if ("cache" in fs) {
+    fs.cache = null;
+  }
+}

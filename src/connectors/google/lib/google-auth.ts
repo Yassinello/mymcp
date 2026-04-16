@@ -48,7 +48,7 @@ export async function getGoogleAccessToken(): Promise<string> {
       invalid_client:
         "OAuth client does not exist or was deleted. Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
       invalid_grant:
-        "Refresh token was revoked or expired. Re-authenticate via /setup and update GOOGLE_REFRESH_TOKEN.",
+        "Refresh token was revoked or expired. Re-authenticate via /config → Connectors and update GOOGLE_REFRESH_TOKEN.",
       unauthorized_client: "OAuth client is not authorized for this grant type.",
       invalid_scope: "One or more scopes are not authorized. Check OAuth consent screen scopes.",
     };

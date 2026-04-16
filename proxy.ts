@@ -121,20 +121,20 @@ export function proxy(request: NextRequest) {
   const adminToken = (process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN)?.trim();
   const isFirstTimeSetup = !process.env.MCP_AUTH_TOKEN;
 
-  // ── First-run: /setup is open, everything else redirects to /setup ─
+  // ── First-run: /welcome is the entry point, everything else redirects ─
   if (isFirstTimeSetup) {
     if (pathname === "/setup" || pathname.startsWith("/api/setup")) {
       return passthrough();
     }
     if (pathname === "/" || pathname === "/config" || pathname.startsWith("/config/")) {
-      return finalize(NextResponse.redirect(new URL("/setup", request.url)));
+      return finalize(NextResponse.redirect(new URL("/welcome", request.url)));
     }
     return passthrough();
   }
 
-  // ── Post first-run: /setup → /config unless ?add= ───────────────────
-  if (pathname === "/setup" && !request.nextUrl.searchParams.has("add")) {
-    return finalize(NextResponse.redirect(new URL("/config", request.url)));
+  // ── Post first-run: /setup always redirects to /config ──────────────
+  if (pathname === "/setup") {
+    return finalize(NextResponse.redirect(new URL("/config?tab=connectors", request.url)));
   }
   if (pathname === "/" && process.env.INSTANCE_MODE === "personal") {
     return finalize(NextResponse.redirect(new URL("/config", request.url)));
@@ -145,7 +145,7 @@ export function proxy(request: NextRequest) {
     pathname === "/config" ||
     pathname.startsWith("/config/") ||
     pathname.startsWith("/api/config/") ||
-    pathname === "/setup";
+    pathname === "/setup"; // legacy: still gate it in case someone hits it before redirect
 
   if (adminGated && !adminToken) {
     // Misconfiguration: admin surface exists but no token set.

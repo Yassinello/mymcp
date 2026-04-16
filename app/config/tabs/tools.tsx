@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { ConnectorSummary } from "../tabs";
 
 interface ToolRow {
@@ -10,6 +10,7 @@ interface ToolRow {
   packLabel: string;
   deprecated?: string;
   destructive?: boolean;
+  disabled?: boolean;
 }
 
 export function ToolsTab({ connectors }: { connectors: ConnectorSummary[] }) {
@@ -22,6 +23,47 @@ export function ToolsTab({ connectors }: { connectors: ConnectorSummary[] }) {
     Record<string, { ok: boolean; data?: unknown; error?: string; durationMs?: number }>
   >({});
   const [running, setRunning] = useState<string | null>(null);
+  const [disabledTools, setDisabledTools] = useState<Set<string>>(new Set());
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  // Load disabled tools on mount
+  useEffect(() => {
+    fetch("/api/config/tool-toggle-list", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d: { ok?: boolean; disabled?: string[] }) => {
+        if (d.ok && Array.isArray(d.disabled)) {
+          setDisabledTools(new Set(d.disabled));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const toggleTool = async (toolName: string, currentlyDisabled: boolean) => {
+    setToggling(toolName);
+    try {
+      const res = await fetch("/api/config/tool-toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ tool: toolName, disabled: !currentlyDisabled }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setDisabledTools((prev) => {
+          const next = new Set(prev);
+          if (!currentlyDisabled) {
+            next.add(toolName);
+          } else {
+            next.delete(toolName);
+          }
+          return next;
+        });
+      }
+    } catch {
+      // Silently fail — user can retry.
+    }
+    setToggling(null);
+  };
 
   const allTools: ToolRow[] = useMemo(() => {
     const rows: ToolRow[] = [];
@@ -125,19 +167,22 @@ export function ToolsTab({ connectors }: { connectors: ConnectorSummary[] }) {
           const isOpen = expanded === tool.name;
           const result = results[tool.name];
           const destructive = !!tool.destructive;
+          const isDisabled = disabledTools.has(tool.name);
           return (
-            <div key={tool.name}>
-              <button
-                onClick={() => setExpanded(isOpen ? null : tool.name)}
-                className="w-full flex items-center gap-3 px-3 sm:px-5 py-3 text-left hover:bg-bg-muted/50 transition-colors whitespace-nowrap min-w-max"
-              >
-                <span className="font-mono text-xs text-accent w-40 truncate shrink-0">
-                  {tool.name}
-                </span>
-                <span className="text-xs text-text-muted w-24 truncate shrink-0">
-                  {tool.packLabel}
-                </span>
-                <span className="text-xs text-text-dim flex-1 truncate">{tool.description}</span>
+            <div key={tool.name} className={isDisabled ? "opacity-60" : ""}>
+              <div className="w-full flex items-center gap-3 px-3 sm:px-5 py-3 hover:bg-bg-muted/50 transition-colors whitespace-nowrap min-w-max">
+                <button
+                  onClick={() => setExpanded(isOpen ? null : tool.name)}
+                  className="flex items-center gap-3 flex-1 text-left min-w-0"
+                >
+                  <span className="font-mono text-xs text-accent w-40 truncate shrink-0">
+                    {tool.name}
+                  </span>
+                  <span className="text-xs text-text-muted w-24 truncate shrink-0">
+                    {tool.packLabel}
+                  </span>
+                  <span className="text-xs text-text-dim flex-1 truncate">{tool.description}</span>
+                </button>
                 {destructive && (
                   <span
                     className="text-[10px] font-medium text-orange bg-orange-bg px-1.5 py-0.5 rounded shrink-0"
@@ -146,7 +191,30 @@ export function ToolsTab({ connectors }: { connectors: ConnectorSummary[] }) {
                     DESTRUCTIVE
                   </span>
                 )}
-              </button>
+                {isDisabled && (
+                  <span className="text-[10px] font-medium text-text-muted bg-bg-muted px-1.5 py-0.5 rounded shrink-0">
+                    OFF
+                  </span>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleTool(tool.name, isDisabled);
+                  }}
+                  disabled={toggling === tool.name}
+                  className={`w-9 h-5 rounded-full transition-colors relative shrink-0 ${
+                    isDisabled ? "bg-bg-muted border border-border" : "bg-accent"
+                  }`}
+                  title={isDisabled ? "Enable tool" : "Disable tool"}
+                  aria-label={isDisabled ? `Enable ${tool.name}` : `Disable ${tool.name}`}
+                >
+                  <div
+                    className={`w-3.5 h-3.5 rounded-full bg-white shadow-sm absolute top-[3px] transition-all ${
+                      isDisabled ? "left-[3px]" : "left-[18px]"
+                    }`}
+                  />
+                </button>
+              </div>
               {isOpen && (
                 <div className="bg-bg-muted/30 px-5 py-4 space-y-3">
                   <div>

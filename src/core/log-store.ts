@@ -415,3 +415,18 @@ export function getLogStore(): LogStore {
 export function resetLogStoreCache(): void {
   cached = null;
 }
+
+/**
+ * Clear the in-memory buffer of the current LogStore instance.
+ * For MemoryLogStore this empties the ring buffer. For other backends
+ * this is a no-op (they don't buffer locally).
+ */
+export function clearLogStoreBuffer(): void {
+  if (!cached) return;
+  if (cached.kind === "memory") {
+    const mem = cached as unknown as { buf: unknown[] };
+    if (Array.isArray(mem.buf)) {
+      mem.buf.length = 0;
+    }
+  }
+}

@@ -21,14 +21,14 @@ src/connectors/vault/manifest.ts      — Obsidian Vault connector (15 tools)
 src/connectors/browser/manifest.ts    — Browser Automation connector (4 tools)
 src/connectors/slack/manifest.ts      — Slack connector (4 tools)
 src/connectors/notion/manifest.ts     — Notion connector (3 tools)
-src/connectors/admin/manifest.ts      — Admin connector (1 tool)
+src/connectors/admin/manifest.ts      — Admin connector (2 tools)
 src/connectors/*/tools/               — Individual tool handlers
 src/connectors/*/lib/                 — API wrappers and helpers
 app/api/[transport]/route.ts     — MCP endpoint (~30 lines, reads from registry)
 app/api/health/route.ts          — Public liveness: { ok, version }
 app/api/admin/status/route.ts    — Private diagnostics (auth-gated)
 app/page.tsx                     — Private status dashboard
-app/setup/page.tsx               — Guided setup page
+app/welcome/page.tsx             — First-run setup + welcome flow
 ```
 
 ## How the Registry Works
@@ -100,4 +100,4 @@ app/setup/page.tsx               — Guided setup page
 - Error messages sanitized (API keys stripped)
 - OAuth uses state parameter + PKCE
 - Health endpoint is public but returns minimal info only
-- Dashboard/setup are auth-gated via middleware
+- Dashboard/welcome are auth-gated via middleware
