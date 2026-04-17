@@ -44,15 +44,15 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
         setStorageError(data.error ?? null);
       })
       .catch(() => {
-        // Treat unknown as KV (most permissive) so we don't accidentally
-        // disable saves due to a transient network blip. Server still has
-        // the final say via the PUT response.
-        setStorageMode("kv");
+        // Network error: keep mode null. Save button is enabled (server has
+        // the final say) but we won't render the stub helper or the
+        // KV-degraded badge — both rely on a known mode value.
       });
   }, []);
 
   // Static mode: saves are disabled, we render a per-connector .env stub
-  // helper instead. Pre-compute the flag once for clarity in the render.
+  // helper instead. kv-degraded also blocks. Null mode (network error during
+  // detect) keeps saves enabled — server-side validation still runs.
   const savesDisabled = storageMode === "static" || storageMode === "kv-degraded";
 
   const getValue = useCallback(
@@ -161,6 +161,20 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
   };
 
   const togglePack = async (packId: string, enable: boolean) => {
+    if (savesDisabled) {
+      // Mirror the Save button behavior: surface a clear error rather than
+      // letting the toggle visually flip and silently fail server-side.
+      setSaveError((p) => ({
+        ...p,
+        [packId]:
+          storageMode === "static"
+            ? "Static mode — toggle this connector via env vars (MYMCP_DISABLE_<id>) and redeploy."
+            : `KV unreachable${storageError ? ` — ${storageError}` : ""} — toggle blocked until KV recovers.`,
+      }));
+      // Make sure the card is open so the error is visible.
+      setExpanded(packId);
+      return;
+    }
     const key = `MYMCP_DISABLE_${packId.toUpperCase()}`;
     const vars = { [key]: enable ? "" : "true" };
     try {
@@ -175,6 +189,16 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
         setEnvVars((p) => ({ ...p, ...vars }));
         // Reload to re-fetch registry state
         window.location.reload();
+      } else {
+        // Non-ok with mode hint → sync local state, surface error inline.
+        if (data.mode === "static" || data.mode === "kv-degraded") {
+          setStorageMode(data.mode);
+        }
+        setSaveError((p) => ({
+          ...p,
+          [packId]: data.error || "Failed to toggle connector",
+        }));
+        setExpanded(packId);
       }
     } catch {
       setSaveError((p) => ({ ...p, [packId]: "Failed to toggle connector" }));

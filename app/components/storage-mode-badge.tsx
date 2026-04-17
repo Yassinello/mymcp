@@ -30,25 +30,43 @@ const META: Record<Mode, { label: string; tone: "ok" | "warn" | "error"; title: 
 export function StorageModeBadge() {
   const [mode, setMode] = useState<Mode | null>(null);
 
+  // Initial fetch — runs once on mount. Separated from the polling effect
+  // below so we don't double-fire on the first mode-state change (the
+  // pre-fix version refired the whole effect when state went null → kv,
+  // hitting the API twice on cold load).
   useEffect(() => {
     let cancelled = false;
-    const load = async (force: boolean) => {
+    void (async () => {
       try {
-        const res = await fetch(`/api/storage/status?counts=0${force ? "&force=1" : ""}`, {
-          credentials: "include",
-        });
+        const res = await fetch(`/api/storage/status?counts=0`, { credentials: "include" });
         if (!res.ok) return;
         const data = (await res.json()) as { mode?: Mode };
         if (!cancelled && data.mode) setMode(data.mode);
       } catch {
         // Silent — badge stays in last-known state
       }
+    })();
+    return () => {
+      cancelled = true;
     };
-    void load(false);
-    const id = setInterval(() => {
-      // Only re-poll when in transient states. KV/file are stable enough
-      // that we trust them until the user navigates away.
-      if (mode === "kv-degraded" || mode === "static") void load(true);
+  }, []);
+
+  // Auto-poll only in transient states (kv-degraded recovery, static waiting
+  // for upstash setup). KV/file are stable — no point burning requests.
+  useEffect(() => {
+    if (mode !== "kv-degraded" && mode !== "static") return;
+    let cancelled = false;
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/storage/status?counts=0&force=1`, {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { mode?: Mode };
+        if (!cancelled && data.mode) setMode(data.mode);
+      } catch {
+        // Silent
+      }
     }, 30_000);
     return () => {
       cancelled = true;

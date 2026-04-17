@@ -78,9 +78,11 @@ export function StorageTab() {
     <div className="space-y-5">
       <ModeCard status={status} meta={meta} onRecheck={() => load(true)} rechecking={rechecking} />
 
-      {status.mode === "kv" && <KvHealthCard status={status} />}
+      {status.mode === "kv" && (
+        <KvHealthCard status={status} onMigrateFromFile={() => setMigrationOpen(true)} />
+      )}
 
-      {status.mode === "file" && <FileUpgradeCard onMigrate={() => setMigrationOpen(true)} />}
+      {status.mode === "file" && <FileUpgradeCard />}
 
       {status.mode === "static" && <StaticUpgradeCard />}
 
@@ -166,9 +168,15 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
   );
 }
 
-function KvHealthCard({ status }: { status: StatusReport }) {
+function KvHealthCard({
+  status,
+  onMigrateFromFile,
+}: {
+  status: StatusReport;
+  onMigrateFromFile: () => void;
+}) {
   return (
-    <div className="border border-green/20 rounded-lg p-5 bg-green-bg/30 space-y-2">
+    <div className="border border-green/20 rounded-lg p-5 bg-green-bg/30 space-y-3">
       <h3 className="text-sm font-semibold">KV is healthy</h3>
       <p className="text-xs text-text-dim">
         Saves are instant and survive cold starts. No redeploy needed.
@@ -181,17 +189,40 @@ function KvHealthCard({ status }: { status: StatusReport }) {
           </>
         )}
       </p>
+      {/* The "migrate from file" affordance lives here (not in FileUpgradeCard)
+          because the migration endpoint requires KV to be reachable as the
+          destination — running it from file mode is impossible by definition. */}
+      <details className="pt-1">
+        <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-text-muted hover:text-text">
+          Migrate from .env / file storage
+        </summary>
+        <div className="mt-2 text-xs text-text-dim space-y-2">
+          <p>
+            If you previously ran with file-based storage (Docker / dev) and have credentials in
+            <code className="font-mono mx-1">./.env</code>, copy them into KV. Existing KV values
+            are preserved unless overwritten by file values.
+          </p>
+          <button
+            onClick={onMigrateFromFile}
+            className="text-xs font-medium px-3 py-1.5 rounded-md bg-bg-muted hover:bg-border-light text-text-dim hover:text-text border border-border"
+          >
+            Preview & migrate
+          </button>
+        </div>
+      </details>
     </div>
   );
 }
 
-function FileUpgradeCard({ onMigrate }: { onMigrate: () => void }) {
+function FileUpgradeCard() {
   return (
     <div className="border border-border rounded-lg p-5 space-y-3">
       <h3 className="text-sm font-semibold">Upgrade to KV (optional)</h3>
       <p className="text-xs text-text-dim leading-relaxed">
         File storage works great for single-instance Docker. If you need multi-instance sync, easy
-        backups, or you&apos;re moving to a cloud platform, migrate to Upstash Redis.
+        backups, or you&apos;re moving to a cloud platform, set up Upstash Redis. After it&apos;s
+        connected and this instance is restarted, the &ldquo;Migrate from file&rdquo; option will
+        appear here automatically.
       </p>
       <ol className="text-xs text-text-dim list-decimal list-inside space-y-0.5">
         <li>Set up Upstash and get a REST URL + token</li>
@@ -199,24 +230,16 @@ function FileUpgradeCard({ onMigrate }: { onMigrate: () => void }) {
           Add <code className="font-mono text-text">UPSTASH_REDIS_REST_URL</code> and{" "}
           <code className="font-mono text-text">UPSTASH_REDIS_REST_TOKEN</code>
         </li>
-        <li>Restart this instance and click &ldquo;Migrate file → KV&rdquo;</li>
+        <li>Restart this instance — mode flips to KV, migrate option becomes available</li>
       </ol>
-      <div className="flex items-center gap-2 pt-1">
-        <a
-          href="https://upstash.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs font-medium text-accent hover:text-accent/80 underline underline-offset-2"
-        >
-          Open Upstash
-        </a>
-        <button
-          onClick={onMigrate}
-          className="text-xs font-medium px-3 py-1.5 rounded-md bg-bg-muted hover:bg-border-light text-text-dim hover:text-text border border-border"
-        >
-          Preview migration (dry-run)
-        </button>
-      </div>
+      <a
+        href="https://upstash.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-xs font-medium text-accent hover:text-accent/80 underline underline-offset-2"
+      >
+        Open Upstash
+      </a>
     </div>
   );
 }

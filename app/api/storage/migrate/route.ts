@@ -2,11 +2,7 @@ import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/core/auth";
 import { detectStorageMode, clearStorageModeCache } from "@/core/storage-mode";
 import { getKVStore, kvScanAll } from "@/core/kv-store";
-import {
-  CRED_PREFIX,
-  saveCredentialsToKV,
-  readAllCredentialsFromKV,
-} from "@/core/credential-store";
+import { CRED_PREFIX, readAllCredentialsFromKV } from "@/core/credential-store";
 import { getEnvStore } from "@/core/env-store";
 
 /**
@@ -108,37 +104,72 @@ export async function POST(request: Request) {
       });
     }
 
-    // Execute: write all add+update keys to KV
-    const writes: Record<string, string> = {};
-    for (const k of [...toAdd, ...toUpdate]) writes[k] = sourceVars[k];
-
+    // Execute: write each add+update key individually so partial failures
+    // surface per-key in the response (matches the docstring's "atomic
+    // per-key" guarantee). We can't use saveCredentialsToKV's bulk
+    // Promise.all because Promise.all rejects on first failure and we'd lose
+    // visibility on which keys actually landed.
+    const kv = getKVStore();
     const errors: { key: string; error: string }[] = [];
-    try {
-      await saveCredentialsToKV(writes);
-    } catch (err) {
-      errors.push({
-        key: "*",
-        error: err instanceof Error ? err.message : String(err),
-      });
+    let migrated = 0;
+    for (const k of [...toAdd, ...toUpdate]) {
+      try {
+        await kv.set(`${CRED_PREFIX}${k}`, sourceVars[k]);
+        process.env[k] = sourceVars[k];
+        migrated++;
+      } catch (err) {
+        errors.push({
+          key: k,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     clearStorageModeCache();
     return NextResponse.json({
       ok: errors.length === 0,
       direction,
-      migrated: Object.keys(writes).length - errors.length,
+      migrated,
       diff: { add: toAdd, update: toUpdate, unchanged },
       errors,
     });
   }
 
   // kv-to-file
-  if (report.mode !== "file") {
+  // We need TWO separate guarantees that the unified mode value can't give us
+  // alone: (a) the KV source is reachable, (b) the FS destination is writable.
+  // detectStorageMode() only reports one, so we re-probe the FS independently
+  // here. The most common scenario for this branch is "Docker user with both
+  // Upstash AND a writable volume who wants to leave Upstash" — both are live
+  // simultaneously.
+  if (report.mode !== "kv") {
     return NextResponse.json(
       {
         ok: false,
-        error: `Cannot migrate to file — destination filesystem is not writable (mode: '${report.mode}').`,
+        error: `Cannot migrate from KV — KV is not the active source (mode: '${report.mode}'). Upstash env vars must be set and reachable.`,
         mode: report.mode,
+      },
+      { status: 422 }
+    );
+  }
+  // Independent FS probe for destination — bypass the mode cache since we
+  // need a fresh boolean answer about the *file* path, not the unified mode.
+  const { promises: fsp } = await import("node:fs");
+  const { randomBytes } = await import("node:crypto");
+  const path = await import("node:path");
+  const dataDir = process.env.MYMCP_KV_PATH
+    ? path.dirname(process.env.MYMCP_KV_PATH)
+    : path.resolve(process.cwd(), "data");
+  const probePath = path.join(dataDir, `.mymcp-probe-${randomBytes(4).toString("hex")}`);
+  try {
+    await fsp.mkdir(dataDir, { recursive: true });
+    await fsp.writeFile(probePath, "probe", "utf-8");
+    await fsp.unlink(probePath).catch(() => undefined);
+  } catch (err) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Destination filesystem is not writable: ${err instanceof Error ? err.message : String(err)}. Migration aborted to avoid data loss.`,
       },
       { status: 422 }
     );

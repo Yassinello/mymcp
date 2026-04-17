@@ -7,7 +7,7 @@ import {
   saveCredentialsToKV,
   resetCredentialHydration,
 } from "@/core/credential-store";
-import { detectStorageMode } from "@/core/storage-mode";
+import { detectStorageMode, clearStorageModeCache } from "@/core/storage-mode";
 
 /**
  * v0.6 (A1): these four env-var-style keys are now backed by KVStore,
@@ -112,10 +112,24 @@ export async function PUT(request: Request) {
 
   try {
     const { kvVars, envVars } = splitVars(vars);
+    // IMPORTANT: detect storage mode BEFORE any write. Settings persistence
+    // also goes through KV, so we have to check kv-degraded first and refuse
+    // ALL writes — otherwise settings would land in a half-broken backend
+    // while creds get rejected, leaving the user confused.
+    const storageReport = await detectStorageMode();
+    if (storageReport.mode === "kv-degraded") {
+      return NextResponse.json(
+        {
+          ok: false,
+          mode: storageReport.mode,
+          error: `Storage temporarily unavailable: ${storageReport.error ?? "KV unreachable"}. Saves are blocked to prevent data loss. Retry once KV recovers.`,
+        },
+        { status: 503 }
+      );
+    }
     await persistKvSettings(kvVars);
 
     const kvWritten = Object.keys(kvVars).length;
-    const storageReport = await detectStorageMode();
     let result: { written: number; note?: string } = { written: 0 };
     // Surface a single backend identifier in the response so the connectors
     // tab can show the right "Saved to X" toast. Mirrors the old
@@ -129,17 +143,6 @@ export async function PUT(request: Request) {
         resetCredentialHydration();
         backend = "upstash";
         result = { written: Object.keys(envVars).length, note: "Saved to Upstash KV." };
-      } else if (storageReport.mode === "kv-degraded") {
-        // KV configured but unreachable — refuse to save rather than
-        // silently routing to the wrong backend (data loss when KV recovers).
-        return NextResponse.json(
-          {
-            ok: false,
-            mode: storageReport.mode,
-            error: `Storage temporarily unavailable: ${storageReport.error ?? "KV unreachable"}. Saves are blocked to prevent data loss. Retry once KV recovers.`,
-          },
-          { status: 503 }
-        );
       } else if (storageReport.mode === "static") {
         // No FS, no KV. Last-resort fallback: if VERCEL_TOKEN +
         // VERCEL_PROJECT_ID are configured, use the Vercel API to write env
@@ -174,6 +177,11 @@ export async function PUT(request: Request) {
     // force-disable toggles.
     const { emit } = await import("@/core/events");
     emit("env.changed");
+    // Bust the storage-mode cache as well — if the user just saved
+    // UPSTASH_REDIS_REST_URL/TOKEN via the dashboard, the next status fetch
+    // (badge, storage tab) should reflect the new mode immediately rather
+    // than waiting for the 60s TTL.
+    clearStorageModeCache();
     return NextResponse.json({
       ok: true,
       storageBackend: backend,

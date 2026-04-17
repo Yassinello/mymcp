@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 interface VarRow {
   key: string;
@@ -32,7 +32,10 @@ interface EnvStubBlockProps {
 export function EnvStubBlock({ packId, packLabel, vars }: EnvStubBlockProps) {
   const [copied, setCopied] = useState(false);
 
-  const buildText = (): string => {
+  // Memoize so we don't rebuild the text 3× per render (preview + 2 handlers)
+  // — typing into the connector form re-renders the whole tree, and OAuth
+  // refresh tokens make this non-trivial to do on every keystroke.
+  const previewText = useMemo(() => {
     const lines: string[] = [
       `# MyMCP — ${packLabel} connector`,
       `# Generated: ${new Date().toISOString()}`,
@@ -49,12 +52,11 @@ export function EnvStubBlock({ packId, packLabel, vars }: EnvStubBlockProps) {
     }
     lines.push("");
     return lines.join("\n");
-  };
+  }, [vars, packId, packLabel]);
 
   const handleCopy = async () => {
-    const text = buildText();
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(previewText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -63,8 +65,7 @@ export function EnvStubBlock({ packId, packLabel, vars }: EnvStubBlockProps) {
   };
 
   const handleDownload = () => {
-    const text = buildText();
-    const blob = new Blob([text], { type: "text/plain" });
+    const blob = new Blob([previewText], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -76,7 +77,6 @@ export function EnvStubBlock({ packId, packLabel, vars }: EnvStubBlockProps) {
   // Visible preview always materializes so the user can verify what they're
   // copying. Masked values render as the placeholder; we never reveal the
   // actual masked value here (that would defeat the masking).
-  const previewText = buildText();
   const hasMaskedValues = vars.some((v) => v.masked);
   const hasEmptyValues = vars.some((v) => !v.value && !v.masked);
 

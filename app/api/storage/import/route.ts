@@ -117,9 +117,10 @@ export async function POST(request: Request) {
     });
   }
 
-  // Refuse to write in modes where we can't durably persist. Settings would
-  // still survive the next cold start because they go through KV (which we
-  // require). If KV is degraded the same KV is unreachable, so refuse.
+  // Refuse to write in modes where we can't durably persist. We perform the
+  // mode check BEFORE any write so the response is consistent — partial
+  // writes (settings succeed, creds rejected) would leave the user confused
+  // about what landed where.
   if (report.mode === "kv-degraded") {
     return NextResponse.json(
       {
@@ -139,35 +140,68 @@ export async function POST(request: Request) {
     else credsToWrite[k] = v;
   }
 
-  // Settings always go through saveInstanceConfig (KV-backed)
+  // Static mode: settings go through KV (which `getKVStore()` selects),
+  // but in static mode the FS is read-only — `FilesystemKV.set()` would
+  // throw EROFS. Refuse the whole import unless there's nothing to write
+  // outside Vercel-API fallback. (We don't try to be clever and split
+  // settings vs creds here — the user gets one clear error.)
+  if (report.mode === "static") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Static mode — neither credentials nor settings can be persisted. Set them as deploy environment variables and redeploy, or set up Upstash Redis first.",
+        mode: report.mode,
+        partialDiff: { added, updated, unchanged },
+      },
+      { status: 422 }
+    );
+  }
+
+  // Settings always go through saveInstanceConfig (KV-backed). At this
+  // point mode is `kv` or `file`, both of which the KV writer handles.
+  const writeErrors: string[] = [];
   if (Object.keys(settingsToWrite).length > 0) {
-    await saveInstanceConfig({
-      displayName: settingsToWrite.MYMCP_DISPLAY_NAME,
-      timezone: settingsToWrite.MYMCP_TIMEZONE,
-      locale: settingsToWrite.MYMCP_LOCALE,
-      contextPath: settingsToWrite.MYMCP_CONTEXT_PATH,
-    });
+    try {
+      await saveInstanceConfig({
+        displayName: settingsToWrite.MYMCP_DISPLAY_NAME,
+        timezone: settingsToWrite.MYMCP_TIMEZONE,
+        locale: settingsToWrite.MYMCP_LOCALE,
+        contextPath: settingsToWrite.MYMCP_CONTEXT_PATH,
+      });
+    } catch (err) {
+      writeErrors.push(
+        `Settings write failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
 
   if (Object.keys(credsToWrite).length > 0) {
-    if (report.mode === "kv") {
-      await saveCredentialsToKV(credsToWrite);
-    } else if (report.mode === "file") {
-      const store = getEnvStore();
-      await store.write(credsToWrite);
-    } else {
-      // static
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Static mode — credential keys cannot be persisted. Set them as deploy environment variables instead.",
-          mode: report.mode,
-          partialDiff: { added, updated, unchanged },
-        },
-        { status: 422 }
+    try {
+      if (report.mode === "kv") {
+        await saveCredentialsToKV(credsToWrite);
+      } else {
+        // mode === "file"
+        const store = getEnvStore();
+        await store.write(credsToWrite);
+      }
+    } catch (err) {
+      writeErrors.push(
+        `Credential write failed: ${err instanceof Error ? err.message : String(err)}`
       );
     }
+  }
+
+  if (writeErrors.length > 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        mode: report.mode,
+        error: writeErrors.join("; "),
+        partialDiff: { added, updated, unchanged },
+      },
+      { status: 500 }
+    );
   }
 
   // Tell the registry to re-scan

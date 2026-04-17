@@ -138,13 +138,20 @@ export function AdvancedSection() {
 
   const confirmImport = async (current: Phase) => {
     if (current.kind !== "import-preview") return;
+    // Snapshot the token locally then transition phase. As soon as the next
+    // setPhase fires the token field disappears from the union, so it's no
+    // longer reachable via React DevTools or accidental re-render. The
+    // local `token` const lives only inside this closure and is GC-eligible
+    // when the function returns.
+    const token = current.token;
+    const file = current.file;
     setPhase({ kind: "running", action: "import" });
     try {
-      const text = await current.file.text();
+      const text = await file.text();
       const res = await fetch("/api/storage/import", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${current.token}`,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "text/plain",
         },
         credentials: "include",

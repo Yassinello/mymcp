@@ -45,19 +45,49 @@ interface StorageStatus {
   error: string | null;
 }
 
-const STATIC_ACK_COOKIE = "mymcp.storage.ack";
+const STATIC_ACK_KEY = "mymcp.storage.ack";
 
-function readStaticAckCookie(): boolean {
+/**
+ * Persist the "Continue env-vars only" acknowledgment.
+ *
+ * We try three layers in order: cookie (preferred — survives across reloads
+ * and respects same-origin), localStorage (fallback when cookies are blocked
+ * by Brave/Safari shields or strict private mode), and finally the in-memory
+ * React state via `setStaticAcknowledged` which the caller uses for current
+ * session at minimum. Returns whether durable persistence succeeded — when
+ * false, the caller should surface a "your choice won't persist across
+ * reloads" banner so the user understands and can take action.
+ */
+function readStaticAck(): boolean {
   if (typeof document === "undefined") return false;
-  return document.cookie.split(";").some((c) => c.trim().startsWith(`${STATIC_ACK_COOKIE}=`));
+  if (document.cookie.split(";").some((c) => c.trim().startsWith(`${STATIC_ACK_KEY}=`))) {
+    return true;
+  }
+  try {
+    return window.localStorage.getItem(STATIC_ACK_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
-function setStaticAckCookie(): void {
-  if (typeof document === "undefined") return;
-  // 1 year, root path. Not HttpOnly because it's a UX hint, not a security
-  // boundary — the welcome page reads it client-side to know whether to
-  // re-prompt the static-mode choice.
-  document.cookie = `${STATIC_ACK_COOKIE}=1; path=/; max-age=31536000; samesite=lax`;
+function writeStaticAck(): { persisted: boolean } {
+  if (typeof document === "undefined") return { persisted: false };
+  const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+  const secureFlag = isHttps ? "; Secure" : "";
+  // 1 year, root path. Not HttpOnly because it's a UX hint read client-side.
+  document.cookie = `${STATIC_ACK_KEY}=1; path=/; max-age=31536000; samesite=lax${secureFlag}`;
+  // Verify cookie landed (some browsers silently drop it under strict modes).
+  const cookieOk = document.cookie
+    .split(";")
+    .some((c) => c.trim().startsWith(`${STATIC_ACK_KEY}=`));
+  let storageOk: boolean;
+  try {
+    window.localStorage.setItem(STATIC_ACK_KEY, "1");
+    storageOk = window.localStorage.getItem(STATIC_ACK_KEY) === "1";
+  } catch {
+    storageOk = false;
+  }
+  return { persisted: cookieOk || storageOk };
 }
 
 export default function WelcomeClient({
@@ -80,12 +110,13 @@ export default function WelcomeClient({
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const [storageChecking, setStorageChecking] = useState(false);
   const [staticAcknowledged, setStaticAcknowledged] = useState(false);
+  const [ackPersisted, setAckPersisted] = useState(true);
 
-  // Hydrate ack flag from cookie on mount (avoid SSR mismatch by reading
-  // post-mount). The cookie persists user's "Continue env-vars-only" choice
-  // so the welcome flow doesn't re-prompt on every visit.
+  // Hydrate ack flag from cookie/localStorage on mount (avoid SSR mismatch by
+  // reading post-mount). Persists user's "Continue env-vars-only" choice so
+  // the welcome flow doesn't re-prompt on every visit.
   useEffect(() => {
-    setStaticAcknowledged(readStaticAckCookie());
+    setStaticAcknowledged(readStaticAck());
   }, []);
 
   // Step 1: claim the instance. If we re-enter with bootstrap already active
@@ -185,7 +216,8 @@ export default function WelcomeClient({
   }, [storageStatus, staticAcknowledged, loadStorageStatus]);
 
   const acknowledgeStatic = useCallback(() => {
-    setStaticAckCookie();
+    const { persisted } = writeStaticAck();
+    setAckPersisted(persisted);
     setStaticAcknowledged(true);
   }, []);
 
@@ -473,13 +505,22 @@ export default function WelcomeClient({
       })()}
 
       {permanent && storageStatus && (
-        <WelcomeStorageStep
-          status={storageStatus}
-          checking={storageChecking}
-          acknowledged={staticAcknowledged}
-          onRecheck={() => loadStorageStatus(true)}
-          onAcknowledgeStatic={acknowledgeStatic}
-        />
+        <>
+          <WelcomeStorageStep
+            status={storageStatus}
+            checking={storageChecking}
+            acknowledged={staticAcknowledged}
+            onRecheck={() => loadStorageStatus(true)}
+            onAcknowledgeStatic={acknowledgeStatic}
+          />
+          {staticAcknowledged && !ackPersisted && (
+            <div className="mb-6 rounded-lg border border-orange-900/60 bg-orange-950/30 px-4 py-3 text-xs text-orange-200">
+              <strong className="font-semibold">Your browser blocked our cookie.</strong> Your
+              choice will not persist across reloads — re-confirm if you come back, or unblock
+              cookies for this origin.
+            </div>
+          )}
+        </>
       )}
 
       {token && <TokenUsagePanel token={token} instanceUrl={instanceUrl} />}
