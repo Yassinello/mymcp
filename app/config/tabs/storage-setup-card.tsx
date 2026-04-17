@@ -117,6 +117,14 @@ export function StorageSetupCard({
         </button>
       </div>
 
+      <p className="text-[11px] text-text-muted">
+        Tip: Go back to{" "}
+        <a href="/welcome?preview=1" className="text-accent underline underline-offset-2">
+          /welcome
+        </a>{" "}
+        to set up Upstash if you haven&apos;t already.
+      </p>
+
       <button onClick={onDismiss} className="text-[11px] text-text-muted hover:text-text-dim">
         Dismiss
       </button>

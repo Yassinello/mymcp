@@ -59,6 +59,7 @@ export default async function WelcomePage({
           previewMode
           previewToken={token}
           previewInstanceUrl={instanceUrl}
+          isVercel={process.env.VERCEL === "1"}
         />
       );
     }
@@ -68,5 +69,6 @@ export default async function WelcomePage({
     redirect("/config");
   }
 
-  return <WelcomeClient initialBootstrap={isBootstrapActive()} />;
+  const isVercel = process.env.VERCEL === "1";
+  return <WelcomeClient initialBootstrap={isBootstrapActive()} isVercel={isVercel} />;
 }

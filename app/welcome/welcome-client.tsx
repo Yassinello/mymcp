@@ -33,6 +33,7 @@ interface WelcomeClientProps {
   previewMode?: boolean;
   previewToken?: string;
   previewInstanceUrl?: string;
+  isVercel?: boolean;
 }
 
 export default function WelcomeClient({
@@ -40,6 +41,7 @@ export default function WelcomeClient({
   previewMode = false,
   previewToken = "",
   previewInstanceUrl = "",
+  isVercel = false,
 }: WelcomeClientProps) {
   const [claim, setClaim] = useState<ClaimStatus>(previewMode ? "claimer" : "loading");
   const [token, setToken] = useState<string | null>(previewMode ? previewToken : null);
@@ -52,6 +54,9 @@ export default function WelcomeClient({
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
   const [testError, setTestError] = useState<string | null>(null);
   const [skipTest, setSkipTest] = useState(false);
+  const [upstashConnected, setUpstashConnected] = useState(false);
+  const [upstashChecking, setUpstashChecking] = useState(false);
+  const [upstashPolling, setUpstashPolling] = useState(false);
 
   // Step 1: claim the instance. If we re-enter with bootstrap already active
   // (user came back to /welcome before the redeploy), auto-call init so we
@@ -112,6 +117,30 @@ export default function WelcomeClient({
     }, 10_000);
     return () => clearInterval(id);
   }, [permanent, previewMode]);
+
+  // Check Upstash connection status
+  const checkUpstash = useCallback(async () => {
+    setUpstashChecking(true);
+    try {
+      const res = await fetch("/api/config/storage-status", { credentials: "include" });
+      const data = (await res.json()) as { upstashConfigured?: boolean };
+      if (data.upstashConfigured) {
+        setUpstashConnected(true);
+        setUpstashPolling(false);
+      }
+    } catch {
+      // Ignore transient errors
+    } finally {
+      setUpstashChecking(false);
+    }
+  }, []);
+
+  // Auto-poll for Upstash every 15s when user has clicked "I've added it"
+  useEffect(() => {
+    if (!isVercel || !upstashPolling || upstashConnected) return;
+    const id = setInterval(checkUpstash, 15_000);
+    return () => clearInterval(id);
+  }, [isVercel, upstashPolling, upstashConnected, checkUpstash]);
 
   const initialize = useCallback(async () => {
     setBusy(true);
@@ -320,6 +349,23 @@ export default function WelcomeClient({
                   {permanent ? "Redeployed — your instance is permanent." : "Redeploying… (~60s)"}
                 </span>
               </li>
+              {isVercel && (
+                <li className="flex items-start gap-3">
+                  <span
+                    className={
+                      upstashConnected ? "text-emerald-400 mt-0.5" : "text-slate-500 mt-0.5"
+                    }
+                    aria-hidden
+                  >
+                    {upstashConnected ? "✓" : "□"}
+                  </span>
+                  <span className="text-slate-300">
+                    {upstashConnected
+                      ? "Upstash Redis connected"
+                      : "Connect Upstash Redis (see below)"}
+                  </span>
+                </li>
+              )}
               <li className="flex items-start gap-3">
                 <span className="text-slate-500 mt-0.5">□</span>
                 <span className="text-slate-300">Configure your MCP client (snippet below)</span>
@@ -380,6 +426,23 @@ export default function WelcomeClient({
                   </a>
                 </span>
               </li>
+              {isVercel && (
+                <li className="flex items-start gap-3">
+                  <span
+                    className={
+                      upstashConnected ? "text-emerald-400 mt-0.5" : "text-slate-500 mt-0.5"
+                    }
+                    aria-hidden
+                  >
+                    {upstashConnected ? "✓" : "□"}
+                  </span>
+                  <span className="text-slate-300">
+                    {upstashConnected
+                      ? "Upstash Redis connected"
+                      : "Connect Upstash Redis (see below)"}
+                  </span>
+                </li>
+              )}
               <li className="flex items-start gap-3">
                 <span className="text-slate-500 mt-0.5">□</span>
                 <span className="text-slate-300">Configure your MCP client (snippet below)</span>
@@ -388,6 +451,22 @@ export default function WelcomeClient({
           </>
         );
       })()}
+
+      {isVercel && !upstashConnected && permanent && (
+        <UpstashSetupPanel
+          checking={upstashChecking}
+          polling={upstashPolling}
+          onCheck={() => {
+            checkUpstash();
+            setUpstashPolling(true);
+          }}
+        />
+      )}
+      {isVercel && upstashConnected && (
+        <div className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-300">
+          Upstash Redis connected — connector credentials will persist across deploys.
+        </div>
+      )}
 
       {token && <TokenUsagePanel token={token} instanceUrl={instanceUrl} />}
       <MultiClientNote />
@@ -433,6 +512,55 @@ export default function WelcomeClient({
       })()}
       <RecoveryFooter />
     </Shell>
+  );
+}
+
+function UpstashSetupPanel({
+  checking,
+  polling,
+  onCheck,
+}: {
+  checking: boolean;
+  polling: boolean;
+  onCheck: () => void;
+}) {
+  return (
+    <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900/40 p-5">
+      <p className="text-sm font-semibold text-white mb-1">Connect Upstash Redis</p>
+      <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
+        Required for saving connector credentials on Vercel. Free tier is enough.
+      </p>
+      <ol className="space-y-2 mb-4 text-xs text-slate-300 list-decimal list-inside">
+        <li>
+          Go to{" "}
+          <a
+            href="https://vercel.com/integrations/upstash"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 hover:text-blue-300 underline"
+          >
+            Vercel &rarr; Integrations &rarr; Upstash
+          </a>
+        </li>
+        <li>Click &ldquo;Add Integration&rdquo; and select this project</li>
+        <li>Upstash will auto-configure the Redis env vars</li>
+      </ol>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onCheck}
+          disabled={checking}
+          className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 px-4 py-2 rounded-md text-xs font-semibold transition-colors"
+        >
+          {checking ? "Checking..." : "Check connection"}
+        </button>
+        {polling && !checking && (
+          <span className="text-[11px] text-slate-500">
+            Auto-polling every 15s. Not detected yet — Vercel may still be redeploying.
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -585,9 +713,7 @@ function StarterSkillsPanel() {
   return (
     <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900/40 p-5">
       <div className="flex items-baseline justify-between gap-2 mb-3 flex-wrap">
-        <p className="text-sm font-semibold text-white">
-          Or skip credentials — start with a skill
-        </p>
+        <p className="text-sm font-semibold text-white">Or skip credentials — start with a skill</p>
         <span className="text-[11px] text-slate-500">No connector setup required</span>
       </div>
       <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
