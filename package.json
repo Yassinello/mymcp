@@ -36,6 +36,7 @@
     "test:unit": "vitest run",
     "test:watch": "vitest",
     "test:csp-e2e": "npx tsx scripts/csp-e2e-check.ts",
+    "test:doc-counts": "npx tsx scripts/check-doc-counts.ts",
     "test:coverage": "vitest run --coverage",
     "test:stress": "vitest run tests/stress/",
     "test:visual": "npx playwright test tests/visual/",
@@ -43,7 +44,7 @@
     "kv:compact": "npx tsx scripts/kv-compact.ts",
     "backup:export": "npx tsx scripts/backup.ts export",
     "backup:import": "npx tsx scripts/backup.ts import",
-    "test": "vitest run && npm run test:registry && npm run test:contract",
+    "test": "vitest run && npm run test:registry && npm run test:contract && npm run test:doc-counts",
     "update": "git fetch upstream && git merge upstream/main",
     "prepare": "husky"
   },
