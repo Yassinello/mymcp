@@ -9,6 +9,7 @@ import { ToolsTab } from "./tabs/tools";
 import { SkillsTab } from "./tabs/skills";
 import { LogsTab } from "./tabs/logs";
 import { SettingsTab } from "./tabs/settings";
+import { StorageTab } from "./tabs/storage";
 import { DocumentationTab, type DocEntry } from "./tabs/documentation";
 import { PlaygroundTab } from "./tabs/playground";
 
@@ -95,6 +96,10 @@ export function ConfigTabs({
           hasAuthToken={hasAuthToken}
         />
       );
+      break;
+    case "storage":
+      section = "Storage";
+      tab = <StorageTab />;
       break;
     case "overview":
     default:

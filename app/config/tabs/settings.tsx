@@ -6,7 +6,7 @@ import type { InstanceConfig } from "@/core/types";
 import { ContextFileField } from "./settings/context-file-field";
 import { McpInstallPanel } from "./settings/mcp-install-panel";
 import { InfoTooltip } from "./settings/info-tooltip";
-import { StorageSection } from "./settings/storage-section";
+import { AdvancedSection } from "./settings/advanced-section";
 
 const USER_FIELDS: {
   key: string;
@@ -34,7 +34,7 @@ const USER_FIELDS: {
   },
 ];
 
-type SubTab = "user" | "mcp" | "storage";
+type SubTab = "user" | "mcp" | "advanced";
 
 export function SettingsTab({
   config,
@@ -52,8 +52,14 @@ export function SettingsTab({
   const searchParams = useSearchParams();
   const router = useRouter();
   const subFromUrl = searchParams.get("sub");
+  // Accept both "advanced" (new) and "storage" (legacy alias for backward
+  // compat with anyone who bookmarked the old subtab) — both map to advanced.
   const initialSub: SubTab =
-    subFromUrl === "mcp" ? "mcp" : subFromUrl === "storage" ? "storage" : "user";
+    subFromUrl === "mcp"
+      ? "mcp"
+      : subFromUrl === "advanced" || subFromUrl === "storage"
+        ? "advanced"
+        : "user";
   const [tab, setTabState] = useState<SubTab>(initialSub);
   const setTab = (next: SubTab) => {
     setTabState(next);
@@ -103,7 +109,7 @@ export function SettingsTab({
           [
             ["user", "User settings"],
             ["mcp", "MCP install"],
-            ["storage", "Storage"],
+            ["advanced", "Advanced"],
           ] as const
         ).map(([k, label]) => (
           <button
@@ -172,7 +178,7 @@ export function SettingsTab({
 
       {tab === "mcp" && <McpInstallPanel baseUrl={baseUrl} hasToken={hasAuthToken} />}
 
-      {tab === "storage" && <StorageSection />}
+      {tab === "advanced" && <AdvancedSection />}
     </div>
   );
 }

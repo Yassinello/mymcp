@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import type { ConnectorSummary } from "../tabs";
 import { PACKS, CredentialInput, normalizeGitHubRepo } from "../pack-defs";
 import { renderMarkdown } from "@/core/markdown-lite";
-import { StorageSetupCard } from "./storage-setup-card";
+import { EnvStubBlock } from "./env-stub-block";
+
+type StorageMode = "kv" | "file" | "static" | "kv-degraded" | null;
 
 export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }) {
   const [envVars, setEnvVars] = useState<Record<string, string>>({});
@@ -19,7 +21,8 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
   const [savedBackend, setSavedBackend] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<Record<string, string>>({});
-  const [needsStoragePack, setNeedsStoragePack] = useState<string | null>(null);
+  const [storageMode, setStorageMode] = useState<StorageMode>(null);
+  const [storageError, setStorageError] = useState<string | null>(null);
 
   // Load current env on mount
   useEffect(() => {
@@ -30,6 +33,27 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // Load storage mode so we can branch the save UX (disable in static, show
+  // KV-degraded warning, etc). Lightweight call — counts skipped.
+  useEffect(() => {
+    fetch("/api/storage/status?counts=0", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => {
+        setStorageMode(data.mode ?? null);
+        setStorageError(data.error ?? null);
+      })
+      .catch(() => {
+        // Treat unknown as KV (most permissive) so we don't accidentally
+        // disable saves due to a transient network blip. Server still has
+        // the final say via the PUT response.
+        setStorageMode("kv");
+      });
+  }, []);
+
+  // Static mode: saves are disabled, we render a per-connector .env stub
+  // helper instead. Pre-compute the flag once for clarity in the render.
+  const savesDisabled = storageMode === "static" || storageMode === "kv-degraded";
 
   const getValue = useCallback(
     (key: string) => {
@@ -81,7 +105,6 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
   const savePack = async (packId: string) => {
     setSavingId(packId);
     setSaveError((p) => ({ ...p, [packId]: "" }));
-    setNeedsStoragePack(null);
     const packDef = PACKS.find((p) => p.id === packId);
     if (!packDef) return;
     const vars: Record<string, string> = {};
@@ -123,10 +146,12 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
           setSavedFlash(null);
           setSavedBackend(null);
         }, 3000);
-      } else if (data.needsStorage) {
-        // Vercel without Upstash — show storage choice card
-        setNeedsStoragePack(packId);
       } else {
+        // Server reported the mode if relevant — sync local state so the
+        // stub helper appears without a manual recheck.
+        if (data.mode === "static" || data.mode === "kv-degraded") {
+          setStorageMode(data.mode);
+        }
         setSaveError((p) => ({ ...p, [packId]: data.error || "Save failed" }));
       }
     } catch {
@@ -346,11 +371,18 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                       />
                     </div>
                   ))}
-                  <div className="flex items-center gap-3 pt-2">
+                  <div className="flex items-center gap-3 pt-2 flex-wrap">
                     <button
                       onClick={() => savePack(pack.id)}
-                      disabled={savingId === pack.id}
-                      className="bg-accent text-white text-sm font-medium px-4 py-1.5 rounded-md hover:bg-accent/90 disabled:opacity-60"
+                      disabled={savingId === pack.id || savesDisabled}
+                      title={
+                        savesDisabled
+                          ? storageMode === "static"
+                            ? "Static mode — saves disabled. Use the env stub helper below."
+                            : "KV unreachable — saves blocked to prevent data loss."
+                          : undefined
+                      }
+                      className="bg-accent text-white text-sm font-medium px-4 py-1.5 rounded-md hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {savingId === pack.id ? "Saving..." : "Save"}
                     </button>
@@ -369,23 +401,29 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                         {test.message}
                       </span>
                     )}
+                    {savesDisabled && (
+                      <span className="text-[11px] text-orange">
+                        {storageMode === "static"
+                          ? "Static mode (env-vars only)"
+                          : `KV unreachable${storageError ? ` — ${storageError}` : ""}`}
+                      </span>
+                    )}
                   </div>
-                  {needsStoragePack === pack.id && (
-                    <StorageSetupCard
-                      pendingVars={(() => {
-                        const vars: Record<string, string> = {};
-                        for (const v of packDef.vars) {
-                          const edited = edits[v.key];
-                          if (edited !== undefined && edited !== "" && !edited.includes("\u2022")) {
-                            vars[v.key] =
-                              v.key === "GITHUB_REPO" ? normalizeGitHubRepo(edited) : edited;
-                          }
-                        }
-                        return vars;
-                      })()}
-                      allEnvVars={envVars}
-                      onRetry={() => savePack(pack.id)}
-                      onDismiss={() => setNeedsStoragePack(null)}
+                  {storageMode === "static" && (
+                    <EnvStubBlock
+                      packId={pack.id}
+                      packLabel={pack.label}
+                      vars={packDef.vars.map((v) => {
+                        const raw = getValue(v.key);
+                        const masked = typeof raw === "string" && raw.includes("\u2022");
+                        return {
+                          key: v.key,
+                          label: v.label,
+                          value: masked ? "" : raw,
+                          masked,
+                          placeholder: `your-${v.key.toLowerCase().replace(/_/g, "-")}`,
+                        };
+                      })}
                     />
                   )}
                   {saveError[pack.id] && (

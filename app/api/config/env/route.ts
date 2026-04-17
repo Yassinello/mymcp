@@ -3,11 +3,11 @@ import { checkAdminAuth } from "@/core/auth";
 import { getEnvStore, maskValue } from "@/core/env-store";
 import { saveInstanceConfig, SETTINGS_ENV_KEYS } from "@/core/config";
 import {
-  detectStorageBackend,
+  isVercelApiConfigured,
   saveCredentialsToKV,
   resetCredentialHydration,
-  type StorageBackend,
 } from "@/core/credential-store";
+import { detectStorageMode } from "@/core/storage-mode";
 
 /**
  * v0.6 (A1): these four env-var-style keys are now backed by KVStore,
@@ -115,33 +115,57 @@ export async function PUT(request: Request) {
     await persistKvSettings(kvVars);
 
     const kvWritten = Object.keys(kvVars).length;
-    const storageBackend: StorageBackend = detectStorageBackend();
+    const storageReport = await detectStorageMode();
     let result: { written: number; note?: string } = { written: 0 };
+    // Surface a single backend identifier in the response so the connectors
+    // tab can show the right "Saved to X" toast. Mirrors the old
+    // detectStorageBackend() return values for backward compat.
+    let backend: "upstash" | "vercel-api" | "filesystem" | "none" = "none";
 
     if (Object.keys(envVars).length > 0) {
-      // Determine how to persist credentials based on the storage backend.
-      if (storageBackend === "upstash") {
-        // Save credentials to KV — instant, no redeploy needed.
+      if (storageReport.mode === "kv") {
+        // KV available — instant save, no redeploy.
         await saveCredentialsToKV(envVars);
-        // Reset hydration so next registry resolve picks up new creds.
         resetCredentialHydration();
+        backend = "upstash";
         result = { written: Object.keys(envVars).length, note: "Saved to Upstash KV." };
-      } else if (storageBackend === "none") {
-        // Vercel without Upstash or VERCEL_TOKEN — can't persist.
-        // Return a signal so the frontend can show the storage choice card.
+      } else if (storageReport.mode === "kv-degraded") {
+        // KV configured but unreachable — refuse to save rather than
+        // silently routing to the wrong backend (data loss when KV recovers).
         return NextResponse.json(
           {
             ok: false,
-            needsStorage: true,
-            error:
-              "No persistent storage available on Vercel. Set up Upstash Redis or add VERCEL_TOKEN + VERCEL_PROJECT_ID.",
+            mode: storageReport.mode,
+            error: `Storage temporarily unavailable: ${storageReport.error ?? "KV unreachable"}. Saves are blocked to prevent data loss. Retry once KV recovers.`,
           },
-          { status: 422 }
+          { status: 503 }
         );
+      } else if (storageReport.mode === "static") {
+        // No FS, no KV. Last-resort fallback: if VERCEL_TOKEN +
+        // VERCEL_PROJECT_ID are configured, use the Vercel API to write env
+        // vars (still triggers a redeploy, but at least it works). Otherwise
+        // surface a clean static-mode error so the frontend can show the
+        // per-connector .env stub helper.
+        if (isVercelApiConfigured()) {
+          const store = getEnvStore();
+          result = await store.write(envVars);
+          backend = "vercel-api";
+        } else {
+          return NextResponse.json(
+            {
+              ok: false,
+              mode: "static",
+              error:
+                "This instance is in env-vars-only mode. Set credentials in your deploy environment and redeploy, or set up Upstash Redis for live saves.",
+            },
+            { status: 422 }
+          );
+        }
       } else {
-        // "vercel-api" or "filesystem" — use EnvStore as before.
+        // mode === "file" — local FS (Docker, dev) or Vercel /tmp ephemeral.
         const store = getEnvStore();
         result = await store.write(envVars);
+        backend = store.kind === "vercel" ? "vercel-api" : "filesystem";
       }
     }
 
@@ -152,25 +176,25 @@ export async function PUT(request: Request) {
     emit("env.changed");
     return NextResponse.json({
       ok: true,
-      storageBackend,
+      storageBackend: backend,
+      mode: storageReport.mode,
       ...result,
       written: result.written + kvWritten,
       kvWritten,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Vercel's filesystem is read-only. If the user hasn't configured
-    // VERCEL_TOKEN + VERCEL_PROJECT_ID, the FilesystemEnvStore tries to
-    // write .env and hits EROFS. Surface a helpful message.
+    // Vercel filesystem races with our detection cache (e.g. cached as 'file'
+    // but the FS just lost write permission). Surface a clean static-mode
+    // error so the frontend renders the right helper.
     const isReadOnly = msg.includes("EROFS") || msg.includes("read-only");
     if (isReadOnly) {
-      // Treat EROFS the same as "none" backend — show storage choice card.
       return NextResponse.json(
         {
           ok: false,
-          needsStorage: true,
+          mode: "static",
           error:
-            "Vercel filesystem is read-only. Set up Upstash Redis for instant credential storage, or add VERCEL_TOKEN + VERCEL_PROJECT_ID.",
+            "Filesystem became read-only mid-save. Set up Upstash Redis for live saves, or set credentials via env vars.",
         },
         { status: 422 }
       );

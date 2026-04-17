@@ -20,6 +20,7 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   playground: { title: "Playground", subtitle: "Try tools interactively." },
   logs: { title: "Logs", subtitle: "Recent tool invocations." },
   documentation: { title: "Documentation", subtitle: "Guides and reference for MyMCP." },
+  storage: { title: "Storage", subtitle: "Where your credentials and skills live." },
   settings: { title: "Settings", subtitle: "Server-wide configuration." },
 };
 

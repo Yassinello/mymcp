@@ -1,0 +1,423 @@
+"use client";
+
+import { useState } from "react";
+
+type Phase =
+  | { kind: "idle" }
+  | { kind: "confirming"; action: "export" | "import"; file?: File }
+  | { kind: "auth-prompt"; action: "export" | "import"; file?: File }
+  | { kind: "running"; action: "export" | "import" }
+  | { kind: "import-preview"; diff: ImportDiff; file: File; token: string }
+  | { kind: "done"; action: "export" | "import"; message: string }
+  | { kind: "error"; message: string };
+
+interface ImportDiff {
+  added: string[];
+  updated: string[];
+  unchanged: string[];
+}
+
+/**
+ * Advanced section — backup, restore, and other power-user operations that
+ * we don't want surfaced as casual buttons.
+ *
+ * The full .env export is gated behind:
+ *   1. A confirmation modal explaining what's being exported
+ *   2. A re-auth prompt (admin token) — even if the user is already
+ *      authed via cookie, we ask once more before materializing every
+ *      secret in plaintext. Defense against shoulder-surfing and
+ *      against tab-snatching scripts that abuse an existing session.
+ *
+ * Per-connector .env stubs (used in static mode) are NOT gated this way —
+ * they only contain values the user just typed into the form, no
+ * server-side secrets.
+ */
+export function AdvancedSection() {
+  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+
+  const handleExportClick = () => {
+    setPhase({ kind: "confirming", action: "export" });
+  };
+
+  const handleImportFile = (file: File | null) => {
+    if (!file) return;
+    setPhase({ kind: "confirming", action: "import", file });
+  };
+
+  const proceedAfterConfirm = (current: Phase) => {
+    if (current.kind !== "confirming") return;
+    setPhase({
+      kind: "auth-prompt",
+      action: current.action,
+      file: current.file,
+    });
+  };
+
+  const performAction = async (token: string, current: Phase) => {
+    if (current.kind !== "auth-prompt") return;
+    setPhase({ kind: "running", action: current.action });
+
+    if (current.action === "export") {
+      try {
+        const res = await fetch("/api/config/env-export", {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
+        });
+        if (res.status === 401 || res.status === 403) {
+          setPhase({ kind: "error", message: "Invalid admin token. Try again." });
+          return;
+        }
+        if (!res.ok) {
+          setPhase({ kind: "error", message: `Export failed (HTTP ${res.status})` });
+          return;
+        }
+        const text = await res.text();
+        const blob = new Blob([text], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `mymcp-backup-${new Date().toISOString().slice(0, 10)}.env`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setPhase({
+          kind: "done",
+          action: "export",
+          message: "Backup downloaded. Store it securely — it contains all your credentials.",
+        });
+      } catch (err) {
+        setPhase({
+          kind: "error",
+          message: err instanceof Error ? err.message : "Network error",
+        });
+      }
+      return;
+    }
+
+    // import — first do a dry-run preview, then ask for second confirmation
+    if (!current.file) {
+      setPhase({ kind: "error", message: "No file selected" });
+      return;
+    }
+    try {
+      const text = await current.file.text();
+      const res = await fetch("/api/storage/import?dryRun=1", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "text/plain",
+        },
+        credentials: "include",
+        body: text,
+      });
+      if (res.status === 401 || res.status === 403) {
+        setPhase({ kind: "error", message: "Invalid admin token. Try again." });
+        return;
+      }
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setPhase({
+          kind: "error",
+          message: body.error || `Import preview failed (HTTP ${res.status})`,
+        });
+        return;
+      }
+      const data = (await res.json()) as { diff: ImportDiff };
+      setPhase({
+        kind: "import-preview",
+        diff: data.diff,
+        file: current.file,
+        token,
+      });
+    } catch (err) {
+      setPhase({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Network error",
+      });
+    }
+  };
+
+  const confirmImport = async (current: Phase) => {
+    if (current.kind !== "import-preview") return;
+    setPhase({ kind: "running", action: "import" });
+    try {
+      const text = await current.file.text();
+      const res = await fetch("/api/storage/import", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${current.token}`,
+          "Content-Type": "text/plain",
+        },
+        credentials: "include",
+        body: text,
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setPhase({
+          kind: "error",
+          message: body.error || `Import failed (HTTP ${res.status})`,
+        });
+        return;
+      }
+      const data = (await res.json()) as {
+        added?: number;
+        updated?: number;
+        unchanged?: number;
+      };
+      setPhase({
+        kind: "done",
+        action: "import",
+        message: `Imported ${data.added ?? 0} new and ${data.updated ?? 0} updated key(s).`,
+      });
+    } catch (err) {
+      setPhase({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Network error",
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-5 max-w-2xl">
+      <div className="border border-border rounded-lg p-5 space-y-3">
+        <h3 className="text-sm font-semibold">Backup & migration</h3>
+        <p className="text-xs text-text-dim leading-relaxed">
+          Export every credential and setting as a single <code>.env</code> file for backup,
+          migration between deployments, or moving between Docker and Vercel. Re-auth required.
+        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleExportClick}
+            className="text-sm font-medium px-4 py-1.5 rounded-md bg-bg-muted hover:bg-border-light text-text-dim hover:text-text border border-border"
+          >
+            Export full backup (.env)
+          </button>
+          <label className="text-sm font-medium px-4 py-1.5 rounded-md bg-bg-muted hover:bg-border-light text-text-dim hover:text-text border border-border cursor-pointer">
+            Restore from .env…
+            <input
+              type="file"
+              accept=".env,text/plain"
+              className="hidden"
+              onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+        </div>
+      </div>
+
+      {phase.kind === "confirming" && (
+        <Modal
+          title={phase.action === "export" ? "Export full backup?" : "Restore from backup?"}
+          onClose={() => setPhase({ kind: "idle" })}
+        >
+          <p className="text-xs text-text-dim leading-relaxed">
+            {phase.action === "export" ? (
+              <>
+                The downloaded file contains <strong>all</strong> connector credentials in
+                plaintext: API keys, OAuth refresh tokens, etc. Store it in a password manager or
+                encrypted vault. Don&apos;t commit it, don&apos;t email it, don&apos;t paste it into
+                chat.
+              </>
+            ) : (
+              <>
+                Importing will overwrite any existing values for keys present in the file.
+                You&apos;ll see a preview before changes are committed.
+              </>
+            )}
+          </p>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              onClick={() => setPhase({ kind: "idle" })}
+              className="text-xs font-medium px-3 py-1.5 rounded-md text-text-dim hover:text-text"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => proceedAfterConfirm(phase)}
+              className="text-xs font-medium px-4 py-1.5 rounded-md bg-accent text-white hover:bg-accent/90"
+            >
+              I understand, continue
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {phase.kind === "auth-prompt" && (
+        <AuthPrompt
+          action={phase.action}
+          onSubmit={(t) => performAction(t, phase)}
+          onCancel={() => setPhase({ kind: "idle" })}
+        />
+      )}
+
+      {phase.kind === "running" && (
+        <Modal title="Working…" onClose={() => undefined}>
+          <p className="text-xs text-text-dim">
+            {phase.action === "export" ? "Exporting…" : "Importing…"}
+          </p>
+        </Modal>
+      )}
+
+      {phase.kind === "import-preview" && (
+        <Modal title="Preview import" onClose={() => setPhase({ kind: "idle" })}>
+          <div className="text-xs text-text-dim space-y-1">
+            <p>
+              <span className="text-green font-medium">+{phase.diff.added.length}</span> new key(s)
+            </p>
+            <p>
+              <span className="text-orange font-medium">~{phase.diff.updated.length}</span> key(s)
+              will be overwritten
+            </p>
+            <p>
+              <span className="text-text-muted">={phase.diff.unchanged.length}</span> key(s)
+              unchanged (skipped)
+            </p>
+          </div>
+          {phase.diff.added.length + phase.diff.updated.length > 0 && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-text-dim hover:text-text">Show keys</summary>
+              <ul className="mt-2 max-h-40 overflow-y-auto space-y-0.5 font-mono text-[11px]">
+                {phase.diff.added.map((k) => (
+                  <li key={k} className="text-green">
+                    + {k}
+                  </li>
+                ))}
+                {phase.diff.updated.map((k) => (
+                  <li key={k} className="text-orange">
+                    ~ {k}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              onClick={() => setPhase({ kind: "idle" })}
+              className="text-xs font-medium px-3 py-1.5 rounded-md text-text-dim hover:text-text"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => confirmImport(phase)}
+              disabled={phase.diff.added.length + phase.diff.updated.length === 0}
+              className="text-xs font-medium px-4 py-1.5 rounded-md bg-accent text-white hover:bg-accent/90 disabled:opacity-50"
+            >
+              {phase.diff.added.length + phase.diff.updated.length === 0
+                ? "Nothing to import"
+                : "Apply changes"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {phase.kind === "done" && (
+        <Modal title="Done" onClose={() => setPhase({ kind: "idle" })}>
+          <p className="text-xs text-green">{phase.message}</p>
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={() => setPhase({ kind: "idle" })}
+              className="text-xs font-medium px-4 py-1.5 rounded-md bg-accent text-white hover:bg-accent/90"
+            >
+              Close
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {phase.kind === "error" && (
+        <Modal title="Failed" onClose={() => setPhase({ kind: "idle" })}>
+          <p className="text-xs text-red">{phase.message}</p>
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={() => setPhase({ kind: "idle" })}
+              className="text-xs font-medium px-4 py-1.5 rounded-md bg-bg-muted hover:bg-border-light text-text-dim hover:text-text border border-border"
+            >
+              Close
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-bg border border-border rounded-lg max-w-md w-full p-5 space-y-3 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-base font-semibold">{title}</h3>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function AuthPrompt({
+  action,
+  onSubmit,
+  onCancel,
+}: {
+  action: "export" | "import";
+  onSubmit: (token: string) => void;
+  onCancel: () => void;
+}) {
+  const [token, setToken] = useState("");
+  const [showing, setShowing] = useState(false);
+
+  return (
+    <Modal title="Confirm with admin token" onClose={onCancel}>
+      <p className="text-xs text-text-dim">
+        Re-enter your admin token to{" "}
+        {action === "export" ? "download the backup" : "apply the import"}. This is an extra check
+        on top of your dashboard session.
+      </p>
+      <div className="flex items-center gap-2">
+        <input
+          type={showing ? "text" : "password"}
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          placeholder="paste your admin token"
+          className="flex-1 bg-bg-muted border border-border rounded px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-accent/30"
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && token) onSubmit(token);
+          }}
+        />
+        <button
+          onClick={() => setShowing((s) => !s)}
+          className="text-xs text-text-muted hover:text-text px-2 py-1"
+          type="button"
+        >
+          {showing ? "Hide" : "Show"}
+        </button>
+      </div>
+      <div className="flex items-center justify-end gap-2 pt-2">
+        <button
+          onClick={onCancel}
+          className="text-xs font-medium px-3 py-1.5 rounded-md text-text-dim hover:text-text"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => token && onSubmit(token)}
+          disabled={!token}
+          className="text-xs font-medium px-4 py-1.5 rounded-md bg-accent text-white hover:bg-accent/90 disabled:opacity-50"
+        >
+          Continue
+        </button>
+      </div>
+    </Modal>
+  );
+}

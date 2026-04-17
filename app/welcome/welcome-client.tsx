@@ -33,7 +33,31 @@ interface WelcomeClientProps {
   previewMode?: boolean;
   previewToken?: string;
   previewInstanceUrl?: string;
-  isVercel?: boolean;
+}
+
+type StorageMode = "kv" | "file" | "static" | "kv-degraded";
+
+interface StorageStatus {
+  mode: StorageMode;
+  reason: string;
+  dataDir: string | null;
+  kvUrl: string | null;
+  error: string | null;
+}
+
+const STATIC_ACK_COOKIE = "mymcp.storage.ack";
+
+function readStaticAckCookie(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.cookie.split(";").some((c) => c.trim().startsWith(`${STATIC_ACK_COOKIE}=`));
+}
+
+function setStaticAckCookie(): void {
+  if (typeof document === "undefined") return;
+  // 1 year, root path. Not HttpOnly because it's a UX hint, not a security
+  // boundary — the welcome page reads it client-side to know whether to
+  // re-prompt the static-mode choice.
+  document.cookie = `${STATIC_ACK_COOKIE}=1; path=/; max-age=31536000; samesite=lax`;
 }
 
 export default function WelcomeClient({
@@ -41,7 +65,6 @@ export default function WelcomeClient({
   previewMode = false,
   previewToken = "",
   previewInstanceUrl = "",
-  isVercel = false,
 }: WelcomeClientProps) {
   const [claim, setClaim] = useState<ClaimStatus>(previewMode ? "claimer" : "loading");
   const [token, setToken] = useState<string | null>(previewMode ? previewToken : null);
@@ -54,9 +77,16 @@ export default function WelcomeClient({
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
   const [testError, setTestError] = useState<string | null>(null);
   const [skipTest, setSkipTest] = useState(false);
-  const [upstashConnected, setUpstashConnected] = useState(false);
-  const [upstashChecking, setUpstashChecking] = useState(false);
-  const [upstashPolling, setUpstashPolling] = useState(false);
+  const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
+  const [storageChecking, setStorageChecking] = useState(false);
+  const [staticAcknowledged, setStaticAcknowledged] = useState(false);
+
+  // Hydrate ack flag from cookie on mount (avoid SSR mismatch by reading
+  // post-mount). The cookie persists user's "Continue env-vars-only" choice
+  // so the welcome flow doesn't re-prompt on every visit.
+  useEffect(() => {
+    setStaticAcknowledged(readStaticAckCookie());
+  }, []);
 
   // Step 1: claim the instance. If we re-enter with bootstrap already active
   // (user came back to /welcome before the redeploy), auto-call init so we
@@ -118,29 +148,51 @@ export default function WelcomeClient({
     return () => clearInterval(id);
   }, [permanent, previewMode]);
 
-  // Check Upstash connection status
-  const checkUpstash = useCallback(async () => {
-    setUpstashChecking(true);
+  // Load the unified storage mode (kv / file / static / kv-degraded).
+  // This replaces the legacy isolated "Upstash configured?" check and feeds
+  // the welcome storage step + the MCP-client step list.
+  const loadStorageStatus = useCallback(async (force = false) => {
+    setStorageChecking(true);
     try {
-      const res = await fetch("/api/config/storage-status", { credentials: "include" });
-      const data = (await res.json()) as { upstashConfigured?: boolean };
-      if (data.upstashConfigured) {
-        setUpstashConnected(true);
-        setUpstashPolling(false);
-      }
+      const res = await fetch(`/api/storage/status${force ? "?force=1" : ""}`, {
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as StorageStatus;
+      setStorageStatus(data);
     } catch {
-      // Ignore transient errors
+      // Silent — UI falls back to "checking…" until next attempt
     } finally {
-      setUpstashChecking(false);
+      setStorageChecking(false);
     }
   }, []);
 
-  // Auto-poll for Upstash every 15s when user has clicked "I've added it"
+  // Initial load on mount, refresh after token issued (so we re-fetch with
+  // bearer cookie set by /init), and auto-refresh every 20s while the page
+  // is open and the user hasn't yet reached a settled mode.
   useEffect(() => {
-    if (!isVercel || !upstashPolling || upstashConnected) return;
-    const id = setInterval(checkUpstash, 15_000);
+    void loadStorageStatus(false);
+  }, [loadStorageStatus, token]);
+
+  useEffect(() => {
+    // Auto-poll only while in transient states (kv-degraded retry, static
+    // waiting for upstash setup). Stop once we hit a settled mode.
+    if (!storageStatus) return;
+    if (storageStatus.mode === "kv" || storageStatus.mode === "file") return;
+    if (storageStatus.mode === "static" && staticAcknowledged) return;
+    const id = setInterval(() => loadStorageStatus(true), 20_000);
     return () => clearInterval(id);
-  }, [isVercel, upstashPolling, upstashConnected, checkUpstash]);
+  }, [storageStatus, staticAcknowledged, loadStorageStatus]);
+
+  const acknowledgeStatic = useCallback(() => {
+    setStaticAckCookie();
+    setStaticAcknowledged(true);
+  }, []);
+
+  const storageReady =
+    storageStatus?.mode === "kv" ||
+    storageStatus?.mode === "file" ||
+    (storageStatus?.mode === "static" && staticAcknowledged);
 
   const initialize = useCallback(async () => {
     setBusy(true);
@@ -349,23 +401,7 @@ export default function WelcomeClient({
                   {permanent ? "Redeployed — your instance is permanent." : "Redeploying… (~60s)"}
                 </span>
               </li>
-              {isVercel && (
-                <li className="flex items-start gap-3">
-                  <span
-                    className={
-                      upstashConnected ? "text-emerald-400 mt-0.5" : "text-slate-500 mt-0.5"
-                    }
-                    aria-hidden
-                  >
-                    {upstashConnected ? "✓" : "□"}
-                  </span>
-                  <span className="text-slate-300">
-                    {upstashConnected
-                      ? "Upstash Redis connected"
-                      : "Connect Upstash Redis (see below)"}
-                  </span>
-                </li>
-              )}
+              <StorageStepLine status={storageStatus} acknowledged={staticAcknowledged} />
               <li className="flex items-start gap-3">
                 <span className="text-slate-500 mt-0.5">□</span>
                 <span className="text-slate-300">Configure your MCP client (snippet below)</span>
@@ -426,23 +462,7 @@ export default function WelcomeClient({
                   </a>
                 </span>
               </li>
-              {isVercel && (
-                <li className="flex items-start gap-3">
-                  <span
-                    className={
-                      upstashConnected ? "text-emerald-400 mt-0.5" : "text-slate-500 mt-0.5"
-                    }
-                    aria-hidden
-                  >
-                    {upstashConnected ? "✓" : "□"}
-                  </span>
-                  <span className="text-slate-300">
-                    {upstashConnected
-                      ? "Upstash Redis connected"
-                      : "Connect Upstash Redis (see below)"}
-                  </span>
-                </li>
-              )}
+              <StorageStepLine status={storageStatus} acknowledged={staticAcknowledged} />
               <li className="flex items-start gap-3">
                 <span className="text-slate-500 mt-0.5">□</span>
                 <span className="text-slate-300">Configure your MCP client (snippet below)</span>
@@ -452,20 +472,14 @@ export default function WelcomeClient({
         );
       })()}
 
-      {isVercel && !upstashConnected && permanent && (
-        <UpstashSetupPanel
-          checking={upstashChecking}
-          polling={upstashPolling}
-          onCheck={() => {
-            checkUpstash();
-            setUpstashPolling(true);
-          }}
+      {permanent && storageStatus && (
+        <WelcomeStorageStep
+          status={storageStatus}
+          checking={storageChecking}
+          acknowledged={staticAcknowledged}
+          onRecheck={() => loadStorageStatus(true)}
+          onAcknowledgeStatic={acknowledgeStatic}
         />
-      )}
-      {isVercel && upstashConnected && (
-        <div className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-300">
-          Upstash Redis connected — connector credentials will persist across deploys.
-        </div>
       )}
 
       {token && <TokenUsagePanel token={token} instanceUrl={instanceUrl} />}
@@ -481,7 +495,7 @@ export default function WelcomeClient({
       />
 
       {(() => {
-        const canContinue = (permanent && testStatus === "ok") || skipTest;
+        const canContinue = (permanent && testStatus === "ok" && storageReady) || skipTest;
         return (
           <div className="flex items-center gap-4">
             <a
@@ -515,50 +529,214 @@ export default function WelcomeClient({
   );
 }
 
-function UpstashSetupPanel({
-  checking,
-  polling,
-  onCheck,
+/**
+ * Single line in the welcome step list reflecting current storage mode.
+ *
+ * - kv / file → green checkmark "Storage ready"
+ * - static + acknowledged → grey checkmark "Static mode (env vars only)"
+ * - static + not acknowledged → empty checkbox "Storage decision needed"
+ * - kv-degraded → red ✗ "KV unreachable"
+ * - null (still loading) → grey "Checking storage…"
+ */
+function StorageStepLine({
+  status,
+  acknowledged,
 }: {
-  checking: boolean;
-  polling: boolean;
-  onCheck: () => void;
+  status: StorageStatus | null;
+  acknowledged: boolean;
 }) {
-  return (
-    <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900/40 p-5">
-      <p className="text-sm font-semibold text-white mb-1">Connect Upstash Redis</p>
-      <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
-        Required for saving connector credentials on Vercel. Free tier is enough.
-      </p>
-      <ol className="space-y-2 mb-4 text-xs text-slate-300 list-decimal list-inside">
-        <li>
-          Go to{" "}
-          <a
-            href="https://vercel.com/integrations/upstash"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-400 hover:text-blue-300 underline"
-          >
-            Vercel &rarr; Integrations &rarr; Upstash
-          </a>
+  if (!status) {
+    return (
+      <li className="flex items-start gap-3">
+        <span className="text-slate-500 mt-0.5">…</span>
+        <span className="text-slate-300">Checking storage…</span>
+      </li>
+    );
+  }
+  if (status.mode === "kv") {
+    return (
+      <li className="flex items-start gap-3">
+        <span className="text-emerald-400 mt-0.5">✓</span>
+        <span className="text-slate-300">Storage: Upstash Redis ready</span>
+      </li>
+    );
+  }
+  if (status.mode === "file") {
+    return (
+      <li className="flex items-start gap-3">
+        <span className="text-emerald-400 mt-0.5">✓</span>
+        <span className="text-slate-300">Storage: file-based (writable)</span>
+      </li>
+    );
+  }
+  if (status.mode === "static") {
+    if (acknowledged) {
+      return (
+        <li className="flex items-start gap-3">
+          <span className="text-slate-400 mt-0.5">✓</span>
+          <span className="text-slate-300">
+            Storage: env-vars only (saves disabled, by your choice)
+          </span>
         </li>
-        <li>Click &ldquo;Add Integration&rdquo; and select this project</li>
-        <li>Upstash will auto-configure the Redis env vars</li>
-      </ol>
-      <div className="flex items-center gap-3">
+      );
+    }
+    return (
+      <li className="flex items-start gap-3">
+        <span className="text-amber-400 mt-0.5">□</span>
+        <span className="text-slate-300">Choose your storage strategy (see below)</span>
+      </li>
+    );
+  }
+  // kv-degraded
+  return (
+    <li className="flex items-start gap-3">
+      <span className="text-red-400 mt-0.5">✗</span>
+      <span className="text-slate-300">Storage: KV unreachable — see below</span>
+    </li>
+  );
+}
+
+/**
+ * Full storage configuration panel inside the welcome flow.
+ *
+ * Renders one of four UIs based on the unified storage mode:
+ *
+ *  - **kv / file** → small green confirmation banner. No further action.
+ *  - **static** (not yet acknowledged) → 2-card layout asking the user to
+ *    either set up Upstash OR explicitly continue env-vars-only. We persist
+ *    the latter via a cookie so we don't re-prompt forever.
+ *  - **static** (acknowledged) → small confirmation banner.
+ *  - **kv-degraded** → red banner with retry CTA.
+ */
+function WelcomeStorageStep({
+  status,
+  checking,
+  acknowledged,
+  onRecheck,
+  onAcknowledgeStatic,
+}: {
+  status: StorageStatus;
+  checking: boolean;
+  acknowledged: boolean;
+  onRecheck: () => void;
+  onAcknowledgeStatic: () => void;
+}) {
+  if (status.mode === "kv") {
+    return (
+      <div className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-300">
+        Storage ready — Upstash Redis connected. Connector saves persist instantly.
+      </div>
+    );
+  }
+
+  if (status.mode === "file") {
+    return (
+      <div className="mb-6 rounded-lg border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-300">
+        Storage ready — file-based at {status.dataDir ?? "data dir"}. Connector saves persist
+        locally.
+      </div>
+    );
+  }
+
+  if (status.mode === "kv-degraded") {
+    return (
+      <div className="mb-6 rounded-lg border border-red-900/60 bg-red-950/40 p-5">
+        <p className="text-sm font-semibold text-red-300 mb-1">KV configured but unreachable</p>
+        <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+          We don&apos;t silently downgrade to file storage during a temporary KV outage — that would
+          cause data loss when Upstash recovers. Check that your Upstash database is online and your
+          token is valid, then click recheck.
+        </p>
+        {status.error && (
+          <p className="text-[11px] font-mono text-red-200 bg-red-950/60 p-2 rounded mb-3">
+            {status.error}
+          </p>
+        )}
         <button
           type="button"
-          onClick={onCheck}
+          onClick={onRecheck}
           disabled={checking}
-          className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 px-4 py-2 rounded-md text-xs font-semibold transition-colors"
+          className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 px-4 py-2 rounded-md text-xs font-semibold"
         >
-          {checking ? "Checking..." : "Check connection"}
+          {checking ? "Rechecking…" : "Retry detection"}
         </button>
-        {polling && !checking && (
-          <span className="text-[11px] text-slate-500">
-            Auto-polling every 15s. Not detected yet — Vercel may still be redeploying.
-          </span>
-        )}
+      </div>
+    );
+  }
+
+  // static
+  if (acknowledged) {
+    return (
+      <div className="mb-6 rounded-lg border border-amber-900/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+        Continuing in env-vars-only mode. To save connector credentials, set them in your deploy
+        environment and redeploy. You can switch to KV anytime in /config → Storage.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900/40 p-5">
+      <p className="text-sm font-semibold text-white mb-1">Choose your storage strategy</p>
+      <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
+        This instance has no persistent storage configured. Your filesystem is read-only and no KV
+        backend is set up. Pick one of these two paths.
+      </p>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div className="rounded-md border border-slate-700 bg-slate-950 p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-950 px-1.5 py-0.5 rounded">
+              RECOMMENDED
+            </span>
+            <p className="text-sm font-semibold text-white">Add Upstash Redis</p>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            2-min setup. Save credentials live from the dashboard, no redeploys. Free tier covers
+            most personal use.
+          </p>
+          <ol className="text-[11px] text-slate-400 list-decimal list-inside space-y-0.5">
+            <li>
+              Open{" "}
+              <a
+                href="https://vercel.com/integrations/upstash"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 underline"
+              >
+                Vercel → Integrations → Upstash
+              </a>
+            </li>
+            <li>Add the integration to this project</li>
+            <li>Wait for redeploy, then recheck</li>
+          </ol>
+          <button
+            type="button"
+            onClick={onRecheck}
+            disabled={checking}
+            className="mt-2 w-full bg-blue-500 hover:bg-blue-400 disabled:opacity-40 text-white px-3 py-1.5 rounded-md text-xs font-semibold"
+          >
+            {checking ? "Rechecking…" : "I added Upstash — recheck"}
+          </button>
+        </div>
+
+        <div className="rounded-md border border-slate-700 bg-slate-950 p-4 space-y-2">
+          <p className="text-sm font-semibold text-white">Continue env-vars only</p>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Set credentials via env vars in your deploy. Each new connector requires a redeploy.
+            Dashboard saves are disabled — you&apos;ll get .env stub helpers instead.
+          </p>
+          <ul className="text-[11px] text-slate-400 list-disc list-inside space-y-0.5">
+            <li>OK for infra-as-code teams</li>
+            <li>OK for static showcase deploys</li>
+            <li>You can switch to KV later</li>
+          </ul>
+          <button
+            type="button"
+            onClick={onAcknowledgeStatic}
+            className="mt-2 w-full bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-md text-xs font-semibold"
+          >
+            Continue env-vars only
+          </button>
+        </div>
       </div>
     </div>
   );
