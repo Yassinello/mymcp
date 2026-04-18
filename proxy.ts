@@ -122,7 +122,18 @@ export function proxy(request: NextRequest) {
   const passthrough = () => finalize(NextResponse.next({ request: { headers: requestHeaders } }));
 
   const adminToken = (process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN)?.trim();
-  const isFirstTimeSetup = !process.env.MCP_AUTH_TOKEN;
+  const isShowcase = process.env.INSTANCE_MODE === "showcase";
+  const isFirstTimeSetup = !process.env.MCP_AUTH_TOKEN && !isShowcase;
+
+  // ── Showcase: public template deploy, no MCP endpoint, no admin. ─────
+  // / serves the landing page; /welcome and /config are meaningless here
+  // (no token to configure, no instance to admin) so we send them home.
+  if (isShowcase) {
+    if (pathname === "/welcome" || pathname === "/config" || pathname.startsWith("/config/")) {
+      return finalize(NextResponse.redirect(new URL("/", request.url)));
+    }
+    return passthrough();
+  }
 
   // ── First-run: /welcome is the entry point, everything else redirects ─
   if (isFirstTimeSetup) {
