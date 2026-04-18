@@ -49,7 +49,7 @@ for (const connector of ALL_CONNECTORS) {
     typeof connector.registerPrompts !== "function"
   ) {
     throw new Error(
-      `[MyMCP] Connector "${connector.id}" sets registerPrompts to a ` +
+      `[Kebab MCP] Connector "${connector.id}" sets registerPrompts to a ` +
         `${typeof connector.registerPrompts} — it must be a function or omitted.`
     );
   }
@@ -189,11 +189,11 @@ export function logRegistryState(): void {
   const enabled = packs.filter((p) => p.enabled);
   const disabled = packs.filter((p) => !p.enabled);
 
-  console.log(`[MyMCP] Registry: ${enabled.length}/${packs.length} packs active`);
+  console.log(`[Kebab MCP] Registry: ${enabled.length}/${packs.length} packs active`);
   for (const p of enabled) {
-    console.log(`[MyMCP]   ✓ ${p.manifest.label} (${p.manifest.tools.length} tools)`);
+    console.log(`[Kebab MCP]   ✓ ${p.manifest.label} (${p.manifest.tools.length} tools)`);
   }
   for (const p of disabled) {
-    console.log(`[MyMCP]   ✗ ${p.manifest.label} — ${p.reason}`);
+    console.log(`[Kebab MCP]   ✗ ${p.manifest.label} — ${p.reason}`);
   }
 }

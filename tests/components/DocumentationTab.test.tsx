@@ -15,7 +15,7 @@ const mockDocs: DocEntry[] = [
   {
     slug: "getting-started",
     title: "Getting Started",
-    summary: "How to set up MyMCP",
+    summary: "How to set up Kebab MCP",
     content: "Install and deploy in 5 minutes.",
   },
   {
@@ -41,7 +41,7 @@ describe("DocumentationTab", () => {
     render(<DocumentationTab docs={mockDocs} />);
 
     // Summary appears as <p> text
-    expect(screen.getByText("How to set up MyMCP")).toBeInTheDocument();
+    expect(screen.getByText("How to set up Kebab MCP")).toBeInTheDocument();
   });
 
   it("switches doc content when clicking a sidebar item", () => {

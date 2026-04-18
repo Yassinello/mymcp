@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Core types for MyMCP framework.
+ * Core types for Kebab MCP framework.
  * These are framework-level types — no instance-specific values.
  */
 

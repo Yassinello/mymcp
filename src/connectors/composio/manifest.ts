@@ -8,7 +8,7 @@ export const composioConnector: ConnectorManifest = {
   guide: `Call any of 1000+ SaaS apps (Jira, HubSpot, Salesforce, Figma, Trello, …) through [Composio](https://composio.dev)'s managed-auth layer — Composio handles the per-app OAuth so you don't have to.
 
 ### Prerequisites
-A Composio account. You'll connect each target app _inside_ the Composio dashboard; MyMCP only needs your Composio API key to dispatch calls.
+A Composio account. You'll connect each target app _inside_ the Composio dashboard; Kebab MCP only needs your Composio API key to dispatch calls.
 
 ### How to get credentials
 1. Sign up at [app.composio.dev](https://app.composio.dev)

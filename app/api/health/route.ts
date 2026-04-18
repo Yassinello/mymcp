@@ -89,7 +89,7 @@ export async function GET(request: Request) {
   const sample = { ts: sampleTs, overall, connectors: connectorMap };
   const kv = getKVStore();
   kv.set(`health:sample:${sampleTs}`, JSON.stringify(sample)).catch((err: Error) =>
-    console.error("[MyMCP] Health sample write failed:", err.message)
+    console.error("[Kebab MCP] Health sample write failed:", err.message)
   );
 
   return Response.json({

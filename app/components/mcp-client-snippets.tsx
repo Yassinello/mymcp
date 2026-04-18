@@ -61,7 +61,7 @@ export function McpClientSnippets({
   const desktopConfigSnippet = JSON.stringify(
     {
       mcpServers: {
-        mymcp: {
+        "kebab-mcp": {
           url,
           headers: { Authorization: `Bearer ${tokenForSnippet}` },
         },
@@ -71,12 +71,12 @@ export function McpClientSnippets({
     2
   );
 
-  const claudeCodeSnippet = `claude mcp add --transport http mymcp ${url} \\\n  --header "Authorization: Bearer ${tokenForSnippet}"`;
+  const claudeCodeSnippet = `claude mcp add --transport http kebab-mcp ${url} \\\n  --header "Authorization: Bearer ${tokenForSnippet}"`;
 
   const cursorSnippet = JSON.stringify(
     {
       mcpServers: {
-        mymcp: {
+        "kebab-mcp": {
           url: urlWithToken,
         },
       },
@@ -134,8 +134,7 @@ export function McpClientSnippets({
           tabBarBg: "bg-bg-muted",
           tabBarBorder: "border-border",
           tabActive: "border-accent text-accent",
-          tabInactive:
-            "border-transparent text-text-dim hover:text-text",
+          tabInactive: "border-transparent text-text-dim hover:text-text",
           helpText: "text-text-muted",
           codeColor: "text-text-muted",
           preBg: "bg-bg-muted",
@@ -189,9 +188,7 @@ export function McpClientSnippets({
           type="button"
           onClick={copy}
           className={`absolute top-2 right-2 text-[10px] font-medium px-2 py-1 rounded-md transition-colors ${
-            copied
-              ? `${t.copiedBg} ${t.copiedText}`
-              : `${t.copyBg} ${t.copyText}`
+            copied ? `${t.copiedBg} ${t.copiedText}` : `${t.copyBg} ${t.copyText}`
           }`}
         >
           {copied ? "Copied!" : copyLabel}
@@ -225,7 +222,7 @@ function HelpText({
     return (
       <p className={klass}>
         In Claude Desktop: <strong>Settings → Connectors → Add custom connector</strong>. Set
-        <code className={codeKlass}> Name</code> to <code className={codeKlass}>MyMCP</code> and
+        <code className={codeKlass}> Name</code> to <code className={codeKlass}>Kebab MCP</code> and
         paste this URL into <code className={codeKlass}>Remote MCP server URL</code>. Leave the
         OAuth fields empty — the token travels in the query string.
       </p>
@@ -244,8 +241,8 @@ function HelpText({
   if (tab === "claude-code") {
     return (
       <p className={klass}>
-        Run this command in any terminal. It registers MyMCP as an HTTP MCP server in your Claude
-        Code config.
+        Run this command in any terminal. It registers Kebab MCP as an HTTP MCP server in your
+        Claude Code config.
       </p>
     );
   }
@@ -261,8 +258,8 @@ function HelpText({
 
   return (
     <p className={klass}>
-      For ChatGPT desktop, n8n, Continue, or any other MCP client: paste this URL (token embedded
-      in the query string). Clients that support custom headers can use the base URL{" "}
+      For ChatGPT desktop, n8n, Continue, or any other MCP client: paste this URL (token embedded in
+      the query string). Clients that support custom headers can use the base URL{" "}
       <code className={codeKlass}>{baseUrl}</code> with{" "}
       <code className={codeKlass}>Authorization: Bearer &lt;token&gt;</code>.
     </p>

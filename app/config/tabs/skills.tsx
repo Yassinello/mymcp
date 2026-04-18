@@ -611,7 +611,7 @@ function DraftForm({
           <label className="text-sm font-medium">Source</label>
           <InfoTooltip
             title="Inline vs Remote"
-            body="Inline = the prompt body lives in MyMCP's KV store; edit it from this form anytime. Remote = MyMCP fetches the markdown from a URL on each invocation (with caching). Use Remote for skills shared across deployments; use Inline for personal skills you tweak often."
+            body="Inline = the prompt body lives in Kebab MCP's KV store; edit it from this form anytime. Remote = Kebab MCP fetches the markdown from a URL on each invocation (with caching). Use Remote for skills shared across deployments; use Inline for personal skills you tweak often."
           />
         </div>
         <div className="flex gap-2">

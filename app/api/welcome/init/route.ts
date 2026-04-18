@@ -55,31 +55,31 @@ export async function POST(request: Request) {
   let redeployTriggered = false;
   let redeployError: string | undefined;
 
-  console.info("[MyMCP first-run] auto-magic mode: writing MCP_AUTH_TOKEN to Vercel...");
+  console.info("[Kebab MCP first-run] auto-magic mode: writing MCP_AUTH_TOKEN to Vercel...");
   try {
     await getEnvStore().write({ MCP_AUTH_TOKEN: token });
     envWritten = true;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`[MyMCP first-run] auto-magic env write failed: ${msg}`);
+    console.warn(`[Kebab MCP first-run] auto-magic env write failed: ${msg}`);
   }
 
-  console.info("[MyMCP first-run] auto-magic mode: triggering redeploy...");
+  console.info("[Kebab MCP first-run] auto-magic mode: triggering redeploy...");
   try {
     const result = await triggerVercelRedeploy();
     if (result.ok) {
       redeployTriggered = true;
       console.info(
-        `[MyMCP first-run] auto-magic mode: redeploy triggered (deployment=${result.deploymentId ?? "?"})`
+        `[Kebab MCP first-run] auto-magic mode: redeploy triggered (deployment=${result.deploymentId ?? "?"})`
       );
     } else {
       redeployError = result.error;
-      console.warn(`[MyMCP first-run] auto-magic redeploy failed: ${result.error}`);
+      console.warn(`[Kebab MCP first-run] auto-magic redeploy failed: ${result.error}`);
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     redeployError = msg;
-    console.warn(`[MyMCP first-run] auto-magic redeploy threw: ${msg}`);
+    console.warn(`[Kebab MCP first-run] auto-magic redeploy threw: ${msg}`);
   }
 
   return NextResponse.json({

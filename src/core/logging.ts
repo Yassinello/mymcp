@@ -36,7 +36,7 @@ export function logToolCall(log: ToolLog) {
   const errorSuffix = log.error
     ? ` — ${log.errorCode ? `[${log.errorCode}] ` : ""}${log.error}`
     : "";
-  console.log(`[MyMCP] ${emoji} ${log.tool} (${log.durationMs}ms)${errorSuffix}`);
+  console.log(`[Kebab MCP] ${emoji} ${log.tool} (${log.durationMs}ms)${errorSuffix}`);
 
   // Write to the pluggable log store if durable logging is enabled.
   // Fire-and-forget: a failing log write must never surface to the
@@ -53,10 +53,10 @@ export function logToolCall(log: ToolLog) {
       };
       store
         .append(entry)
-        .catch((err: Error) => console.error("[MyMCP] Durable log write failed:", err.message));
+        .catch((err: Error) => console.error("[Kebab MCP] Durable log write failed:", err.message));
     } catch (err) {
       console.error(
-        "[MyMCP] Durable log store unavailable:",
+        "[Kebab MCP] Durable log store unavailable:",
         err instanceof Error ? err.message : String(err)
       );
     }
@@ -70,7 +70,7 @@ export function logToolCall(log: ToolLog) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: `[MyMCP] Tool error: ${log.tool} — ${log.error} (${log.durationMs}ms)`,
+          text: `[Kebab MCP] Tool error: ${log.tool} — ${log.error} (${log.durationMs}ms)`,
           tool: log.tool,
           error: log.error,
           errorCode: log.errorCode,
@@ -266,7 +266,7 @@ export function withLogging<TParams>(
         // Log the detailed internalRecovery server-side (contains env var
         // names etc.), but only surface the generic recovery to the client.
         if (error.internalRecovery) {
-          console.log(`[MyMCP] Recovery detail (${toolName}): ${error.internalRecovery}`);
+          console.log(`[Kebab MCP] Recovery detail (${toolName}): ${error.internalRecovery}`);
         }
         logToolCall({
           tool: toolName,

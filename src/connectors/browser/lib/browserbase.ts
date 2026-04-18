@@ -162,7 +162,7 @@ export async function checkAndIncrementDailyLimit(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        message: `linkedin_feed call ${data.count}/${limit} — ${today} via MyMCP`,
+        message: `linkedin_feed call ${data.count}/${limit} — ${today} via Kebab MCP`,
         content,
         ...(sha && { sha }),
       }),

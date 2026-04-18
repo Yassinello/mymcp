@@ -85,7 +85,7 @@ export async function checkRateLimit(
   } catch (err) {
     // Fail open: KV errors must not block legitimate requests
     console.warn(
-      "[MyMCP] Rate limit KV error (failing open):",
+      "[Kebab MCP] Rate limit KV error (failing open):",
       err instanceof Error ? err.message : String(err)
     );
     return { allowed: true, remaining: -1, resetAt };

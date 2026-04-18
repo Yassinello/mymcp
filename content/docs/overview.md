@@ -1,12 +1,12 @@
 ---
-title: Welcome to MyMCP
+title: Welcome to Kebab MCP
 summary: Tour the dashboard in 60 seconds and pick where to go next
 order: 1
 ---
 
 ## What this dashboard is for
 
-You're looking at the **MyMCP dashboard** — the control panel for your personal MCP server. From here you wire up connectors (Gmail, Notion, Slack, Obsidian, …), author skills, watch tool calls in real time, and check that your storage is healthy. None of this is required to start using the MCP endpoint, but it's the difference between "MyMCP works" and "MyMCP works the way I want."
+You're looking at the **Kebab MCP dashboard** — the control panel for your personal MCP server. From here you wire up connectors (Gmail, Notion, Slack, Obsidian, …), author skills, watch tool calls in real time, and check that your storage is healthy. None of this is required to start using the MCP endpoint, but it's the difference between "Kebab MCP works" and "Kebab MCP works the way I want."
 
 If you just deployed and got dropped here from the Welcome wizard: skip to [Where to start](#where-to-start). Otherwise read on for a tab-by-tab tour.
 
@@ -18,7 +18,7 @@ The default landing tab. Shows your **instance health widget** (token status, Ve
 
 ### Connectors
 
-The credential surface for every connector MyMCP ships. Each one knows its required env vars, exposes a per-connector setup guide, and a **Test connection** button that verifies the credentials are real before you trust them.
+The credential surface for every connector Kebab MCP ships. Each one knows its required env vars, exposes a per-connector setup guide, and a **Test connection** button that verifies the credentials are real before you trust them.
 
 → See [Connector setup](#connectors) for per-connector instructions.
 
@@ -86,7 +86,7 @@ If the **Storage** badge is orange (`Filesystem (temporary)`), fix that first �
 - Check the **Logs** tab for the most recent invocation — error column shows what went wrong
 - Read [Troubleshooting](#troubleshooting) — covers the dozen most common issues including all v3 storage failure modes
 - Read the [FAQ](#faq) for design-decision questions ("can I run multi-user?", "what happens on cold starts?", …)
-- Still stuck? [Open an issue](https://github.com/Yassinello/mymcp/issues) — include MyMCP version (sidebar footer), connector affected, and the Logs entry if applicable
+- Still stuck? [Open an issue](https://github.com/Yassinello/mymcp/issues) — include Kebab MCP version (sidebar footer), connector affected, and the Logs entry if applicable
 
 ## See also
 

@@ -1,5 +1,5 @@
 /**
- * Contract snapshot test for MyMCP.
+ * Contract snapshot test for Kebab MCP.
  * Verifies that tool names and input schemas haven't changed unexpectedly.
  *
  * Run: npx tsx scripts/contract-test.ts

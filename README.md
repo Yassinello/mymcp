@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">MyMCP</h1>
+  <h1 align="center">Kebab MCP</h1>
   <p align="center"><strong>Your personal AI backend. One endpoint. 86+ tools. Deploy in 5 minutes.</strong></p>
 </p>
 
@@ -31,7 +31,7 @@
                                │ MCP (Streamable HTTP)
                                ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                              MyMCP on Vercel / Docker                                   │
+│                              Kebab MCP on Vercel / Docker                                   │
 │                                                                                         │
 │  ┌──────────┐ ┌────────┐ ┌────────┐ ┌───────┐ ┌────────┐ ┌─────────┐ ┌──────┐         │
 │  │  Google   │ │ Vault  │ │Browser │ │ Slack │ │ Notion │ │Composio │ │Apify │         │
@@ -50,17 +50,17 @@
 
 ## The Story
 
-I built MyMCP because I wanted a single MCP server that works everywhere (Claude, ChatGPT, Cursor, Windsurf, OpenClaw, ..). It started as a simple bridge to my Obsidian vault with a few tools, and kept growing as I added Google Workspace, browser automation, Slack, Notion, and LinkedIn via Apify. At some point I realized: if it's useful to me, it might be useful to others, so I open-sourced it.
+I built Kebab MCP because I wanted a single MCP server that works everywhere (Claude, ChatGPT, Cursor, Windsurf, OpenClaw, ..). It started as a simple bridge to my Obsidian vault with a few tools, and kept growing as I added Google Workspace, browser automation, Slack, Notion, and LinkedIn via Apify. At some point I realized: if it's useful to me, it might be useful to others, so I open-sourced it.
 
 A live demo lives at **[mymcp-home.vercel.app](https://mymcp-home.vercel.app)** (read-only showcase deploy). Click around to see the dashboard before committing to a deploy of your own.
 
-## Why MyMCP?
+## Why Kebab MCP?
 
 Most MCP setups require running 5 separate servers, each with their own config. Or paying for a hosted platform that controls your data.
 
-MyMCP gives you **one server, one endpoint, 86+ tools** — deployed on Vercel's free tier (or Docker). You own everything.
+Kebab MCP gives you **one server, one endpoint, 86+ tools** — deployed on Vercel's free tier (or Docker). You own everything.
 
-|              | MyMCP                    | Separate MCP servers | Hosted platforms           |
+|              | Kebab MCP                    | Separate MCP servers | Hosted platforms           |
 | ------------ | ------------------------ | -------------------- | -------------------------- |
 | **Setup**    | Fork + env vars + deploy | 5 repos, 5 configs   | Sign up + monthly fee      |
 | **Tools**    | 86+ pre-built            | Build your own       | 1000s (but vendor lock-in) |
@@ -110,14 +110,14 @@ Dashboard at `http://localhost:3000/config?token=<your-token>`, MCP endpoint at 
 
 Just ask Claude to run the installer:
 
-> "Run `npx @yassinello/create-mymcp@latest` and help me set up MyMCP."
+> "Run `npx @yassinello/create-kebab-mcp@latest` and help me set up Kebab MCP."
 
 The installer clones the repo, picks connectors, generates your token, collects credentials, and optionally deploys to Vercel. Claude can then wire the resulting endpoint into your client config.
 
 ### Interactive npx installer
 
 ```bash
-npx @yassinello/create-mymcp@latest
+npx @yassinello/create-kebab-mcp@latest
 ```
 
 Five-step CLI: project setup → clone → pick connectors → paste credentials → install & deploy. Leaves you with a working `.env`, installed deps, and an `upstream` remote for future `npm run update`.
@@ -128,7 +128,7 @@ Five-step CLI: project setup → clone → pick connectors → paste credentials
 
 ### Connect your AI client
 
-Once deployed, add MyMCP to your AI client's config:
+Once deployed, add Kebab MCP to your AI client's config:
 
 <details>
 <summary><strong>Claude Desktop</strong></summary>
@@ -225,7 +225,7 @@ Use the Streamable HTTP endpoint:
 
 ### Staying up to date
 
-MyMCP is a [template repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository). Your copy is standalone — it won't auto-update. Three ways to pull new tools and fixes, from zero-effort to fully manual:
+Kebab MCP is a [template repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository). Your copy is standalone — it won't auto-update. Three ways to pull new tools and fixes, from zero-effort to fully manual:
 
 #### 1. Automatic — updates on every `npm run dev` (default)
 
@@ -258,7 +258,7 @@ This is the recommended flow if you keep the dashboard open while working.
 The classic CLI flow still works:
 
 ```bash
-# One-time setup (skip if you used npx @yassinello/create-mymcp — already done)
+# One-time setup (skip if you used npx @yassinello/create-kebab-mcp — already done)
 git remote add upstream https://github.com/Yassinello/mymcp.git
 
 # Pull updates anytime
@@ -275,7 +275,7 @@ Equivalent to `git fetch upstream && git merge upstream/main`. Useful when you'r
 
 ## Connectors
 
-MyMCP ships **86+ production-ready tools** organized in 14 connectors. Each connector activates automatically when its credentials are present in env vars. Additionally, user-defined **Skills** create dynamic tools from prompt templates.
+Kebab MCP ships **86+ production-ready tools** organized in 14 connectors. Each connector activates automatically when its credentials are present in env vars. Additionally, user-defined **Skills** create dynamic tools from prompt templates.
 
 ### Google Workspace — 18 tools
 

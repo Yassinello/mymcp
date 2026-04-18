@@ -1,6 +1,6 @@
-# Contributing to MyMCP
+# Contributing to Kebab MCP
 
-Thank you for considering a contribution. MyMCP grows through community connectors — every new integration you add makes the tool more useful for every developer who deploys it.
+Thank you for considering a contribution. Kebab MCP grows through community connectors — every new integration you add makes the tool more useful for every developer who deploys it.
 
 ## Code of Conduct
 
@@ -449,4 +449,4 @@ If you're not sure whether an idea is a good fit before writing code, open an is
 
 ---
 
-*MyMCP grows through community contributions. Every connector you add makes it more useful for every developer who deploys it.*
+*Kebab MCP grows through community contributions. Every connector you add makes it more useful for every developer who deploys it.*

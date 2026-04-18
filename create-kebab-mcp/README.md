@@ -1,16 +1,18 @@
-# create-mymcp
+# create-kebab-mcp
 
-Interactive installer for [MyMCP](https://github.com/Yassinello/mymcp) — your personal AI backend.
+Interactive installer for [Kebab MCP](https://github.com/Yassinello/mymcp) — your personal AI backend.
+
+(Renamed from `create-mymcp`; the old npm name still resolves to the legacy 0.3.x line — re-run with the new name to get the latest.)
 
 ## Usage
 
 ```bash
-npx @yassinello/create-mymcp@latest
+npx @yassinello/create-kebab-mcp@latest
 ```
 
 ## What it does
 
-1. **Clones** the MyMCP repo into a new directory
+1. **Clones** the Kebab MCP repo into a new directory
 2. **Asks** which tool packs you want (Google Workspace, Obsidian, Browser, Slack, Notion)
 3. **Collects** your API credentials interactively
 4. **Generates** a `.env` file with your config

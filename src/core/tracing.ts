@@ -1,5 +1,5 @@
 /**
- * OpenTelemetry tracing facade for MyMCP.
+ * OpenTelemetry tracing facade for Kebab MCP.
  *
  * Uses `@opentelemetry/api` as a facade only — if no SDK is registered
  * (the default), all operations are no-ops with zero overhead. When a
@@ -72,7 +72,7 @@ function autoBootstrap(): void {
     // SDK packages not installed or failed to load — warn so the operator
     // knows OTel was requested but could not be started.
     console.warn(
-      "[MyMCP] OTel bootstrap failed: " +
+      "[Kebab MCP] OTel bootstrap failed: " +
         (error instanceof Error ? error.message : String(error)) +
         ". Install @opentelemetry/sdk-trace-node and @opentelemetry/exporter-trace-otlp-http to enable tracing."
     );

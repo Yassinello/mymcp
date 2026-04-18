@@ -4,7 +4,7 @@ import { isClaimer } from "./first-run";
 import { getTenantId } from "./tenant";
 
 /**
- * Auth utilities for MyMCP.
+ * Auth utilities for Kebab MCP.
  *
  * Two auth scopes:
  * - MCP auth: protects the /api/mcp endpoint (MCP_AUTH_TOKEN)
@@ -19,12 +19,12 @@ function warnAdminTokenFallback() {
   if (adminTokenWarned) return;
   if (!process.env.ADMIN_AUTH_TOKEN && !process.env.MCP_AUTH_TOKEN) {
     console.warn(
-      "[MyMCP Security] No auth tokens configured. Admin dashboard is publicly accessible."
+      "[Kebab MCP Security] No auth tokens configured. Admin dashboard is publicly accessible."
     );
     adminTokenWarned = true;
   } else if (!process.env.ADMIN_AUTH_TOKEN && process.env.MCP_AUTH_TOKEN) {
     console.warn(
-      "[MyMCP Security] ADMIN_AUTH_TOKEN is not set. Falling back to MCP_AUTH_TOKEN for admin access. " +
+      "[Kebab MCP Security] ADMIN_AUTH_TOKEN is not set. Falling back to MCP_AUTH_TOKEN for admin access. " +
         "Set a separate ADMIN_AUTH_TOKEN for better security isolation."
     );
     adminTokenWarned = true;

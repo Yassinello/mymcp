@@ -443,7 +443,7 @@ export function getKVStore(): KVStore {
   // Vercel detected, but no Upstash: fall back to /tmp with a warning.
   if (process.env.VERCEL === "1") {
     console.warn(
-      "[MyMCP] KVStore: running on Vercel without UPSTASH_REDIS_REST_URL/TOKEN — " +
+      "[Kebab MCP] KVStore: running on Vercel without UPSTASH_REDIS_REST_URL/TOKEN — " +
         "using /tmp filesystem (ephemeral, data lost on cold start). " +
         "Set Upstash env vars for persistence."
     );

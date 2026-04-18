@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "First-run setup only accepts loopback (localhost) requests. Open the setup wizard on the machine running MyMCP.",
+            "First-run setup only accepts loopback (localhost) requests. Open the setup wizard on the machine running Kebab MCP.",
         },
         { status: 403 }
       );

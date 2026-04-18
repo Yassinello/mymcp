@@ -36,7 +36,7 @@ An Airtable account with access to at least one base. Free plans work fine.
 ### How to get credentials
 1. Go to [airtable.com/create/tokens](https://airtable.com/create/tokens) and click **Create new token**
 2. Give it a name (e.g. _MyMCP_) and add the scopes \`data.records:read\`, \`data.records:write\`, and \`schema.bases:read\`
-3. Under **Access**, add every base you want MyMCP to reach (you must pick them explicitly — tokens are not workspace-wide)
+3. Under **Access**, add every base you want Kebab MCP to reach (you must pick them explicitly — tokens are not workspace-wide)
 4. Copy the generated token and set it as \`AIRTABLE_API_KEY\`
 
 ### Troubleshooting

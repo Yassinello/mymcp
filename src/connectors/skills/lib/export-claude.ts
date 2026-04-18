@@ -1,5 +1,5 @@
 /**
- * Export a MyMCP skill to Claude Desktop `.skill` format.
+ * Export a Kebab MCP skill to Claude Desktop `.skill` format.
  *
  * Claude Skill format is a JSON file with extension `.skill`:
  * ```json
@@ -39,7 +39,7 @@ export interface SkillLike {
 }
 
 /**
- * Convert a MyMCP skill to Claude Desktop `.skill` JSON format.
+ * Convert a Kebab MCP skill to Claude Desktop `.skill` JSON format.
  *
  * @param skill  The skill (or skill-like object) to convert.
  * @param opts   Optional overrides for metadata fields.

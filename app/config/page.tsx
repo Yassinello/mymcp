@@ -19,7 +19,7 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   skills: { title: "Skills", subtitle: "Create and manage user-defined skills." },
   playground: { title: "Playground", subtitle: "Try tools interactively." },
   logs: { title: "Logs", subtitle: "Recent tool invocations." },
-  documentation: { title: "Documentation", subtitle: "Guides and reference for MyMCP." },
+  documentation: { title: "Documentation", subtitle: "Guides and reference for Kebab MCP." },
   storage: { title: "Storage", subtitle: "Where your credentials and skills live." },
   settings: { title: "Settings", subtitle: "Server-wide configuration." },
 };

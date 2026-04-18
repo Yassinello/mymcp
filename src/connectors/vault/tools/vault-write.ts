@@ -5,7 +5,7 @@ import { vaultWrite } from "../lib/github";
 export const vaultWriteSchema = {
   path: z.string().describe("Path in the vault, e.g. Veille/mon-article.md"),
   content: z.string().describe("Markdown content of the note"),
-  message: z.string().optional().describe('Git commit message (default: "Update via MyMCP")'),
+  message: z.string().optional().describe('Git commit message (default: "Update via Kebab MCP")'),
   frontmatter: z
     .record(z.string(), z.any())
     .optional()

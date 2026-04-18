@@ -138,7 +138,7 @@ export const skillsConnector: ConnectorManifest = {
           });
         } catch (err) {
           console.info(
-            `[MyMCP] Skipping prompt registration for skill "${skill.id}": ${
+            `[Kebab MCP] Skipping prompt registration for skill "${skill.id}": ${
               err instanceof Error ? err.message : String(err)
             }`
           );
@@ -146,7 +146,7 @@ export const skillsConnector: ConnectorManifest = {
       }
     } catch (err) {
       console.info(
-        `[MyMCP] Skills prompt registration unavailable: ${
+        `[Kebab MCP] Skills prompt registration unavailable: ${
           err instanceof Error ? err.message : String(err)
         }`
       );

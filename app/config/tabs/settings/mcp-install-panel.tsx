@@ -10,13 +10,7 @@ import { McpClientSnippets } from "../../../components/mcp-client-snippets";
  * reveal affordance that fetches the actual token on demand via
  * /api/config/auth-token rather than serializing it into the HTML payload.
  */
-export function McpInstallPanel({
-  baseUrl,
-  hasToken,
-}: {
-  baseUrl: string;
-  hasToken: boolean;
-}) {
+export function McpInstallPanel({ baseUrl, hasToken }: { baseUrl: string; hasToken: boolean }) {
   const [token, setToken] = useState<string | null>(null);
   const [revealing, setRevealing] = useState(false);
   const [revealError, setRevealError] = useState<string | null>(null);
@@ -59,7 +53,7 @@ export function McpInstallPanel({
   return (
     <div className="space-y-5">
       <p className="text-sm text-text-dim">
-        Install MyMCP in any MCP client below. The same token works in every client — paste it
+        Install Kebab MCP in any MCP client below. The same token works in every client — paste it
         everywhere. Use multiple comma-separated tokens (in <code>MCP_AUTH_TOKEN</code>) only if you
         want to revoke one client without breaking the others.
       </p>

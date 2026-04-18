@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MyMCP — Dashboard",
+  title: "Kebab MCP — Dashboard",
   description: "Personal MCP Server Dashboard",
 };
 

@@ -47,7 +47,7 @@ export async function GET(request: Request) {
       // Fall through to the in-memory ring buffer so the dashboard
       // never loses visibility if the store is momentarily unhealthy.
       console.error(
-        "[MyMCP] /api/config/logs: log store read failed, falling back to memory:",
+        "[Kebab MCP] /api/config/logs: log store read failed, falling back to memory:",
         err instanceof Error ? err.message : String(err)
       );
     }

@@ -141,7 +141,7 @@ export async function fetchRemote(url: string): Promise<FetchRemoteResult> {
           signal: controller.signal,
           redirect: "manual",
           headers: {
-            "User-Agent": "MyMCP-Skills/1.0",
+            "User-Agent": "Kebab MCP-Skills/1.0",
             Range: `bytes=0-${MAX_BYTES - 1}`,
           },
         },

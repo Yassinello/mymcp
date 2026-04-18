@@ -4,7 +4,7 @@ summary: Deploy your personal MCP server in 5 minutes
 order: 10
 ---
 
-## What MyMCP gives you
+## What Kebab MCP gives you
 
 A single Vercel deploy that exposes 86+ tools across 14 connectors (Gmail, Calendar, Drive, GitHub Issues, Linear, Notion, Slack, Obsidian, Airtable, Apify, Composio, Webhook Receiver, paywalled article reader, browser automation) behind one MCP endpoint. Plus user-defined Skills that create dynamic tools from prompt templates. Plug it into Claude Desktop, Claude Code, Cursor, ChatGPT, n8n, or any MCP-aware client and your AI assistant gets your tools.
 
@@ -13,7 +13,7 @@ A single Vercel deploy that exposes 86+ tools across 14 connectors (Gmail, Calen
 1. Click **Deploy to Vercel** on the [GitHub readme](https://github.com/Yassinello/mymcp). Vercel forks the repo into your account and walks you through env vars.
 2. Skip the env vars at deploy time — you can paste them later.
 3. After the first deploy, open the new Vercel app URL. You will land on `/welcome`.
-4. Click **Initialize this instance**. MyMCP mints a permanent `MCP_AUTH_TOKEN`, writes it to your Vercel project, and triggers a redeploy automatically.
+4. Click **Initialize this instance**. Kebab MCP mints a permanent `MCP_AUTH_TOKEN`, writes it to your Vercel project, and triggers a redeploy automatically.
 5. When the redeploy lands, copy the install snippet for your client (the welcome page has tabs for Claude Desktop, Claude Code, Cursor, and Other) and paste it into your client config.
 
 That's it. Your AI assistant now has tools.

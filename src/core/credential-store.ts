@@ -95,11 +95,11 @@ export async function hydrateCredentialsFromKV(): Promise<void> {
       }
     }
     if (keys.length > 0) {
-      console.log(`[MyMCP] Hydrated ${keys.length} credential(s) from KV into process.env`);
+      console.log(`[Kebab MCP] Hydrated ${keys.length} credential(s) from KV into process.env`);
     }
   } catch (err) {
     console.warn(
-      "[MyMCP] Failed to hydrate credentials from KV:",
+      "[Kebab MCP] Failed to hydrate credentials from KV:",
       err instanceof Error ? err.message : err
     );
   }

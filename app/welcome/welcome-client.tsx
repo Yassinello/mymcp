@@ -554,7 +554,7 @@ export default function WelcomeClient({
   if (!token && !initialBootstrap) {
     return (
       <Shell>
-        <h1 className="text-3xl font-bold text-white mb-3 tracking-tight">Welcome to MyMCP</h1>
+        <h1 className="text-3xl font-bold text-white mb-3 tracking-tight">Welcome to Kebab MCP</h1>
         <p className="text-slate-400 mb-8 leading-relaxed">
           Click below to generate your permanent auth token and unlock this instance. The token will
           be shown once — save it somewhere safe.
@@ -839,7 +839,7 @@ function renderStepStorage(props: {
     <section>
       <StepHeader
         title="Where your data lives"
-        subtitle="Pick where MyMCP saves your credentials, skills, and context. You can change this later from the dashboard."
+        subtitle="Pick where Kebab MCP saves your credentials, skills, and context. You can change this later from the dashboard."
       />
 
       {/* Mode-change celebration — shows briefly after Upstash setup completes */}
@@ -992,7 +992,7 @@ function renderStepConnect(props: {
     <section>
       <StepHeader
         title="Connect your AI client"
-        subtitle="Add MyMCP to your client's MCP server config, then verify it works."
+        subtitle="Add Kebab MCP to your client's MCP server config, then verify it works."
       />
 
       {token && <TokenUsagePanel token={token} instanceUrl={instanceUrl} />}
@@ -1369,7 +1369,7 @@ function WelcomeStorageStep({
             other deploy. Free tier covers personal use.
           </p>
           <p>
-            <strong className="text-slate-300">Local file:</strong> MyMCP writes to{" "}
+            <strong className="text-slate-300">Local file:</strong> Kebab MCP writes to{" "}
             <code className="font-mono">./data/kv.json</code> and <code>.env</code> on disk. Great
             for Docker with a mounted volume or local dev. Doesn&apos;t work for multi-instance
             deploys because each instance has its own file.
@@ -1853,7 +1853,7 @@ function Shell({ children, wide }: { children: React.ReactNode; wide?: boolean }
           token" where there's only one CTA to focus on. */}
       <div className={`mx-auto px-6 py-12 sm:py-16 ${wide ? "max-w-3xl" : "max-w-xl"}`}>
         <p className="text-xs font-mono text-blue-400 mb-4 tracking-wider uppercase">
-          MyMCP · First-run setup
+          Kebab MCP · First-run setup
         </p>
         {children}
       </div>

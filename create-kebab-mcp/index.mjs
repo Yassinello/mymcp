@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// create-mymcp — Interactive installer for MyMCP
-// Usage: npx @yassinello/create-mymcp@latest
+// create-kebab-mcp — Interactive installer for Kebab MCP
+// Usage: npx @yassinello/create-kebab-mcp@latest
 
 import { spawnSync, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -55,7 +55,7 @@ function isDirNonEmpty(dir) {
 async function main() {
   log("");
   log(`${BOLD}  ╔══════════════════════════════════════════╗${RESET}`);
-  log(`${BOLD}  ║          ${CYAN}create-mymcp${RESET}${BOLD}                    ║${RESET}`);
+  log(`${BOLD}  ║       ${CYAN}create-kebab-mcp${RESET}${BOLD}                   ║${RESET}`);
   log(`${BOLD}  ║  Your personal AI backend in minutes     ║${RESET}`);
   log(`${BOLD}  ╚══════════════════════════════════════════╝${RESET}`);
 
@@ -79,7 +79,7 @@ async function main() {
 
   // ── Step 2: Clone ────────────────────────────────────────────────
 
-  step("2/3", "Cloning MyMCP");
+  step("2/3", "Cloning Kebab MCP");
 
   const cloneResult = spawnSync(
     "git",

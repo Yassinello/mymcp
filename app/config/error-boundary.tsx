@@ -29,7 +29,11 @@ export class TabErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorB
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
-    console.error(`[MyMCP] Error in ${this.props.section ?? "tab"}:`, error, info.componentStack);
+    console.error(
+      `[Kebab MCP] Error in ${this.props.section ?? "tab"}:`,
+      error,
+      info.componentStack
+    );
   }
 
   handleRetry = () => {

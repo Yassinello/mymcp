@@ -97,7 +97,7 @@ export default function OpenInstanceButton() {
       {open && (
         <div className="absolute right-0 mt-2 w-80 rounded-lg border border-slate-700 bg-slate-900 shadow-xl p-4 text-left">
           <p className="text-xs text-slate-400 mb-2">
-            Enter the URL of your deployed MyMCP instance.
+            Enter the URL of your deployed Kebab MCP instance.
           </p>
           <form
             onSubmit={(e) => {

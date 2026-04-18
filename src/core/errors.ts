@@ -1,5 +1,5 @@
 /**
- * Structured error system for MyMCP tool handlers.
+ * Structured error system for Kebab MCP tool handlers.
  * All packs should use McpToolError for machine-readable diagnostics.
  */
 

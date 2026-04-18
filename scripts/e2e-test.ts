@@ -1,5 +1,5 @@
 /**
- * E2E smoke test for MyMCP.
+ * E2E smoke test for Kebab MCP.
  * Starts the dev server, calls tools/list via HTTP, verifies response.
  *
  * Run: npm run test:e2e
@@ -68,9 +68,7 @@ async function callToolsList(): Promise<string[]> {
 
   const text = await res.text();
   // Parse SSE response
-  const dataLine = text
-    .split("\n")
-    .find((l) => l.startsWith("data: "));
+  const dataLine = text.split("\n").find((l) => l.startsWith("data: "));
   if (!dataLine) throw new Error(`Unexpected response: ${text.slice(0, 200)}`);
 
   const json = JSON.parse(dataLine.replace("data: ", ""));
@@ -88,8 +86,12 @@ async function main() {
   });
 
   let serverOutput = "";
-  server.stdout?.on("data", (d) => { serverOutput += d.toString(); });
-  server.stderr?.on("data", (d) => { serverOutput += d.toString(); });
+  server.stdout?.on("data", (d) => {
+    serverOutput += d.toString();
+  });
+  server.stderr?.on("data", (d) => {
+    serverOutput += d.toString();
+  });
 
   try {
     console.log("[E2E] Waiting for server...");

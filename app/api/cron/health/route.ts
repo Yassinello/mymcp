@@ -29,10 +29,9 @@ export async function GET(request: Request) {
   } else {
     // Fail-closed when CRON_SECRET is not configured.
     if (!isLoopbackRequest(request)) {
-      return new Response(
-        "CRON_SECRET not configured — cron endpoint is locked to loopback",
-        { status: 503 }
-      );
+      return new Response("CRON_SECRET not configured — cron endpoint is locked to loopback", {
+        status: 503,
+      });
     }
   }
 
@@ -63,7 +62,7 @@ export async function GET(request: Request) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: `[MyMCP Health] ${degraded.length} pack(s) degraded: ${degraded.map((d) => `${d.pack}: ${d.message}`).join("; ")}`,
+          text: `[Kebab MCP Health] ${degraded.length} pack(s) degraded: ${degraded.map((d) => `${d.pack}: ${d.message}`).join("; ")}`,
           packs: degraded,
         }),
       }).catch(() => {});

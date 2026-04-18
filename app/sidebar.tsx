@@ -100,7 +100,7 @@ function getInitials(name: string): string {
 
 export function Sidebar({
   displayName = "User",
-  serverName = "MyMCP",
+  serverName = "Kebab MCP",
   setupMode = false,
 }: {
   displayName?: string;

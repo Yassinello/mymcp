@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     params: {
       protocolVersion: "2024-11-05",
       capabilities: {},
-      clientInfo: { name: "mymcp-welcome-test", version: "1.0.0" },
+      clientInfo: { name: "kebab-mcp-welcome-test", version: "1.0.0" },
     },
   };
 

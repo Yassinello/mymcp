@@ -158,7 +158,7 @@ export async function vaultWrite(
   }
 
   const body: Record<string, string> = {
-    message: message || "Update via MyMCP",
+    message: message || "Update via Kebab MCP",
     content: Buffer.from(content, "utf-8").toString("base64"),
   };
   if (existingSha) {
@@ -213,7 +213,7 @@ export async function vaultDelete(
     method: "DELETE",
     headers: headers(pat),
     body: JSON.stringify({
-      message: message || `Delete ${path} via MyMCP`,
+      message: message || `Delete ${path} via Kebab MCP`,
       sha,
     }),
   });

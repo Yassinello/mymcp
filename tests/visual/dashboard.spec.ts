@@ -1,11 +1,11 @@
 /**
- * Visual smoke tests for the MyMCP dashboard.
+ * Visual smoke tests for the Kebab MCP dashboard.
  *
  * Takes screenshots at different viewports for manual diffing.
  * Screenshots are regenerated on each run (gitignored).
  *
  * Prerequisites:
- * - A running MyMCP server (npm run dev) or set PLAYWRIGHT_BASE_URL
+ * - A running Kebab MCP server (npm run dev) or set PLAYWRIGHT_BASE_URL
  * - Chromium installed: npx playwright install chromium
  * - MCP_AUTH_TOKEN set in .env (used for auth cookie)
  */
@@ -52,7 +52,7 @@ test("welcome page", async ({ page }) => {
   await page.goto("/welcome");
   await page.waitForLoadState("networkidle");
   await expect(page.locator("body")).toBeVisible();
-  // Welcome page may show "Welcome to MyMCP" or redirect to /config
+  // Welcome page may show "Welcome to Kebab MCP" or redirect to /config
   // if already initialized — both are valid states
   await page.screenshot({
     path: path.join(screenshotDir, "welcome.png"),

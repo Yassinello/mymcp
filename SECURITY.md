@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Only the latest minor release of MyMCP receives security updates.
+Only the latest minor release of Kebab MCP receives security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -66,7 +66,7 @@ We will credit you in the security advisory unless you prefer to remain anonymou
 
 ## Security Best Practices
 
-When self-hosting MyMCP, follow these guidelines:
+When self-hosting Kebab MCP, follow these guidelines:
 
 ### Token Management
 
@@ -100,7 +100,7 @@ Rotate `MCP_AUTH_TOKEN` when:
 - A team member with access leaves
 - You can't remember the last time you rotated (≥6 months is a useful default)
 
-The procedure depends on where MyMCP is hosted.
+The procedure depends on where Kebab MCP is hosted.
 
 ### Vercel
 

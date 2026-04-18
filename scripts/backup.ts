@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * MyMCP Backup CLI — export / import KV store data.
+ * Kebab MCP Backup CLI — export / import KV store data.
  *
  * Usage:
  *   npx tsx scripts/backup.ts export          → JSON to stdout

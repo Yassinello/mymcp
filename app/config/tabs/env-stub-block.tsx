@@ -37,7 +37,7 @@ export function EnvStubBlock({ packId, packLabel, vars }: EnvStubBlockProps) {
   // refresh tokens make this non-trivial to do on every keystroke.
   const previewText = useMemo(() => {
     const lines: string[] = [
-      `# MyMCP — ${packLabel} connector`,
+      `# Kebab MCP — ${packLabel} connector`,
       `# Generated: ${new Date().toISOString()}`,
       `# Paste these into your deploy environment (Vercel → Project → Settings →`,
       `# Environment Variables) and redeploy. Live save is unavailable in static mode.`,

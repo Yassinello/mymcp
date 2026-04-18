@@ -6,7 +6,7 @@ order: 30
 
 ## What a skill is
 
-A **skill** is a user-authored prompt template stored in MyMCP and exposed to your AI client as both an MCP `prompt` and an MCP `tool`. Use skills to package recurring instructions ("draft a weekly status report from these inputs", "summarize a research paper into 5 bullets") so you can invoke them by name instead of pasting the same prompt every time.
+A **skill** is a user-authored prompt template stored in Kebab MCP and exposed to your AI client as both an MCP `prompt` and an MCP `tool`. Use skills to package recurring instructions ("draft a weekly status report from these inputs", "summarize a research paper into 5 bullets") so you can invoke them by name instead of pasting the same prompt every time.
 
 Skills appear under their `skill_<name>` tool name in your MCP client, and as named prompts in clients that support the prompts primitive (Claude Desktop, Claude Code).
 
@@ -32,12 +32,12 @@ Skills appear under their `skill_<name>` tool name in your MCP client, and as na
 
 ## Inline vs remote skills
 
-- **Inline**: source lives in MyMCP's KV store. Edit anytime from `/config → Skills`.
+- **Inline**: source lives in Kebab MCP's KV store. Edit anytime from `/config → Skills`.
 - **Remote**: source is fetched from a URL on each invocation (with caching). Useful for sharing skills across deployments — point at a raw GitHub URL or a `skills.sh` skill page.
 
 ## Importing a skill from a URL
 
-`/config → Skills → Import from URL`. Paste a raw GitHub markdown URL or a `skills.sh` skill page. MyMCP fetches it (with byte cap and SSRF protection), parses the frontmatter into a skill definition, and shows a preview before saving.
+`/config → Skills → Import from URL`. Paste a raw GitHub markdown URL or a `skills.sh` skill page. Kebab MCP fetches it (with byte cap and SSRF protection), parses the frontmatter into a skill definition, and shows a preview before saving.
 
 ## Skill Composer
 

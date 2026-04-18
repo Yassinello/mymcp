@@ -13,7 +13,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: MyMCP version
+      label: Kebab MCP version
       description: From the dashboard sidebar footer, or `package.json`.
       placeholder: "0.3.5"
     validations:

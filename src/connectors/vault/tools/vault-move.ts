@@ -8,7 +8,7 @@ export const vaultMoveSchema = {
 };
 
 export async function handleVaultMove(params: { from: string; to: string; message?: string }) {
-  const commitMsg = params.message || `Move ${params.from} → ${params.to} via MyMCP`;
+  const commitMsg = params.message || `Move ${params.from} → ${params.to} via Kebab MCP`;
 
   // Step 1: Read source (gets content + SHA in one call)
   const source = await vaultRead(params.from);

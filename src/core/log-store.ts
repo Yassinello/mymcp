@@ -295,7 +295,7 @@ export class UpstashLogStore implements LogStore {
 
   async append(entry: LogEntry): Promise<void> {
     if (!this.shouldAllow()) {
-      console.warn("[MyMCP] UpstashLogStore: circuit open, skipping append");
+      console.warn("[Kebab MCP] UpstashLogStore: circuit open, skipping append");
       return;
     }
 
@@ -327,7 +327,7 @@ export class UpstashLogStore implements LogStore {
     this.recordFailure();
     // Swallow — withLogging must not cascade log-store failures to tool calls.
     console.warn(
-      `[MyMCP] UpstashLogStore: append failed after retries (failures=${this._circuit.consecutiveFailures}):`,
+      `[Kebab MCP] UpstashLogStore: append failed after retries (failures=${this._circuit.consecutiveFailures}):`,
       lastError?.message
     );
   }
@@ -400,7 +400,7 @@ export function getLogStore(): LogStore {
 
   if (process.env.VERCEL === "1") {
     console.warn(
-      "[MyMCP] LogStore: running on Vercel without UPSTASH_REDIS_REST_URL/TOKEN — " +
+      "[Kebab MCP] LogStore: running on Vercel without UPSTASH_REDIS_REST_URL/TOKEN — " +
         "using MemoryLogStore (ephemeral, lost on cold start)."
     );
     cached = new MemoryLogStore();

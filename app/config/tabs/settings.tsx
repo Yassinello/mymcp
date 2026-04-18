@@ -157,8 +157,8 @@ export function SettingsTab({
               </div>
               <ContextFileField vaultEnabled={vaultEnabled} initialPath={config.contextPath} />
               <p className="text-xs text-text-muted mt-2">
-                Pick where this context lives. Inline = stored in MyMCP&apos;s KV store. Vault = a
-                file inside your Obsidian vault, fetched on demand.
+                Pick where this context lives. Inline = stored in Kebab MCP&apos;s KV store. Vault =
+                a file inside your Obsidian vault, fetched on demand.
               </p>
             </div>
           </div>

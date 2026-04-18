@@ -11,7 +11,7 @@ export default function LandingFooter() {
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
           <div>
-            <p className="text-sm font-mono text-white font-semibold mb-1">MyMCP</p>
+            <p className="text-sm font-mono text-white font-semibold mb-1">Kebab MCP</p>
             <p className="text-xs text-slate-500">
               The personal MCP server for developers. MIT License · Open source · Built with the
               community
@@ -33,7 +33,7 @@ export default function LandingFooter() {
         </div>
         <div className="mt-8 pt-6 border-t border-slate-800/50">
           <p className="text-xs text-slate-600 text-center">
-            © 2025 MyMCP contributors · MIT License
+            © 2025 Kebab MCP contributors · MIT License
           </p>
         </div>
       </div>

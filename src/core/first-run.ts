@@ -72,7 +72,7 @@ async function persistBootstrapToKv(payload: BootstrapPayload): Promise<void> {
     await kv.set(KV_BOOTSTRAP_KEY, JSON.stringify(payload));
   } catch (err) {
     console.info(
-      `[MyMCP first-run] KV persist skipped: ${err instanceof Error ? err.message : String(err)}`
+      `[Kebab MCP first-run] KV persist skipped: ${err instanceof Error ? err.message : String(err)}`
     );
   }
 }
@@ -89,7 +89,7 @@ async function loadBootstrapFromKv(): Promise<BootstrapPayload | null> {
     return parsed;
   } catch (err) {
     console.info(
-      `[MyMCP first-run] KV load skipped: ${err instanceof Error ? err.message : String(err)}`
+      `[Kebab MCP first-run] KV load skipped: ${err instanceof Error ? err.message : String(err)}`
     );
     return null;
   }
@@ -102,7 +102,7 @@ async function deleteBootstrapFromKv(): Promise<void> {
     await kv.delete(KV_BOOTSTRAP_KEY);
   } catch (err) {
     console.info(
-      `[MyMCP first-run] KV delete skipped: ${err instanceof Error ? err.message : String(err)}`
+      `[Kebab MCP first-run] KV delete skipped: ${err instanceof Error ? err.message : String(err)}`
     );
   }
 }
@@ -202,7 +202,7 @@ export function getOrCreateClaim(request: Request): ClaimResult {
 
   const claimId = randomBytes(32).toString("hex");
   claims.set(claimId, { createdAt: Date.now() });
-  console.info(`[MyMCP first-run] new claim minted (id=${claimId.slice(0, 8)}…)`);
+  console.info(`[Kebab MCP first-run] new claim minted (id=${claimId.slice(0, 8)}…)`);
   return {
     claimId,
     isNewClaim: true,
@@ -249,7 +249,7 @@ export function bootstrapToken(claimId: string): { token: string } {
   void persistBootstrapToKv(activeBootstrap);
 
   console.info(
-    `[MyMCP first-run] bootstrap token minted (claim=${claimId.slice(0, 8)}…, persisted=${persisted})`
+    `[Kebab MCP first-run] bootstrap token minted (claim=${claimId.slice(0, 8)}…, persisted=${persisted})`
   );
   return { token };
 }
@@ -267,7 +267,7 @@ export function forceReset(): void {
     // Ignore.
   }
   void deleteBootstrapFromKv();
-  console.info("[MyMCP first-run] forceReset() called — bootstrap state cleared");
+  console.info("[Kebab MCP first-run] forceReset() called — bootstrap state cleared");
 }
 
 /** Re-hydrate bootstrap state from /tmp on cold start. Called at module load. */
@@ -275,7 +275,7 @@ export function rehydrateBootstrapFromTmp(): void {
   if (process.env.MYMCP_RECOVERY_RESET === "1") {
     forceReset();
     console.warn(
-      "[MyMCP first-run] MYMCP_RECOVERY_RESET=1 detected — bootstrap reset. Remove the env var after recovery."
+      "[Kebab MCP first-run] MYMCP_RECOVERY_RESET=1 detected — bootstrap reset. Remove the env var after recovery."
     );
     return;
   }
@@ -291,7 +291,7 @@ export function rehydrateBootstrapFromTmp(): void {
       process.env.MCP_AUTH_TOKEN = parsed.token;
     }
     console.info(
-      `[MyMCP first-run] re-hydrated bootstrap from /tmp (claim=${parsed.claimId.slice(0, 8)}…, age=${Math.round((Date.now() - parsed.createdAt) / 1000)}s)`
+      `[Kebab MCP first-run] re-hydrated bootstrap from /tmp (claim=${parsed.claimId.slice(0, 8)}…, age=${Math.round((Date.now() - parsed.createdAt) / 1000)}s)`
     );
   } catch {
     // Ignore malformed/missing bootstrap state.
@@ -336,7 +336,7 @@ export async function rehydrateBootstrapAsync(): Promise<void> {
     // Ignore.
   }
   console.info(
-    `[MyMCP first-run] re-hydrated bootstrap from KV (claim=${fromKv.claimId.slice(0, 8)}…)`
+    `[Kebab MCP first-run] re-hydrated bootstrap from KV (claim=${fromKv.claimId.slice(0, 8)}…)`
   );
 }
 

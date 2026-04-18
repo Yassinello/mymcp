@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     ]);
 
     const lines: string[] = [
-      "# MyMCP — exported credentials",
+      "# Kebab MCP — exported credentials",
       `# Exported: ${new Date().toISOString()}`,
       "",
     ];
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
     return new NextResponse(text, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "Content-Disposition": 'attachment; filename="mymcp-credentials.env"',
+        "Content-Disposition": 'attachment; filename="kebab-mcp-credentials.env"',
       },
     });
   } catch (err) {

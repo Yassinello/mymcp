@@ -21,7 +21,7 @@ export const vaultConnector: ConnectorManifest = {
   guide: `Read, write, search, and link notes in an Obsidian vault that lives inside a GitHub repository. Every write becomes a git commit, so you get full history for free.
 
 ### Prerequisites
-An Obsidian vault pushed to a **private GitHub repo** (public works too, but private is recommended for personal notes). The repo can be empty at first — MyMCP will create notes in it.
+An Obsidian vault pushed to a **private GitHub repo** (public works too, but private is recommended for personal notes). The repo can be empty at first — Kebab MCP will create notes in it.
 
 ### How to get credentials
 1. Go to [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens/new) and create a **fine-grained** personal access token
@@ -33,7 +33,7 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
 
 ### Troubleshooting
 - _404 on the repo_: the token wasn't granted access to that specific repo — edit it and add it.
-- _409 conflict on write_: someone (or another sync) committed between your read and write; retry — MyMCP passes \`sha\` to handle this.
+- _409 conflict on write_: someone (or another sync) committed between your read and write; retry — Kebab MCP passes \`sha\` to handle this.
 - _Search returns nothing fresh_: GitHub's search index lags by 1–2 minutes after a commit; that's normal.`,
   requiredEnvVars: ["GITHUB_PAT", "GITHUB_REPO"],
   testConnection: async (credentials) => {
@@ -48,7 +48,7 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
     }
     const repoNorm = repo.replace(/.*github\.com\//, "").replace(/\/+$/, "");
     const res = await fetch(`https://api.github.com/repos/${repoNorm}`, {
-      headers: { Authorization: `token ${pat}`, "User-Agent": "MyMCP" },
+      headers: { Authorization: `token ${pat}`, "User-Agent": "Kebab MCP" },
     });
     if (res.ok) {
       const data = (await res.json()) as { full_name?: string; private?: boolean };

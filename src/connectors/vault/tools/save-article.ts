@@ -124,7 +124,7 @@ export async function handleSaveArticle(params: {
     title,
     source: params.url,
     date,
-    saved_via: "MyMCP",
+    saved_via: "Kebab MCP",
   };
   if (params.tags && params.tags.length > 0) {
     frontmatterObj.tags = params.tags;
@@ -135,7 +135,7 @@ export async function handleSaveArticle(params: {
     .trimEnd();
   const fullContent = `---\n${yamlStr}\n---\n\n${markdown}`;
 
-  const result = await vaultWrite(path, fullContent, `Save article: ${slug} via MyMCP`);
+  const result = await vaultWrite(path, fullContent, `Save article: ${slug} via Kebab MCP`);
 
   return {
     content: [

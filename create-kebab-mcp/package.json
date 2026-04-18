@@ -1,14 +1,15 @@
 {
-  "name": "@yassinello/create-mymcp",
+  "name": "@yassinello/create-kebab-mcp",
   "version": "0.3.1",
-  "description": "Set up your personal MCP server in minutes — interactive installer for MyMCP",
+  "description": "Set up your personal MCP server in minutes — interactive installer for Kebab MCP (formerly create-mymcp)",
   "bin": {
-    "create-mymcp": "./index.mjs"
+    "create-kebab-mcp": "./index.mjs"
   },
   "keywords": [
     "mcp",
     "create",
     "installer",
+    "kebab-mcp",
     "claude",
     "chatgpt",
     "ai",
@@ -17,7 +18,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Yassinello/mymcp",
-    "directory": "create-mymcp"
+    "directory": "create-kebab-mcp"
   },
   "license": "MIT",
   "engines": {

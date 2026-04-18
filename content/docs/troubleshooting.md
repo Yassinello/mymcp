@@ -12,7 +12,7 @@ Fix: add the [Upstash integration](https://vercel.com/integrations/upstash) (fre
 
 ## Storage badge shows "KV unreachable ✗"
 
-The runtime sees `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` but the ping check failed. MyMCP refuses to save in this state by design — silent fallback to `/tmp` would re-introduce the disappearing-data bug. Common causes:
+The runtime sees `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` but the ping check failed. Kebab MCP refuses to save in this state by design — silent fallback to `/tmp` would re-introduce the disappearing-data bug. Common causes:
 
 - Upstash database paused (free tier auto-pauses after long idle — open the [Upstash console](https://console.upstash.com) and resume)
 - Token rotated in Upstash but not pushed to Vercel
@@ -34,7 +34,7 @@ Pick option 1 unless you're explicitly building a static showcase. See the [Stor
 
 Cause: the request didn't carry a valid token. Fix:
 
-- Browser dashboard: visit `/config?token=YOUR_MCP_AUTH_TOKEN` once. MyMCP sets a cookie and you can navigate normally afterward.
+- Browser dashboard: visit `/config?token=YOUR_MCP_AUTH_TOKEN` once. Kebab MCP sets a cookie and you can navigate normally afterward.
 - MCP client: confirm the client is sending `Authorization: Bearer <token>` (or `?token=` for clients that only accept URLs).
 
 ## Welcome page reappears every time I deploy
@@ -55,7 +55,7 @@ Open the **error details** panel under the failed test. Common causes:
 
 ## Browserbase / Stagehand timeouts
 
-Cause: complex pages exceed the 60s Vercel function timeout. Fix: bump `BROWSER_TIMEOUT_MS` in env vars to 50000 max (Vercel hard cap), or run MyMCP in Docker / a VPS where you control the timeout.
+Cause: complex pages exceed the 60s Vercel function timeout. Fix: bump `BROWSER_TIMEOUT_MS` in env vars to 50000 max (Vercel hard cap), or run Kebab MCP in Docker / a VPS where you control the timeout.
 
 ## Tool calls succeed but return empty content
 
@@ -65,7 +65,7 @@ Likely the connector's underlying API hit a transient error and the handler swal
 
 [github.com/Yassinello/mymcp/issues](https://github.com/Yassinello/mymcp/issues). Include:
 
-- MyMCP version (visible in the sidebar footer)
+- Kebab MCP version (visible in the sidebar footer)
 - Connector affected
 - Steps to reproduce
 - The error from `/config → Logs` if applicable

@@ -27,7 +27,7 @@ export async function handleVaultAppend(params: {
   const result = await vaultWrite(
     params.path,
     newContent,
-    `Append to ${params.path} via MyMCP`,
+    `Append to ${params.path} via Kebab MCP`,
     file.sha
   );
 

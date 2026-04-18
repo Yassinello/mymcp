@@ -1,6 +1,6 @@
 # Code of Conduct
 
-MyMCP follows the [Contributor Covenant, version 2.1][cc].
+Kebab MCP follows the [Contributor Covenant, version 2.1][cc].
 
 By participating in this project (issues, pull requests, discussions, or any
 other interaction), you agree to uphold the standards described there.
@@ -13,7 +13,7 @@ other interaction), you agree to uphold the standards described there.
   experience level.
 - Assume good faith. Disagree on ideas, not on people.
 - No harassment, personal attacks, or sustained disruption.
-- Keep discussions focused on improving MyMCP — this is a tool, not a forum
+- Keep discussions focused on improving Kebab MCP — this is a tool, not a forum
   for unrelated debates.
 
 ## Reporting

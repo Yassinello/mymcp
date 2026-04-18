@@ -1,30 +1,30 @@
 ---
 title: FAQ
-summary: Common questions about MyMCP
+summary: Common questions about Kebab MCP
 order: 50
 ---
 
 ## Is this multi-user?
 
-No. MyMCP is intentionally a personal tool. One deployment, one user, one set of credentials. Multi-user / RBAC is explicitly out of scope — see PROJECT.md.
+No. Kebab MCP is intentionally a personal tool. One deployment, one user, one set of credentials. Multi-user / RBAC is explicitly out of scope — see PROJECT.md.
 
-## Can I run multiple MyMCP instances against the same Vercel account?
+## Can I run multiple Kebab MCP instances against the same Vercel account?
 
 Yes. Each instance is a separate Vercel project with its own URL, env vars, and `MCP_AUTH_TOKEN`. Use one per persona (work, side projects, family) if you want hard separation.
 
-## Does MyMCP store my credentials?
+## Does Kebab MCP store my credentials?
 
-Credentials live as env vars on Vercel (or in `.env.local` for local dev). MyMCP itself never persists credentials anywhere — it reads them at request time. Skill content and personal context live in the KV store (Upstash if configured, filesystem otherwise).
+Credentials live as env vars on Vercel (or in `.env.local` for local dev). Kebab MCP itself never persists credentials anywhere — it reads them at request time. Skill content and personal context live in the KV store (Upstash if configured, filesystem otherwise).
 
 ## What happens to my data on Vercel cold starts?
 
 In-memory state (recent logs, runtime caches) is wiped. Persistent state (skills, context, env vars) survives because it lives in the KV store and the Vercel env var system.
 
-## Can I run MyMCP without Vercel?
+## Can I run Kebab MCP without Vercel?
 
 Yes — Docker is supported. `docker build -t mymcp .` and run with env vars passed via `-e` or `--env-file`. Local dev (`npm run dev`) works the same.
 
-## Is MyMCP open source?
+## Is Kebab MCP open source?
 
 Yes — MIT licensed, see [github.com/Yassinello/mymcp](https://github.com/Yassinello/mymcp). Forks and PRs welcome.
 

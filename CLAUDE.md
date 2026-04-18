@@ -1,4 +1,4 @@
-# MyMCP — Development Guide
+# Kebab MCP — Development Guide
 
 ## Project Overview
 

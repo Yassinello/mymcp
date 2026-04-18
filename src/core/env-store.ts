@@ -112,7 +112,7 @@ class FilesystemEnvStore implements EnvStore {
       existingLines = parseEnvFile(content).rawLines;
     } else {
       existingLines = [
-        "# MyMCP — environment variables",
+        "# Kebab MCP — environment variables",
         `# Created: ${new Date().toISOString().split("T")[0]}`,
         "",
       ];

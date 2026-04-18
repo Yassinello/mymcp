@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to MyMCP.
+All notable changes to Kebab MCP.
 
 ## [0.1.0] - 2026-04-18 — Stabilization release
 
@@ -22,6 +22,10 @@ version intended for public consumption.
   parent advisory). Cannot patch without semver-major regression of the
   browser connector. Tracked: revisit on next stagehand release.
   Audit-level=high CI gate is unaffected.
+
+### Renamed
+
+- **Project renamed**: MyMCP → **Kebab MCP**. Display strings, docs, package names (`kebab-mcp`, `@yassinello/create-kebab-mcp`), Docker compose service name, MCP client config snippet keys all updated. **Internal identifiers preserved** (`MYMCP_*` env var prefix, KV key prefixes, cookie names, `x-mymcp-tenant` header, `mymcp_admin_token` cookie) so existing deployments keep working with no env-var changes. New users get clean naming everywhere they look; legacy users get zero-disruption migration.
 
 ### Added
 
@@ -70,7 +74,7 @@ supersedes them.
 
 - `app/api/welcome/{claim,init,status}/route.ts` now `await rehydrateBootstrapAsync()` at handler entry to pull KV state when available.
 - `__internals` no longer exposes `COOKIE_NAME` and `CLAIM_TTL_MS` — they're proper exports as `FIRST_RUN_COOKIE_NAME` and `CLAIM_TTL_MS`.
-- `first-run.ts` now logs structured `[MyMCP first-run]` info messages on claim creation, bootstrap mint, and re-hydration for production observability.
+- `first-run.ts` now logs structured `[Kebab MCP first-run]` info messages on claim creation, bootstrap mint, and re-hydration for production observability.
 - Vitest config now runs test files sequentially (`fileParallelism: false`) to avoid races on shared OS `/tmp` paths used by the first-run bootstrap state.
 
 ## [0.3.3] - 2026-04-14

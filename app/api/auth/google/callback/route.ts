@@ -100,7 +100,7 @@ function tokenPage(error: string | null, token: string | null): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>MyMCP — Google OAuth</title>
+  <title>Kebab MCP — Google OAuth</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: #e5e5e5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
@@ -119,7 +119,7 @@ function tokenPage(error: string | null, token: string | null): string {
 </head>
 <body>
   <div class="card">
-    <h1>MyMCP — Google OAuth</h1>
+    <h1>Kebab MCP — Google OAuth</h1>
     ${
       error
         ? `<div class="error">${safeError}</div>`
@@ -141,7 +141,7 @@ function tokenPage(error: string | null, token: string | null): string {
         4. Redeploy your project
       </div>
       <div class="warning">
-        This token is shown once and is not stored by MyMCP. Save it now.
+        This token is shown once and is not stored by Kebab MCP. Save it now.
       </div>
       <script>
         function reveal() { document.getElementById('token').classList.remove('token-hidden'); }

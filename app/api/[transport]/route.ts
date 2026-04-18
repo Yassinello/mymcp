@@ -114,7 +114,7 @@ async function buildHandler(
             if (maybePromise && typeof (maybePromise as Promise<void>).then === "function") {
               (maybePromise as Promise<void>).catch((err) =>
                 console.info(
-                  `[MyMCP] ${pack.manifest.id}.registerPrompts rejected: ${
+                  `[Kebab MCP] ${pack.manifest.id}.registerPrompts rejected: ${
                     err instanceof Error ? err.message : String(err)
                   }`
                 )
@@ -122,7 +122,7 @@ async function buildHandler(
             }
           } catch (err) {
             console.info(
-              `[MyMCP] ${pack.manifest.id}.registerPrompts threw: ${
+              `[Kebab MCP] ${pack.manifest.id}.registerPrompts threw: ${
                 err instanceof Error ? err.message : String(err)
               }`
             );
@@ -132,7 +132,7 @@ async function buildHandler(
     },
     {
       serverInfo: {
-        name: "MyMCP",
+        name: "Kebab MCP",
         version: VERSION,
       },
     },
