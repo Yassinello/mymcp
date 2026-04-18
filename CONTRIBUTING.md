@@ -2,6 +2,10 @@
 
 Thank you for considering a contribution. MyMCP grows through community connectors — every new integration you add makes the tool more useful for every developer who deploys it.
 
+## Code of Conduct
+
+All interactions on this project — issues, pull requests, discussions — are governed by the [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to abide by it.
+
 ## Table of Contents
 
 - [Ways to Contribute](#ways-to-contribute)
