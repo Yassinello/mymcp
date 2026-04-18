@@ -70,7 +70,7 @@ When self-hosting MyMCP, follow these guidelines:
 
 ### Token Management
 
-- **Admin token** (`ADMIN_TOKEN`): keep this secret and separate from user-facing tokens. Never expose it in client-side code or logs.
+- **Admin token** (`ADMIN_AUTH_TOKEN`): keep this secret and separate from user-facing tokens. Never expose it in client-side code or logs. Falls back to `MCP_AUTH_TOKEN` if unset.
 - **User tokens**: rotate regularly, especially if you suspect exposure. Use the admin API to revoke compromised tokens.
 - Store all secrets in environment variables — never hard-code them in source files.
 

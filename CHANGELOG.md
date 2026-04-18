@@ -2,7 +2,26 @@
 
 All notable changes to MyMCP.
 
-## [0.3.5] - 2026-04-18
+## [0.1.0] - 2026-04-18 — Stabilization release
+
+This is the consolidated v0.1.0 release: the project was internally
+versioned up to v0.3.5 during pre-OSS development but `package.json`
+was reset to v0.1.0 (commit `87985d6`) to mark the open-source launch
+baseline. Everything described under the "Pre-stabilization development
+log" section below was rolled into this release; it is the first
+version intended for public consumption.
+
+### Known limitations
+
+- **MCP SDK pinned at 1.26**: `mcp-handler@1.1.0` hard-pins
+  `@modelcontextprotocol/sdk@1.26.0` as a peer dependency, so the
+  bump to SDK 1.29 was reverted. Tracked: revisit when `mcp-handler@1.2+`
+  ships (likely soon — the SDK has had 3 patch releases since).
+- **3 residual moderate vulnerabilities** in the stagehand → langchain
+  transitive chain (`langsmith`, `@langchain/core`, `@browserbasehq/stagehand`
+  parent advisory). Cannot patch without semver-major regression of the
+  browser connector. Tracked: revisit on next stagehand release.
+  Audit-level=high CI gate is unaffected.
 
 ### Added
 
@@ -18,24 +37,23 @@ All notable changes to MyMCP.
   - `basic-ftp` 5.2.2 → 5.3.0 — **HIGH** DoS via unbounded memory in `Client.list()`, pulled via `stagehand → puppeteer-core → proxy-agent`
   - `hono` 4.12.12 → 4.12.14 — moderate JSX SSR HTML injection, pulled via `mcp-handler → @modelcontextprotocol/sdk`
 - `npm audit --audit-level=high` (the CI gate) now exits 0 again
-- **Recommended**: rotate your `MCP_AUTH_TOKEN` if you've shared this repo or your `.env` file with anyone (audit hygiene; no leak detected — the verification confirmed `.env` was never committed to history)
-
-### Known residuals (3 moderates)
-
-These cannot be patched without a semver-major downgrade of `@browserbasehq/stagehand` (3.2.1 → 3.1.0), which would regress the browser connector. Tracked upstream:
-
-- `langsmith` SSRF + prototype pollution + token-redaction bypass
-- `@langchain/core` (parent of `langsmith`)
-- `@browserbasehq/stagehand` (parent of `@langchain/core`)
-
-Will close when stagehand publishes a release using a patched langchain stack.
+- **Recommended**: rotate your `MCP_AUTH_TOKEN` if you've shared this repo or your `.env` file with anyone (audit hygiene; no leak detected — verification confirmed `.env` was never in git history)
 
 ### Changed
 
 - 11 minor dependency bumps surfaced by `npm outdated`:
   - **Production**: `next` 16.2.3 → 16.2.4, `react` + `react-dom` 19.2.4 → 19.2.5, `@opentelemetry/exporter-trace-otlp-http` + `@opentelemetry/sdk-node` 0.214 → 0.215
   - **Dev**: `typescript` 6.0.2 → 6.0.3, `eslint` 10.2.0 → 10.2.1, `prettier` 3.8.2 → 3.8.3, `fast-check` 4.6 → 4.7, `@types/node` 25.5 → 25.6, `typescript-eslint` 8.58.1 → 8.58.2
-- **Skipped**: `@modelcontextprotocol/sdk` 1.26 → 1.29. The bump initially landed but was reverted because `mcp-handler@1.1.0` hard-pins SDK 1.26.0 as a peer dependency. Awaiting `mcp-handler` 1.2+ release.
+
+---
+
+## Pre-stabilization development log
+
+The entries below document per-patch development history during the
+private build-out (April 2026). These versions were never published as
+separate releases — `package.json` was at `0.1.0` throughout. They are
+preserved for git-log cross-reference; the public v0.1.0 release above
+supersedes them.
 
 ## [0.3.4] - 2026-04-14
 
