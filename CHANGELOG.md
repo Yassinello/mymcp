@@ -2,6 +2,34 @@
 
 All notable changes to MyMCP.
 
+## [0.3.5] - 2026-04-18
+
+### Security
+
+- **Resolved 3 dependency vulnerabilities** via `npm audit fix`:
+  - `protobufjs` 7.5.4 → 7.5.5 — **CRITICAL** arbitrary code execution (GHSA-xq3m-2v4x-88gg), pulled by `@browserbasehq/stagehand → @google/genai` and by `@opentelemetry/exporter-trace-otlp-http`
+  - `basic-ftp` 5.2.2 → 5.3.0 — **HIGH** DoS via unbounded memory in `Client.list()`, pulled via `stagehand → puppeteer-core → proxy-agent`
+  - `hono` 4.12.12 → 4.12.14 — moderate JSX SSR HTML injection, pulled via `mcp-handler → @modelcontextprotocol/sdk`
+- `npm audit --audit-level=high` (the CI gate) now exits 0 again
+- **Recommended**: rotate your `MCP_AUTH_TOKEN` if you've shared this repo or your `.env` file with anyone (audit hygiene; no leak detected — the verification confirmed `.env` was never committed to history)
+
+### Known residuals (3 moderates)
+
+These cannot be patched without a semver-major downgrade of `@browserbasehq/stagehand` (3.2.1 → 3.1.0), which would regress the browser connector. Tracked upstream:
+
+- `langsmith` SSRF + prototype pollution + token-redaction bypass
+- `@langchain/core` (parent of `langsmith`)
+- `@browserbasehq/stagehand` (parent of `@langchain/core`)
+
+Will close when stagehand publishes a release using a patched langchain stack.
+
+### Changed
+
+- 11 minor dependency bumps surfaced by `npm outdated`:
+  - **Production**: `next` 16.2.3 → 16.2.4, `react` + `react-dom` 19.2.4 → 19.2.5, `@opentelemetry/exporter-trace-otlp-http` + `@opentelemetry/sdk-node` 0.214 → 0.215
+  - **Dev**: `typescript` 6.0.2 → 6.0.3, `eslint` 10.2.0 → 10.2.1, `prettier` 3.8.2 → 3.8.3, `fast-check` 4.6 → 4.7, `@types/node` 25.5 → 25.6, `typescript-eslint` 8.58.1 → 8.58.2
+- **Skipped**: `@modelcontextprotocol/sdk` 1.26 → 1.29. The bump initially landed but was reverted because `mcp-handler@1.1.0` hard-pins SDK 1.26.0 as a peer dependency. Awaiting `mcp-handler` 1.2+ release.
+
 ## [0.3.4] - 2026-04-14
 
 ### Added
