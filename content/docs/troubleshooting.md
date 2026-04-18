@@ -63,7 +63,7 @@ Likely the connector's underlying API hit a transient error and the handler swal
 
 ## Where do I file bugs?
 
-[github.com/Yassinello/mymcp/issues](https://github.com/Yassinello/mymcp/issues). Include:
+[github.com/Yassinello/kebab-mcp/issues](https://github.com/Yassinello/kebab-mcp/issues). Include:
 
 - Kebab MCP version (visible in the sidebar footer)
 - Connector affected

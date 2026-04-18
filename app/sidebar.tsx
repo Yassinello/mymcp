@@ -199,7 +199,7 @@ export function Sidebar({
               </div>
             </div>
             <a
-              href="https://github.com/Yassinello/mymcp"
+              href="https://github.com/Yassinello/kebab-mcp"
               target="_blank"
               rel="noopener"
               className="text-text-muted hover:text-accent transition-colors shrink-0"

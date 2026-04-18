@@ -9,7 +9,7 @@ export default function LandingHeader() {
         </div>
         <nav className="flex items-center gap-6">
           <a
-            href="https://github.com/Yassinello/mymcp"
+            href="https://github.com/Yassinello/kebab-mcp"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-slate-400 hover:text-white transition-colors"

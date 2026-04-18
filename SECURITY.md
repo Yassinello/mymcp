@@ -13,7 +13,7 @@ Only the latest minor release of Kebab MCP receives security updates.
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Report security vulnerabilities by emailing the maintainer at the address listed on the [GitHub profile](https://github.com/Yassinello). You can also open a [GitHub Security Advisory](https://github.com/Yassinello/mymcp/security/advisories/new) directly.
+Report security vulnerabilities by emailing the maintainer at the address listed on the [GitHub profile](https://github.com/Yassinello). You can also open a [GitHub Security Advisory](https://github.com/Yassinello/kebab-mcp/security/advisories/new) directly.
 
 Please include as much of the following as possible:
 

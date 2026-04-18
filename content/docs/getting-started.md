@@ -10,7 +10,7 @@ A single Vercel deploy that exposes 86+ tools across 14 connectors (Gmail, Calen
 
 ## Five-minute deploy
 
-1. Click **Deploy to Vercel** on the [GitHub readme](https://github.com/Yassinello/mymcp). Vercel forks the repo into your account and walks you through env vars.
+1. Click **Deploy to Vercel** on the [GitHub readme](https://github.com/Yassinello/kebab-mcp). Vercel forks the repo into your account and walks you through env vars.
 2. Skip the env vars at deploy time — you can paste them later.
 3. After the first deploy, open the new Vercel app URL. You will land on `/welcome`.
 4. Click **Initialize this instance**. Kebab MCP mints a permanent `MCP_AUTH_TOKEN`, writes it to your Vercel project, and triggers a redeploy automatically.
@@ -25,8 +25,8 @@ By default, none of the heavyweight connectors (Google, Slack, Notion, etc.) are
 ## Local development
 
 ```
-git clone https://github.com/Yassinello/mymcp
-cd mymcp
+git clone https://github.com/Yassinello/kebab-mcp
+cd kebab-mcp
 npm install
 cp .env.example .env.local
 # fill in MCP_AUTH_TOKEN at minimum

@@ -69,7 +69,7 @@ The following connectors are on the roadmap and would make great community contr
 | **Raindrop** | bookmarks, collections, search | [docs](https://developer.raindrop.io) |
 | **Readwise** | highlights, books, articles | [docs](https://readwise.io/api_deets) |
 
-Have an idea not on this list? Open a [New Connector](https://github.com/Yassinello/mymcp/issues/new?template=new-connector.md) issue.
+Have an idea not on this list? Open a [New Connector](https://github.com/Yassinello/kebab-mcp/issues/new?template=new-connector.md) issue.
 
 ---
 

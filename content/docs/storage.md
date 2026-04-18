@@ -114,6 +114,6 @@ Most likely you were in `Filesystem (temporary)` mode on Vercel and a cold start
 2. Set up Upstash (the in-tab walkthrough takes ~2 minutes).
 3. Re-paste your credentials in `/config → Connectors`. They'll persist this time.
 
-If the badge is green and saves still disappeared, that's a real bug — please [open an issue](https://github.com/Yassinello/mymcp/issues) with your storage status JSON (the Storage tab shows mode, latency, and counts you can copy in).
+If the badge is green and saves still disappeared, that's a real bug — please [open an issue](https://github.com/Yassinello/kebab-mcp/issues) with your storage status JSON (the Storage tab shows mode, latency, and counts you can copy in).
 
 See also: [Troubleshooting](#troubleshooting) for the specific badge states, [Connector setup](#connectors) for where credentials end up.

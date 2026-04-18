@@ -1,6 +1,6 @@
 const LINKS = [
-  { label: "GitHub", href: "https://github.com/Yassinello/mymcp" },
-  { label: "Documentation", href: "https://github.com/Yassinello/mymcp#readme" },
+  { label: "GitHub", href: "https://github.com/Yassinello/kebab-mcp" },
+  { label: "Documentation", href: "https://github.com/Yassinello/kebab-mcp#readme" },
   { label: "Discord", href: "https://discord.gg/mymcp" },
   { label: "npm", href: "https://www.npmjs.com/package/mymcp" },
 ];

@@ -26,7 +26,7 @@ Yes — Docker is supported. `docker build -t mymcp .` and run with env vars pas
 
 ## Is Kebab MCP open source?
 
-Yes — MIT licensed, see [github.com/Yassinello/mymcp](https://github.com/Yassinello/mymcp). Forks and PRs welcome.
+Yes — MIT licensed, see [github.com/Yassinello/kebab-mcp](https://github.com/Yassinello/kebab-mcp). Forks and PRs welcome.
 
 ## How do I add a new connector?
 

@@ -1,6 +1,6 @@
 # create-kebab-mcp
 
-Interactive installer for [Kebab MCP](https://github.com/Yassinello/mymcp) — your personal AI backend.
+Interactive installer for [Kebab MCP](https://github.com/Yassinello/kebab-mcp) — your personal AI backend.
 
 (Renamed from `create-mymcp`; the old npm name still resolves to the legacy 0.3.x line — re-run with the new name to get the latest.)
 

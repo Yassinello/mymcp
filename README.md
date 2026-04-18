@@ -4,13 +4,13 @@
 </p>
 
 <p align="center">
-  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fmymcp&project-name=mymcp-me&repository-name=mymcp-me"><img src="https://vercel.com/button" alt="Deploy with Vercel" /></a>
+  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp&project-name=kebab-mcp-me&repository-name=kebab-mcp-me"><img src="https://vercel.com/button" alt="Deploy with Vercel" /></a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/license/Yassinello/mymcp" alt="License: MIT" />
-  <img src="https://img.shields.io/github/v/release/Yassinello/mymcp?label=version" alt="Version" />
-  <img src="https://img.shields.io/github/stars/Yassinello/mymcp?style=social" alt="GitHub stars" />
+  <img src="https://img.shields.io/github/license/Yassinello/kebab-mcp" alt="License: MIT" />
+  <img src="https://img.shields.io/github/v/release/Yassinello/kebab-mcp?label=version" alt="Version" />
+  <img src="https://img.shields.io/github/stars/Yassinello/kebab-mcp?style=social" alt="GitHub stars" />
 </p>
 
 <p align="center">
@@ -75,7 +75,7 @@ Two paths cover ~95% of users — Vercel for click-and-go, self-hosted for full 
 
 ### Option A — Deploy on Vercel (recommended)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fmymcp&project-name=mymcp-me&repository-name=mymcp-me)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp&project-name=kebab-mcp-me&repository-name=kebab-mcp-me)
 
 1. Click **Deploy** above — no env vars to fill in
 2. When Vercel finishes (~60s), open the deployed URL → you land on `/welcome`, mint your token, and the dashboard auto-redeploys with it pinned
@@ -88,8 +88,8 @@ That's it. The Welcome wizard walks you through connectors and shows the token p
 ### Option B — Self-hosted (Docker or local dev)
 
 ```bash
-git clone https://github.com/Yassinello/mymcp.git
-cd mymcp
+git clone https://github.com/Yassinello/kebab-mcp.git
+cd kebab-mcp
 cp .env.example .env    # Fill MCP_AUTH_TOKEN at minimum
 
 # Docker
@@ -259,7 +259,7 @@ The classic CLI flow still works:
 
 ```bash
 # One-time setup (skip if you used npx @yassinello/create-kebab-mcp — already done)
-git remote add upstream https://github.com/Yassinello/mymcp.git
+git remote add upstream https://github.com/Yassinello/kebab-mcp.git
 
 # Pull updates anytime
 npm run update

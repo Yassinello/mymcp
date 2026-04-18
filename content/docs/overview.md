@@ -86,7 +86,7 @@ If the **Storage** badge is orange (`Filesystem (temporary)`), fix that first �
 - Check the **Logs** tab for the most recent invocation — error column shows what went wrong
 - Read [Troubleshooting](#troubleshooting) — covers the dozen most common issues including all v3 storage failure modes
 - Read the [FAQ](#faq) for design-decision questions ("can I run multi-user?", "what happens on cold starts?", …)
-- Still stuck? [Open an issue](https://github.com/Yassinello/mymcp/issues) — include Kebab MCP version (sidebar footer), connector affected, and the Logs entry if applicable
+- Still stuck? [Open an issue](https://github.com/Yassinello/kebab-mcp/issues) — include Kebab MCP version (sidebar footer), connector affected, and the Logs entry if applicable
 
 ## See also
 

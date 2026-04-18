@@ -2,7 +2,7 @@ export default function CtaSection() {
   // Zero-config: no env vars required at deploy time. The /welcome page
   // generates the token after the first visit.
   const deployUrl =
-    "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fmymcp&project-name=mymcp-me&repository-name=mymcp-me";
+    "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FYassinello%2Fkebab-mcp&project-name=kebab-mcp-me&repository-name=kebab-mcp-me";
 
   return (
     <section className="py-24 px-6 border-t border-slate-800">
@@ -22,7 +22,7 @@ export default function CtaSection() {
             Deploy to Vercel
           </a>
           <a
-            href="https://github.com/Yassinello/mymcp#readme"
+            href="https://github.com/Yassinello/kebab-mcp#readme"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 border border-slate-700 text-slate-300 hover:border-slate-500 hover:text-white transition-colors px-8 py-3.5 rounded-lg font-semibold text-sm"
