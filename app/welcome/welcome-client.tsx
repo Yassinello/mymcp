@@ -1246,21 +1246,31 @@ function UpstashCheckPanel({
 }
 
 /**
- * Full storage configuration panel inside the welcome flow (v3).
+ * Storage step panel (v4) — one decision, one primary path.
  *
- * **Design principle:** the welcome page is the pedagogical moment. Even
- * when detection resolves a mode automatically, we SHOW the three options
- * with tradeoffs so first-time users learn what's available and what they
- * might be giving up. Compact banner-only rendering is fine for the
- * dashboard (settled state), not here.
+ * Prior design (v3) was a 3-card grid (Upstash / Local file / Env vars only)
+ * that conflated two questions: "what's currently detected" and "what
+ * should you choose". Both rendered at the same visual weight, the
+ * detected card got highlighted as if pre-selected, and the badge pileup
+ * (RECOMMENDED green + TEMPORARY amber + current emerald + a separate
+ * warning banner) produced a Christmas-tree effect with no dominant
+ * signal. Users read the highlighted "temporary" card as the default —
+ * directly contradicting the banner telling them not to use it.
+ *
+ * New hierarchy:
+ *   1. Status line — one sentence, detection outcome, neutral or amber
+ *   2. Primary CTA — "Set up Upstash" hero, only when the current mode
+ *      isn't already durable (kv or file+persistent)
+ *   3. Advanced disclosure — ack buttons for users who explicitly want
+ *      to stay on /tmp (testing) or env-vars-only (infra-as-code), plus
+ *      a pedagogical "how the backends differ" reference
  *
  * Mode-specific behavior:
- *   - kv → green confirmation + collapsible "See other options"
- *   - file (non-ephemeral, Docker/dev) → green confirmation + collapsible
- *   - file (ephemeral, Vercel /tmp) → AMBER warning + 3 cards always visible
- *     with explicit "Keep temporary (not recommended)" acknowledgment
- *   - static → 3 cards always visible, ack required to continue
- *   - kv-degraded → red error banner (don't show 3 cards — infra broken)
+ *   kv              → ✓ status, no CTA, continue enabled
+ *   file (durable)  → ✓ status (Docker/dev disk), no CTA
+ *   file (ephemeral)→ ⚠ status, Upstash CTA, advanced: ack "keep /tmp"
+ *   static          → ⚠ status, Upstash CTA, advanced: ack "env vars only"
+ *   kv-degraded     → red error panel (retained from prior impl)
  */
 function WelcomeStorageStep({
   status,
@@ -1276,11 +1286,13 @@ function WelcomeStorageStep({
   ack: AckValue;
   onRecheck: () => void;
   onAcknowledge: (value: "static" | "ephemeral") => void;
-  /** Called when the user clicks "I added Upstash" — kicks off the active check loop. */
+  /** Called when the user clicks "Already installed — detect" — kicks off the active check loop. */
   onUpstashSetupStart: () => void;
   /** Whether the active upstash setup loop is currently running. */
   upstashCheckActive: boolean;
 }) {
+  // KV configured but unreachable — infra is broken, don't let the user
+  // pick anything; just surface the error and offer retry.
   if (status.mode === "kv-degraded") {
     return (
       <div className="mb-6 rounded-lg border border-red-900/60 bg-red-950/40 p-5">
@@ -1307,324 +1319,238 @@ function WelcomeStorageStep({
     );
   }
 
-  const settled = status.mode === "kv" || (status.mode === "file" && !status.ephemeral);
+  const isKv = status.mode === "kv";
+  const isFileDurable = status.mode === "file" && !status.ephemeral;
+  const isEphemeral = status.mode === "file" && Boolean(status.ephemeral);
+  const isStatic = status.mode === "static";
+  // Durable backends need no user action. We still render an advanced
+  // disclosure so power users can see the other backends, but there's no
+  // CTA to push — status line alone is enough.
+  const isSettled = isKv || isFileDurable;
 
   return (
-    <div className="mb-8 rounded-lg border border-slate-800 bg-slate-900/40 p-5 space-y-4">
-      {/* Header: intent + status */}
-      {status.mode === "kv" && (
-        <div className="rounded-md border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-300">
-          ✓ Storage ready — Upstash Redis connected. Saves persist instantly across deploys.
-        </div>
-      )}
-      {status.mode === "file" && !status.ephemeral && (
-        <div className="rounded-md border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-300">
-          ✓ Storage ready — file-based at <code className="font-mono">{status.dataDir}</code>. Saves
-          persist locally.
-        </div>
-      )}
-      {status.mode === "file" && status.ephemeral && (
-        <div className="rounded-md border border-amber-700 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
-          <p className="font-semibold mb-1">
-            ⚠ Your storage is temporary — saves will vanish on cold start
-          </p>
-          <p className="text-[12px] text-amber-200/90 leading-relaxed">
-            Vercel reset <code className="font-mono">/tmp</code> on every container recycle
-            (typically every 15–30 min of inactivity). Credentials saved from the dashboard{" "}
-            <strong>will be silently lost</strong>. Pick a real storage option below.
-          </p>
-        </div>
-      )}
-      {status.mode === "static" && (
-        <div>
-          <p className="text-sm font-semibold text-white mb-1">Choose your storage strategy</p>
-          <p className="text-[11px] text-slate-500 leading-relaxed">
-            This instance has no persistent storage configured. Your filesystem is read-only and no
-            KV backend is set up. Pick one of the paths below.
-          </p>
-        </div>
-      )}
+    <div className="mb-8 space-y-4">
+      <StorageStatusLine status={status} />
 
-      {/* 3-card choice layout — always rendered for ephemeral/static,
-          collapsible for settled modes (KV / non-ephemeral file). */}
-      {settled ? (
-        <details>
-          <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-200">
-            See all storage options
-          </summary>
-          <div className="mt-3">
-            <StorageChoiceCards
-              status={status}
-              ack={ack}
-              checking={checking}
-              onAcknowledge={onAcknowledge}
-              onUpstashSetupStart={onUpstashSetupStart}
-              upstashCheckActive={upstashCheckActive}
-            />
-          </div>
-        </details>
-      ) : (
-        <StorageChoiceCards
-          status={status}
-          ack={ack}
-          checking={checking}
-          onAcknowledge={onAcknowledge}
+      {!isSettled && (
+        <UpstashPrimaryCta
           onUpstashSetupStart={onUpstashSetupStart}
+          checking={checking}
           upstashCheckActive={upstashCheckActive}
         />
       )}
 
-      <details className="text-[11px] text-slate-500">
-        <summary className="cursor-pointer hover:text-slate-300">
-          What&apos;s the difference?
+      {/* Open-by-default once the user has acknowledged their fallback
+          choice, so they can see the "Acknowledged" state rather than
+          wondering where the button went. */}
+      <details
+        className="rounded-lg border border-slate-800 bg-slate-900/20 group"
+        open={ack !== null}
+      >
+        <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-slate-400 hover:text-slate-200 flex items-center justify-between">
+          <span>Other storage options</span>
+          <span className="text-[10px] text-slate-600 group-open:hidden">expand</span>
         </summary>
-        <div className="mt-2 space-y-1.5 leading-relaxed">
-          <p>
-            <strong className="text-slate-300">Live database (Upstash):</strong> a hosted
-            Redis-compatible store. Saves from the dashboard go straight to Upstash and are
-            immediately visible to every connector. Works identically on Vercel, Docker, or any
-            other deploy. Free tier covers personal use.
-          </p>
-          <p>
-            <strong className="text-slate-300">Local file:</strong> Kebab MCP writes to{" "}
-            <code className="font-mono">./data/kv.json</code> and <code>.env</code> on disk. Great
-            for Docker with a mounted volume or local dev. Doesn&apos;t work for multi-instance
-            deploys because each instance has its own file.
-          </p>
-          <p>
-            <strong className="text-slate-300">Env vars only:</strong> no dashboard saves. Set
-            credentials in your deploy environment (Vercel → Settings → Environment Variables),
-            redeploy, done. Good for infra-as-code teams who version everything.
-          </p>
+        <div className="border-t border-slate-800 px-4 py-4 space-y-3">
+          {isEphemeral && (
+            <AdvancedOption
+              title="Keep /tmp — testing only"
+              description="Vercel recycles the container (and wipes /tmp) every 15–30 min of inactivity. Credentials saved from the dashboard silently disappear. Only pick this if you're actively poking around."
+              tone="warning"
+              buttonLabel={
+                ack === "ephemeral"
+                  ? "Acknowledged — saves are temporary"
+                  : "I understand — keep temporary storage"
+              }
+              onClick={() => onAcknowledge("ephemeral")}
+              disabled={ack === "ephemeral"}
+            />
+          )}
+          {isStatic && (
+            <AdvancedOption
+              title="Env vars only — no runtime saves"
+              description="Set credentials at deploy time in Vercel's env vars. Dashboard saves are disabled (you get .env stub helpers instead). Fits infra-as-code workflows."
+              tone="neutral"
+              buttonLabel={
+                ack === "static" ? "Acknowledged — env-vars only" : "Continue env-vars only"
+              }
+              onClick={() => onAcknowledge("static")}
+              disabled={ack === "static"}
+            />
+          )}
+          <StorageBackendsExplainer />
         </div>
       </details>
     </div>
   );
 }
 
-/**
- * 3-card grid surfacing the storage options with tradeoffs. Highlights the
- * current mode with a badge, recommends the best upgrade when the current
- * one is sub-optimal, and exposes exactly one action per card.
- */
-function StorageChoiceCards({
-  status,
-  ack,
-  checking,
-  onAcknowledge,
-  onUpstashSetupStart,
-  upstashCheckActive,
-}: {
-  status: StorageStatus;
-  ack: AckValue;
-  checking: boolean;
-  onAcknowledge: (value: "static" | "ephemeral") => void;
-  onUpstashSetupStart: () => void;
-  upstashCheckActive: boolean;
-}) {
-  const isKv = status.mode === "kv";
-  const isFile = status.mode === "file";
-  const isEphemeral = isFile && Boolean(status.ephemeral);
-  const isStatic = status.mode === "static";
-  // KV is "recommended" when the user's current mode is sub-optimal:
-  // ephemeral file or static. For healthy kv/file, no recommendation badge.
-  const kvRecommended = isEphemeral || isStatic;
-
+/** One-line status — the detected state, tone matches severity. */
+function StorageStatusLine({ status }: { status: StorageStatus }) {
+  if (status.mode === "kv") {
+    return (
+      <div className="rounded-md border border-emerald-800 bg-emerald-950/40 px-4 py-2.5 text-sm text-emerald-300 flex items-center gap-2">
+        <span aria-hidden>✓</span>
+        <span>
+          Upstash connected
+          {status.kvUrl && (
+            <>
+              {" · "}
+              <code className="font-mono text-[11px] text-emerald-200/80">{status.kvUrl}</code>
+            </>
+          )}
+        </span>
+      </div>
+    );
+  }
+  if (status.mode === "file" && !status.ephemeral) {
+    return (
+      <div className="rounded-md border border-emerald-800 bg-emerald-950/40 px-4 py-2.5 text-sm text-emerald-300 flex items-center gap-2">
+        <span aria-hidden>✓</span>
+        <span>
+          Writing to local disk{" "}
+          {status.dataDir && (
+            <>
+              (<code className="font-mono text-[11px] text-emerald-200/80">{status.dataDir}</code>)
+            </>
+          )}{" "}
+          — persists across restarts
+        </span>
+      </div>
+    );
+  }
+  if (status.mode === "file" && status.ephemeral) {
+    return (
+      <div className="rounded-md border border-amber-800 bg-amber-950/30 px-4 py-2.5 text-sm text-amber-200 flex items-start gap-2">
+        <span aria-hidden>⚠</span>
+        <span>
+          Your data won&apos;t survive restarts — Vercel wipes{" "}
+          <code className="font-mono text-[11px]">/tmp</code> every 15–30 min of inactivity
+        </span>
+      </div>
+    );
+  }
+  // static
   return (
-    <div className="grid sm:grid-cols-3 gap-3">
-      {/* Card 1 — Live database (Upstash) */}
-      <Card
-        tone={isKv ? "current" : "default"}
-        title="Live database"
-        subtitle="(Upstash Redis)"
-        currentBadge={isKv}
-        recommendedBadge={kvRecommended}
-      >
-        <ul className="text-[11px] text-slate-400 list-disc list-inside space-y-0.5">
-          <li>Instant saves from the dashboard</li>
-          <li>Survives cold starts &amp; redeploys</li>
-          <li>Works on any host (Vercel, Docker, …)</li>
-          <li>Free tier available</li>
-        </ul>
-        {isKv ? (
-          <p className="text-[11px] text-emerald-300 font-medium">Active — nothing to do.</p>
-        ) : (
-          <>
-            <ol className="text-[11px] text-slate-400 list-decimal list-inside space-y-0.5">
-              <li>
-                Open{" "}
-                <a
-                  href="https://vercel.com/integrations/upstash"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:text-blue-300 underline"
-                >
-                  Vercel → Integrations → Upstash
-                </a>
-              </li>
-              <li>Add the integration to this project</li>
-              <li>
-                Come back and click below — we&apos;ll auto-detect when Vercel finishes redeploying
-                (~60–90s).
-              </li>
-            </ol>
-            {/* Use onUpstashSetupStart instead of plain onRecheck so the
-                parent kicks off a 120s active polling loop with a visible
-                countdown. The v3.5 bug was that plain onRecheck fired ONE
-                fetch and showed nothing visible if the answer was the same,
-                making the button feel broken. */}
-            <button
-              type="button"
-              onClick={onUpstashSetupStart}
-              disabled={upstashCheckActive || checking}
-              className="w-full bg-blue-500 hover:bg-blue-400 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-md text-xs font-semibold"
-            >
-              {upstashCheckActive
-                ? "Detecting Upstash…"
-                : checking
-                  ? "Rechecking…"
-                  : "I added Upstash — start auto-detect"}
-            </button>
-          </>
-        )}
-      </Card>
-
-      {/* Card 2 — Local file.
-          When ephemeral, the warning badge IS the current-mode indicator;
-          showing both emerald "← Your setup" AND amber "⚠ Temporary" was
-          visually contradictory (emerald on amber). Suppress the emerald
-          current-badge in the ephemeral case. */}
-      <Card
-        tone={isFile && !isEphemeral ? "current" : isEphemeral ? "warning" : "default"}
-        title="Local file"
-        subtitle={isEphemeral ? "(serverless /tmp — temporary!)" : "(Docker / dev)"}
-        currentBadge={isFile && !isEphemeral}
-        warningBadge={isEphemeral}
-      >
-        {isEphemeral ? (
-          <>
-            <ul className="text-[11px] text-amber-200 list-disc list-inside space-y-0.5">
-              <li className="font-semibold">⚠ Vercel /tmp resets on every cold start</li>
-              <li>Saves look like they work, then silently disappear</li>
-              <li>Not viable for real use — only fine if you&apos;re actively testing</li>
-            </ul>
-            <button
-              type="button"
-              onClick={() => onAcknowledge("ephemeral")}
-              disabled={ack === "ephemeral"}
-              className="w-full bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-amber-200 px-3 py-1.5 rounded-md text-xs font-semibold border border-amber-900/60"
-            >
-              {ack === "ephemeral"
-                ? "Acknowledged — saves are temporary"
-                : "I understand, keep temporary storage"}
-            </button>
-          </>
-        ) : (
-          <>
-            <ul className="text-[11px] text-slate-400 list-disc list-inside space-y-0.5">
-              <li>Saves persist across restarts (with a mounted volume)</li>
-              <li>Good for single-instance Docker or local dev</li>
-              <li>Not suited to multi-instance deploys</li>
-              <li>Export .env anytime for backup/migration</li>
-            </ul>
-            {isFile ? (
-              <p className="text-[11px] text-emerald-300 font-medium">
-                Active at <code className="font-mono">{status.dataDir}</code>.
-              </p>
-            ) : (
-              <p className="text-[11px] text-slate-500">
-                Not available on this deploy — filesystem is read-only.
-              </p>
-            )}
-          </>
-        )}
-      </Card>
-
-      {/* Card 3 — Env vars only */}
-      <Card
-        tone={isStatic ? "current" : "default"}
-        title="Env vars only"
-        subtitle="(no runtime saves)"
-        currentBadge={isStatic}
-      >
-        <ul className="text-[11px] text-slate-400 list-disc list-inside space-y-0.5">
-          <li>Set credentials in your deploy env</li>
-          <li>Each change requires a redeploy</li>
-          <li>Dashboard saves disabled (you get .env stub helpers)</li>
-          <li>Fits infra-as-code workflows</li>
-        </ul>
-        {isStatic ? (
-          <button
-            type="button"
-            onClick={() => onAcknowledge("static")}
-            disabled={ack === "static"}
-            className="w-full bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-slate-200 px-3 py-1.5 rounded-md text-xs font-semibold"
-          >
-            {ack === "static" ? "Acknowledged — env-vars only" : "Continue env-vars only"}
-          </button>
-        ) : (
-          <p className="text-[11px] text-slate-500">
-            Switch by removing KV and any writable FS, then redeploy. Rarely what you want.
-          </p>
-        )}
-      </Card>
+    <div className="rounded-md border border-amber-800 bg-amber-950/30 px-4 py-2.5 text-sm text-amber-200 flex items-center gap-2">
+      <span aria-hidden>⚠</span>
+      <span>Read-only filesystem — no persistent storage configured yet</span>
     </div>
   );
 }
 
-function Card({
-  tone,
-  title,
-  subtitle,
-  currentBadge,
-  recommendedBadge,
-  warningBadge,
-  children,
+/**
+ * Primary CTA: guide the user to install Upstash. The outbound link is
+ * the setup action; the secondary button kicks off a 120s poll loop for
+ * users who've already installed it (or just clicked the link and are
+ * waiting for Vercel to finish the automatic redeploy).
+ */
+function UpstashPrimaryCta({
+  onUpstashSetupStart,
+  checking,
+  upstashCheckActive,
 }: {
-  tone: "current" | "warning" | "default";
-  title: string;
-  subtitle: string;
-  currentBadge?: boolean;
-  recommendedBadge?: boolean;
-  warningBadge?: boolean;
-  children: React.ReactNode;
+  onUpstashSetupStart: () => void;
+  checking: boolean;
+  upstashCheckActive: boolean;
 }) {
-  const border =
-    tone === "current"
-      ? "border-emerald-700/80"
-      : tone === "warning"
-        ? "border-amber-700/80"
-        : "border-slate-700";
-  const bg =
-    tone === "current"
-      ? "bg-emerald-950/30"
-      : tone === "warning"
-        ? "bg-amber-950/30"
-        : "bg-slate-950";
   return (
-    <div className={`rounded-md border ${border} ${bg} p-4 space-y-2 flex flex-col`}>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {currentBadge && (
-          <span className="text-[9px] font-semibold text-emerald-300 bg-emerald-950/60 px-1.5 py-0.5 rounded uppercase tracking-wide">
-            ← Your setup
-          </span>
-        )}
-        {recommendedBadge && (
-          <span className="text-[9px] font-semibold text-blue-300 bg-blue-950/60 px-1.5 py-0.5 rounded uppercase tracking-wide">
-            ★ Recommended
-          </span>
-        )}
-        {warningBadge && (
-          <span className="text-[9px] font-semibold text-amber-300 bg-amber-950/60 px-1.5 py-0.5 rounded uppercase tracking-wide">
-            ⚠ Temporary
-          </span>
-        )}
-      </div>
+    <div className="rounded-lg border border-blue-800/70 bg-blue-950/20 p-5 space-y-4">
       <div>
-        <p className="text-sm font-semibold text-white">{title}</p>
-        <p className="text-[11px] text-slate-500">{subtitle}</p>
+        <p className="text-base font-semibold text-white mb-1">Set up Upstash Redis</p>
+        <p className="text-sm text-slate-400 leading-relaxed">
+          Free tier, ~2-minute install. Saves survive restarts and redeploys on any host.
+        </p>
       </div>
-      <div className="space-y-2 flex-1">{children}</div>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <a
+          href="https://vercel.com/integrations/upstash"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white px-4 py-2 rounded-md text-sm font-semibold"
+        >
+          Add Upstash integration <span aria-hidden>↗</span>
+        </a>
+        <button
+          type="button"
+          onClick={onUpstashSetupStart}
+          disabled={upstashCheckActive || checking}
+          className="inline-flex items-center justify-center bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-200 px-4 py-2 rounded-md text-sm font-semibold"
+        >
+          {upstashCheckActive
+            ? "Auto-detecting…"
+            : checking
+              ? "Rechecking…"
+              : "Already installed — detect"}
+        </button>
+      </div>
+      <p className="text-[11px] text-slate-500 leading-relaxed">
+        After you add the integration, Vercel redeploys with{" "}
+        <code className="font-mono">UPSTASH_REDIS_REST_URL</code> /{" "}
+        <code className="font-mono">_TOKEN</code>. We poll for ~120s and pick it up automatically.
+      </p>
+    </div>
+  );
+}
+
+/** Ack card inside the advanced disclosure. */
+function AdvancedOption({
+  title,
+  description,
+  tone,
+  buttonLabel,
+  onClick,
+  disabled,
+}: {
+  title: string;
+  description: string;
+  tone: "warning" | "neutral";
+  buttonLabel: string;
+  onClick: () => void;
+  disabled: boolean;
+}) {
+  const border = tone === "warning" ? "border-amber-900/60" : "border-slate-800";
+  const titleColor = tone === "warning" ? "text-amber-200" : "text-slate-200";
+  const btnClass =
+    tone === "warning"
+      ? "bg-slate-800 hover:bg-slate-700 text-amber-200 border border-amber-900/60"
+      : "bg-slate-800 hover:bg-slate-700 text-slate-200";
+  return (
+    <div className={`rounded-md border ${border} bg-slate-950/40 p-4 space-y-2`}>
+      <p className={`text-sm font-semibold ${titleColor}`}>{title}</p>
+      <p className="text-[11px] text-slate-400 leading-relaxed">{description}</p>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className={`${btnClass} disabled:opacity-60 px-3 py-1.5 rounded-md text-xs font-semibold`}
+      >
+        {buttonLabel}
+      </button>
+    </div>
+  );
+}
+
+/** Reference card: plain-language summary of the three backends. */
+function StorageBackendsExplainer() {
+  return (
+    <div className="rounded-md border border-slate-800 bg-slate-950/30 p-4 space-y-2 text-[11px] text-slate-500 leading-relaxed">
+      <p className="text-slate-400 font-semibold text-xs mb-1">How the backends differ</p>
+      <p>
+        <strong className="text-slate-300">Upstash (Redis):</strong> hosted key-value store. Saves
+        from the dashboard hit it instantly. Works on Vercel, Docker, anywhere. Free tier covers
+        personal use.
+      </p>
+      <p>
+        <strong className="text-slate-300">Local file:</strong> writes{" "}
+        <code className="font-mono">./data/kv.json</code> + <code className="font-mono">.env</code>.
+        Auto-selected when the host has a durable filesystem (Docker with a mounted volume, local
+        dev). Not for multi-instance deploys — each has its own file.
+      </p>
+      <p>
+        <strong className="text-slate-300">Env vars only:</strong> no runtime persistence.
+        Credentials live in the deploy environment and get read at startup. Change = redeploy.
+      </p>
     </div>
   );
 }
