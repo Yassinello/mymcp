@@ -211,14 +211,27 @@ export function getOrCreateClaim(request: Request): ClaimResult {
   };
 }
 
-/** True if the request's claim cookie matches the active in-memory claim. */
+/**
+ * True if the request carries a valid first-run claim cookie.
+ *
+ * The cookie is HMAC-signed with a secret derived from the deployment's
+ * commit SHA (see `getSigningSecret`), so a valid signature is itself proof
+ * that the bearer received the cookie from `/api/welcome/claim` on this
+ * deployment. The in-memory `claims` Map and `activeBootstrap` are hot-path
+ * hints — on serverless platforms without Upstash, cold lambdas have
+ * neither, and the original "must match in-memory state" check would reject
+ * every cross-lambda welcome call with 403. "First writer wins" is still
+ * enforced at cookie issuance time by `getOrCreateClaim`.
+ *
+ * Reset caveat: because the signing secret is keyed to the commit SHA, a
+ * bare `MYMCP_RECOVERY_RESET=1` redeploy does NOT invalidate outstanding
+ * cookies (same commit → same secret). If that matters (handing the
+ * instance to someone else), push any commit to rotate the secret, or
+ * expect the previous owner's cookie to still count as a claimer.
+ */
 export function isClaimer(request: Request): boolean {
   pruneExpired();
-  const id = readClaimCookie(request);
-  if (!id) return false;
-  if (claims.has(id)) return true;
-  if (activeBootstrap?.claimId === id) return true;
-  return false;
+  return readClaimCookie(request) !== null;
 }
 
 /**
