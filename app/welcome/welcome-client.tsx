@@ -31,6 +31,13 @@ interface StatusResponse {
 
 interface WelcomeClientProps {
   initialBootstrap: boolean;
+  /**
+   * True when MYMCP_RECOVERY_RESET=1 is set on the deployment. Surfaces a
+   * blocking banner at the top of the wizard — minting a token in this
+   * state hands the user a doomed credential, since every cold lambda
+   * wipes the bootstrap.
+   */
+  recoveryResetActive?: boolean;
   previewMode?: boolean;
   previewToken?: string;
   previewInstanceUrl?: string;
@@ -144,6 +151,7 @@ function clearAck(): void {
 
 export default function WelcomeClient({
   initialBootstrap,
+  recoveryResetActive = false,
   previewMode = false,
   previewToken = "",
   previewInstanceUrl = "",
@@ -628,6 +636,19 @@ export default function WelcomeClient({
         <div className="mb-6 rounded-lg border border-purple-800 bg-purple-950/40 px-4 py-3 text-sm text-purple-200">
           <strong className="font-semibold">Preview mode</strong> — read-only rendering against your
           live instance. No state is mutated. Close this tab when done.
+        </div>
+      )}
+
+      {recoveryResetActive && (
+        <div className="mb-6 rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+          <p className="font-semibold mb-1">⚠ MYMCP_RECOVERY_RESET=1 is still set</p>
+          <p className="text-xs leading-relaxed text-red-200/90">
+            Every cold lambda on this deployment wipes the bootstrap (it&apos;s the recovery escape
+            hatch). Any token you mint right now will vanish within a few minutes, and the instance
+            will silently drop back to first-run mode. <strong>Remove the env var</strong> from
+            Vercel Settings → Environment Variables, redeploy, then reload this page before running
+            through the wizard.
+          </p>
         </div>
       )}
 

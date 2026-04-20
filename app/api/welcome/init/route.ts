@@ -23,6 +23,21 @@ import { getEnvStore, isVercelAutoMagicAvailable, triggerVercelRedeploy } from "
  * can fall back to copy/paste.
  */
 export async function POST(request: Request) {
+  // Foot-shoot guard: MYMCP_RECOVERY_RESET=1 wipes the bootstrap on every
+  // cold lambda startup (forceReset deletes /tmp + KV). Letting init mint
+  // a token in this state hands the user a doomed credential — the very
+  // next cold lambda erases it. Refuse outright until the operator
+  // removes the env var.
+  if (process.env.MYMCP_RECOVERY_RESET === "1") {
+    return NextResponse.json(
+      {
+        error:
+          "MYMCP_RECOVERY_RESET=1 is set on this deployment — every cold lambda wipes the bootstrap, so any token minted right now would vanish within minutes. Remove the env var from Vercel Settings → Environment Variables, redeploy, and run /welcome again.",
+      },
+      { status: 409 }
+    );
+  }
+
   await rehydrateBootstrapAsync();
   if (!isFirstRunMode() && !isBootstrapActive()) {
     return NextResponse.json({ error: "Already initialized" }, { status: 409 });

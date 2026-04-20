@@ -68,5 +68,16 @@ export default async function WelcomePage({
     redirect("/config");
   }
 
-  return <WelcomeClient initialBootstrap={isBootstrapActive()} />;
+  // Sticky banner if recovery-reset is still on. Without this, users see
+  // the wizard, click Generate, and end up with a token that the very
+  // next cold lambda wipes — mysterious 503s afterwards. Make the
+  // foot-gun visible BEFORE they spend time on the flow.
+  const recoveryResetActive = process.env.MYMCP_RECOVERY_RESET === "1";
+
+  return (
+    <WelcomeClient
+      initialBootstrap={isBootstrapActive()}
+      recoveryResetActive={recoveryResetActive}
+    />
+  );
 }
