@@ -7,6 +7,7 @@ import {
   FIRST_RUN_COOKIE_NAME,
   CLAIM_TTL_MS,
 } from "@/core/first-run";
+import { SigningSecretUnavailableError } from "@/core/signing-secret";
 
 /**
  * POST /api/welcome/claim
@@ -28,7 +29,6 @@ export async function POST(request: Request) {
     result = await getOrCreateClaim(request);
   } catch (err) {
     // SEC-05: refuse to mint claims on deploys without a durable secret.
-    const { SigningSecretUnavailableError } = await import("@/core/signing-secret");
     if (err instanceof SigningSecretUnavailableError) {
       return NextResponse.json(
         {

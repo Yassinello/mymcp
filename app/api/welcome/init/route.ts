@@ -7,6 +7,7 @@ import {
   isBootstrapActive,
   rehydrateBootstrapAsync,
 } from "@/core/first-run";
+import { SigningSecretUnavailableError } from "@/core/signing-secret";
 import { getEnvStore, isVercelAutoMagicAvailable, triggerVercelRedeploy } from "@/core/env-store";
 
 /**
@@ -43,8 +44,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Already initialized" }, { status: 409 });
   }
 
-  if (!(await isClaimer(request))) {
-    return NextResponse.json({ error: "Forbidden — not the claimer" }, { status: 403 });
+  try {
+    if (!(await isClaimer(request))) {
+      return NextResponse.json({ error: "Forbidden — not the claimer" }, { status: 403 });
+    }
+  } catch (err) {
+    // SEC-05: refuse to mint on insecure deploys (no durable secret).
+    if (err instanceof SigningSecretUnavailableError) {
+      return NextResponse.json(
+        {
+          error: "signing_secret_unavailable",
+          message: err.message,
+          hint: "Set UPSTASH_REDIS_REST_URL (Upstash) or, for local dev, MYMCP_ALLOW_EPHEMERAL_SECRET=1. See docs/SECURITY-ADVISORIES.md#sec-05.",
+        },
+        { status: 503 }
+      );
+    }
+    throw err;
   }
 
   // Read the claim id back from the cookie to pass to bootstrapToken.
