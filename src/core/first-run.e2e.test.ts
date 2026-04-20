@@ -91,7 +91,10 @@ describe("e2e: happy path manual flow", () => {
     expect(initBody.token).toMatch(/^[0-9a-f]{64}$/);
     expect(initBody.instanceUrl).toMatch(/^https?:\/\//);
     expect(initBody.autoMagic).toBe(false);
-    expect(process.env.MCP_AUTH_TOKEN).toBe(initBody.token);
+    // SEC-02: token is in the in-memory bootstrap cache, not process.env.
+    const { getBootstrapAuthToken } = await import("./first-run");
+    expect(getBootstrapAuthToken()).toBe(initBody.token);
+    expect(process.env.MCP_AUTH_TOKEN).toBeUndefined();
 
     // Step 3: status — bootstrap active
     const statusRes = await statusGet();

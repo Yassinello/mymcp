@@ -57,6 +57,24 @@ const claims = new Map<string, ClaimRecord>();
 let activeBootstrap: BootstrapPayload | null = null;
 
 /**
+ * SEC-02: in-memory mirror of the minted MCP_AUTH_TOKEN. Replaces the
+ * pre-v0.10 practice of mutating `process.env.MCP_AUTH_TOKEN` at
+ * request time, which was racy on warm lambdas. `checkMcpAuth` consults
+ * this cache via `getBootstrapAuthToken()` before falling back to the
+ * boot-time env snapshot.
+ */
+let bootstrapAuthTokenCache: string | null = null;
+
+/**
+ * Returns the in-memory bootstrap auth token, if any. Consumed by
+ * `checkMcpAuth` so a bootstrap-minted token is recognized on the
+ * current warm lambda without mutating global state.
+ */
+export function getBootstrapAuthToken(): string | null {
+  return bootstrapAuthTokenCache;
+}
+
+/**
  * KV is OPTIONAL. The factory in kv-store.ts always returns *something*
  * (filesystem fallback) but for cross-instance persistence we only want
  * a backend that's actually shared across instances. On Vercel without
@@ -169,7 +187,10 @@ function pruneExpired(): void {
 
 /** True when this instance is operating without a real MCP_AUTH_TOKEN. */
 export function isFirstRunMode(): boolean {
-  return !process.env.MCP_AUTH_TOKEN;
+  // Either the boot env has the token (permanent), or the in-memory
+  // bootstrap cache has it (transient, this warm lambda), or we really
+  // are in first-run mode.
+  return !process.env.MCP_AUTH_TOKEN && !bootstrapAuthTokenCache;
 }
 
 /** True when MCP_AUTH_TOKEN comes from our in-memory bootstrap, not Vercel env. */
@@ -268,7 +289,11 @@ export function bootstrapToken(claimId: string): { token: string } {
   }
 
   const token = randomBytes(32).toString("hex");
-  process.env.MCP_AUTH_TOKEN = token;
+  // SEC-02: store in module-scope cache instead of process.env so
+  // concurrent requests don't observe mid-write torn state. The
+  // transport's checkMcpAuth consults getBootstrapAuthToken() before
+  // the boot-env snapshot.
+  bootstrapAuthTokenCache = token;
 
   activeBootstrap = { claimId, token, createdAt: Date.now() };
 
@@ -317,6 +342,7 @@ export async function flushBootstrapToKv(): Promise<void> {
  */
 export function forceReset(): void {
   activeBootstrap = null;
+  bootstrapAuthTokenCache = null;
   claims.clear();
   try {
     if (existsSync(BOOTSTRAP_PATH)) unlinkSync(BOOTSTRAP_PATH);
@@ -353,7 +379,8 @@ export function rehydrateBootstrapFromTmp(): void {
     activeBootstrap = parsed;
     claims.set(parsed.claimId, { createdAt: parsed.createdAt });
     if (!process.env.MCP_AUTH_TOKEN) {
-      process.env.MCP_AUTH_TOKEN = parsed.token;
+      // SEC-02: populate the in-memory cache, NOT process.env.
+      bootstrapAuthTokenCache = parsed.token;
     }
     console.info(
       `[Kebab MCP first-run] re-hydrated bootstrap from /tmp (claim=${parsed.claimId.slice(0, 8)}…, age=${Math.round((Date.now() - parsed.createdAt) / 1000)}s)`
@@ -366,6 +393,7 @@ export function rehydrateBootstrapFromTmp(): void {
 /** Clear all in-memory + on-disk bootstrap state. */
 export function clearBootstrap(): void {
   activeBootstrap = null;
+  bootstrapAuthTokenCache = null;
   claims.clear();
   try {
     if (existsSync(BOOTSTRAP_PATH)) unlinkSync(BOOTSTRAP_PATH);
@@ -392,7 +420,8 @@ export async function rehydrateBootstrapAsync(): Promise<void> {
   activeBootstrap = fromKv;
   claims.set(fromKv.claimId, { createdAt: fromKv.createdAt });
   if (!process.env.MCP_AUTH_TOKEN) {
-    process.env.MCP_AUTH_TOKEN = fromKv.token;
+    // SEC-02: populate the in-memory cache, NOT process.env.
+    bootstrapAuthTokenCache = fromKv.token;
   }
   // Mirror back to /tmp for warm-instance fast path.
   try {
@@ -409,6 +438,7 @@ export async function rehydrateBootstrapAsync(): Promise<void> {
 export function __resetFirstRunForTests(): void {
   claims.clear();
   activeBootstrap = null;
+  bootstrapAuthTokenCache = null;
   try {
     if (existsSync(BOOTSTRAP_PATH)) unlinkSync(BOOTSTRAP_PATH);
   } catch {

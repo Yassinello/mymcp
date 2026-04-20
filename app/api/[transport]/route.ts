@@ -4,7 +4,7 @@ import { checkMcpAuth, extractToken } from "@/core/auth";
 import { isFirstRunMode, rehydrateBootstrapAsync } from "@/core/first-run";
 import { checkRateLimit } from "@/core/rate-limit";
 import { getEnabledPacks, logRegistryState } from "@/core/registry";
-import { hydrateCredentialsFromKV } from "@/core/credential-store";
+import { hydrateCredentialsFromKV, getHydratedCredentialSnapshot } from "@/core/credential-store";
 import { on } from "@/core/events";
 import { VERSION } from "@/core/version";
 import { getDisabledTools } from "@/core/tool-toggles";
@@ -93,8 +93,18 @@ async function buildHandler(
                 // context is exited. Each request gets its own async
                 // execution context, so there's no cross-contamination
                 // between concurrent requests — no try/finally needed.
-                return requestContext.run({ tenantId: tenantId ?? null }, () =>
-                  tool.handler(params)
+                //
+                // SEC-02: seed the hydrated credential snapshot into the
+                // request context so tool handlers reading via
+                // `getCredential()` see KV-backed values even when
+                // `process.env` does not. The map is request-scoped;
+                // concurrent requests do not see each other's credentials.
+                return requestContext.run(
+                  {
+                    tenantId: tenantId ?? null,
+                    credentials: { ...getHydratedCredentialSnapshot() },
+                  },
+                  () => tool.handler(params)
                 );
               },
               callerTokenId,

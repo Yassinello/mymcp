@@ -2,6 +2,93 @@
 
 All notable changes to Kebab MCP.
 
+## [0.10.0] — Unreleased — Security hotfix (SEC-01..06)
+
+Expedited security release closing four findings from the 2026-04-20
+deep risk audit (`.planning/research/RISKS-AUDIT.md`). See
+`docs/SECURITY-ADVISORIES.md` for the full advisory index and
+disclosure timeline.
+
+### Security
+
+- **SEC-04 (GHSA pending)** — First-run claim-cookie HMAC signing
+  secret was previously derived from `VERCEL_GIT_COMMIT_SHA`, a public
+  value. An attacker who could read the commit SHA (trivial on public
+  GitHub repos and Vercel preview URLs) could forge a valid claim
+  cookie and hijack `/api/welcome/init` on any fresh public Vercel
+  deploy that had not yet completed welcome bootstrap. The signing
+  secret is now `randomBytes(32)`, KV-persisted at
+  `mymcp:firstrun:signing-secret`, and rotated on
+  `MYMCP_RECOVERY_RESET=1`. A private GHSA advisory has been filed;
+  advisory ID will be added here on publication.
+- **SEC-05** — On public Vercel deploys with no durable KV configured
+  and `MYMCP_ALLOW_EPHEMERAL_SECRET` unset, the welcome routes now
+  refuse to mint claims and return HTTP 503 with an actionable operator
+  error. Prevents the no-KV silent-takeover class of vulnerability.
+- **SEC-01** — Cross-tenant KV data leak. Connector code paths
+  (skills, credentials, webhooks, health samples, admin rate-limit
+  scan) previously bypassed `TenantKVStore` by calling the untenanted
+  `getKVStore()` directly. All refactored to `getContextKVStore()`;
+  contract test `tests/contract/kv-allowlist.test.ts` enforces
+  going forward. `health:sample:*` gained a 7-day TTL.
+- **SEC-02** — `process.env` is no longer mutated at request time.
+  Credential hydration now populates a module-scope snapshot consumed
+  by a new `getCredential(envKey)` helper that reads through
+  request-scoped `AsyncLocalStorage`. Fixes concurrent-request
+  torn-write races on warm lambdas. Connectors still reading
+  `process.env.X` directly will see the boot-time snapshot only
+  (v0.10) — migrate to `getCredential()` before v0.11 (see Breaking).
+- **SEC-03** — `/api/admin/call` now wraps tool invocations in
+  `requestContext.run({ tenantId })` matching the MCP transport. Tool
+  calls from the dashboard playground respect the `x-mymcp-tenant`
+  header.
+- **SEC-06** — This CHANGELOG, `docs/SECURITY-ADVISORIES.md`, and
+  the GHSA draft document the disclosure timeline.
+
+### Breaking (connector authors)
+
+- `process.env.X` reads from within tool handlers now see the
+  **boot-time snapshot** only. Request-scoped credential overrides
+  (dashboard saves, per-tenant creds) require migrating to
+  `getCredential("X")` from `@/core/request-context`. Back-compat is
+  preserved for v0.10.x; v0.11 adds an ESLint rule enforcing the
+  migration.
+- A `no-restricted-syntax` ESLint rule now blocks
+  `process.env[...] = ...` assignments outside the allowlisted boot
+  path (`src/core/env-store.ts`, `scripts/`, `tests/`). Use
+  `runWithCredentials()` instead.
+
+### Added
+
+- `src/core/signing-secret.ts` — KV-backed signing secret with
+  `getSigningSecret()`, `rotateSigningSecret()`,
+  `SigningSecretUnavailableError`.
+- `src/core/request-context.ts` — `getCredential()`,
+  `runWithCredentials()`, frozen boot-env snapshot.
+- `tests/contract/kv-allowlist.test.ts` — grep-style enforcement for
+  `getKVStore()` callsite allowlist.
+- `tests/contract/process-env-readonly.test.ts` — grep-style defense
+  in depth on top of the ESLint rule (see SEC-02-enforce).
+- `MYMCP_ALLOW_EPHEMERAL_SECRET=1` env var — explicit opt-in to
+  `/tmp`-seed signing secret for local dev without Upstash.
+- Data migration on first boot: legacy `cred:*` and `skills:*` KV
+  keys from pre-v0.10 deploys are copied into the default-tenant
+  namespace (see `src/core/migrations/v0.10-tenant-prefix.ts`),
+  preserving existing single-tenant deploys.
+
+### Deferred to v0.11+
+
+Documented in `.planning/phases/37b-security-hotfix/FOLLOW-UP.md`:
+
+- `src/core/rate-limit.ts`, `src/core/log-store.ts`,
+  `src/core/tool-toggles.ts`, `src/core/backup.ts`,
+  `app/api/config/context/*` tenant-scoping
+- `langsmith` transitive CVEs via Stagehand
+- Welcome-init race (two browsers racing the same claim cookie)
+- Unbounded `health:sample:*` growth (folded in partially — 7d TTL
+  added now; broader observability work in Phase 38)
+- `log-store.ts:319` 5xx retry heuristic (Phase 38)
+
 ## [0.1.0] - 2026-04-18 — Stabilization release
 
 This is the consolidated v0.1.0 release: the project was internally

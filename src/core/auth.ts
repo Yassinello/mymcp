@@ -1,6 +1,6 @@
 import { timingSafeEqual, createHash } from "crypto";
 import { isLoopbackRequest } from "./request-utils";
-import { isClaimer } from "./first-run";
+import { isClaimer, getBootstrapAuthToken } from "./first-run";
 import { getTenantId } from "./tenant";
 
 /**
@@ -17,12 +17,13 @@ let adminTokenWarned = false;
 
 function warnAdminTokenFallback() {
   if (adminTokenWarned) return;
-  if (!process.env.ADMIN_AUTH_TOKEN && !process.env.MCP_AUTH_TOKEN) {
+  const hasMcp = Boolean(process.env.MCP_AUTH_TOKEN || getBootstrapAuthToken());
+  if (!process.env.ADMIN_AUTH_TOKEN && !hasMcp) {
     console.warn(
       "[Kebab MCP Security] No auth tokens configured. Admin dashboard is publicly accessible."
     );
     adminTokenWarned = true;
-  } else if (!process.env.ADMIN_AUTH_TOKEN && process.env.MCP_AUTH_TOKEN) {
+  } else if (!process.env.ADMIN_AUTH_TOKEN && hasMcp) {
     console.warn(
       "[Kebab MCP Security] ADMIN_AUTH_TOKEN is not set. Falling back to MCP_AUTH_TOKEN for admin access. " +
         "Set a separate ADMIN_AUTH_TOKEN for better security isolation."
@@ -115,10 +116,15 @@ export function checkMcpAuth(request: Request): {
   }
 
   // Resolve token list: tenant-specific env var first, then global fallback.
+  // SEC-02: default-tenant path also consults the in-memory bootstrap cache
+  // so a welcome-minted token is recognized without mutating process.env.
   const tenantTokenEnv = tenantIdValue
     ? process.env[`MCP_AUTH_TOKEN_${tenantIdValue.toUpperCase().replace(/-/g, "_")}`]
     : undefined;
-  const tokens = parseTokens(tenantTokenEnv || process.env.MCP_AUTH_TOKEN);
+  const bootstrapToken = tenantIdValue ? undefined : getBootstrapAuthToken();
+  const tokens = parseTokens(
+    tenantTokenEnv || process.env.MCP_AUTH_TOKEN || bootstrapToken || undefined
+  );
 
   if (tokens.length === 0) {
     // First-run / dev: only loopback may skip auth.
@@ -204,7 +210,8 @@ export async function checkAdminAuth(request: Request): Promise<Response | null>
   if (csrfError) return csrfError;
 
   warnAdminTokenFallback();
-  const adminRaw = process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN;
+  const adminRaw =
+    process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN || getBootstrapAuthToken() || "";
   const tokens = parseTokens(adminRaw);
   if (tokens.length === 0) {
     // First-run mode (no token configured anywhere). We must NOT silently

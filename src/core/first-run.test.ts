@@ -10,6 +10,7 @@ import {
   forceReset,
   rehydrateBootstrapFromTmp,
   rehydrateBootstrapAsync,
+  getBootstrapAuthToken,
   __resetFirstRunForTests,
   __internals,
 } from "./first-run";
@@ -96,11 +97,14 @@ describe("isClaimer", () => {
 });
 
 describe("bootstrapToken", () => {
-  it("generates a 64-char hex token and mutates process.env", async () => {
+  it("generates a 64-char hex token and populates the bootstrap cache (SEC-02)", async () => {
     const c = await getOrCreateClaim(makeRequest());
     const { token } = bootstrapToken(c.claimId);
     expect(token).toMatch(/^[0-9a-f]{64}$/);
-    expect(process.env.MCP_AUTH_TOKEN).toBe(token);
+    // SEC-02: does NOT mutate process.env; the token lives in the
+    // module-scope bootstrap cache that checkMcpAuth consults.
+    expect(process.env.MCP_AUTH_TOKEN).toBeUndefined();
+    expect(getBootstrapAuthToken()).toBe(token);
     expect(isBootstrapActive()).toBe(true);
   });
 
@@ -234,7 +238,9 @@ describe("KV cross-instance bootstrap persistence", () => {
     await rehydrateBootstrapAsync();
 
     expect(isBootstrapActive()).toBe(true);
-    expect(process.env.MCP_AUTH_TOKEN).toBe(payload.token);
+    // SEC-02: populates the in-memory bootstrap cache, not process.env.
+    expect(process.env.MCP_AUTH_TOKEN).toBeUndefined();
+    expect(getBootstrapAuthToken()).toBe(payload.token);
     expect(stubKv.get).toHaveBeenCalledWith("mymcp:firstrun:bootstrap");
     // Mirrored back to /tmp for fast-path next time.
     expect(existsSync(__internals.BOOTSTRAP_PATH)).toBe(true);
@@ -262,7 +268,8 @@ describe("KV cross-instance bootstrap persistence", () => {
     await rehydrateBootstrapAsync();
 
     // /tmp wins → token is the tmpPayload one.
-    expect(process.env.MCP_AUTH_TOKEN).toBe(tmpPayload.token);
+    // SEC-02: populates the bootstrap cache, not process.env.
+    expect(getBootstrapAuthToken()).toBe(tmpPayload.token);
     // KV.get should NOT have been called because the sync path already
     // populated activeBootstrap.
     expect(stubKv.get).not.toHaveBeenCalled();
