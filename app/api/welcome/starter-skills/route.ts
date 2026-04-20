@@ -16,23 +16,27 @@ import { createSkill } from "@/connectors/skills/store";
  * /welcome init flow itself.
  */
 
-function checkWelcomeAuth(request: Request): Response | null {
+async function checkWelcomeAuth(request: Request): Promise<Response | null> {
   // Standard admin auth wins fastest path.
-  const adminError = checkAdminAuth(request);
+  const adminError = await checkAdminAuth(request);
   if (!adminError) return null;
   // Fall back to the first-run claimer cookie.
-  if (isClaimer(request)) return null;
+  try {
+    if (await isClaimer(request)) return null;
+  } catch {
+    // SigningSecretUnavailableError → deny via admin error.
+  }
   return adminError;
 }
 
 export async function GET(request: Request) {
-  const authError = checkWelcomeAuth(request);
+  const authError = await checkWelcomeAuth(request);
   if (authError) return authError;
   return NextResponse.json({ skills: STARTER_SKILLS });
 }
 
 export async function POST(request: Request) {
-  const authError = checkWelcomeAuth(request);
+  const authError = await checkWelcomeAuth(request);
   if (authError) return authError;
 
   let body: { id?: string };

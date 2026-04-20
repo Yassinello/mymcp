@@ -250,26 +250,26 @@ describe("checkAdminAuth — first-run mode", () => {
     __resetFirstRunForTests();
   });
 
-  it("allows loopback requests when no token is configured", () => {
+  it("allows loopback requests when no token is configured", async () => {
     // x-forwarded-for points at loopback (proxy-header path). v0.6 NIT-05
     // made URL-host trust opt-in, so we test the proxy path explicitly.
     const req = new Request("http://localhost/api/admin/status", {
       headers: { "x-forwarded-for": "127.0.0.1" },
     });
-    expect(checkAdminAuth(req)).toBeNull();
+    expect(await checkAdminAuth(req)).toBeNull();
   });
 
-  it("blocks a non-loopback request with no token and no claim cookie", () => {
+  it("blocks a non-loopback request with no token and no claim cookie", async () => {
     const req = new Request("http://example.com/api/admin/status", {
       headers: { "x-forwarded-for": "8.8.8.8" },
     });
-    const result = checkAdminAuth(req);
+    const result = await checkAdminAuth(req);
     expect(result).not.toBeNull();
     expect((result as Response).status).toBe(401);
   });
 
-  it("allows a non-loopback request that holds a valid first-run claim cookie", () => {
-    const claim = getOrCreateClaim(
+  it("allows a non-loopback request that holds a valid first-run claim cookie", async () => {
+    const claim = await getOrCreateClaim(
       new Request("http://example.com/api/welcome/claim", {
         headers: { "x-forwarded-for": "8.8.8.8" },
       })
@@ -278,6 +278,6 @@ describe("checkAdminAuth — first-run mode", () => {
     const req = new Request("http://example.com/api/admin/status", {
       headers: { "x-forwarded-for": "8.8.8.8", cookie },
     });
-    expect(checkAdminAuth(req)).toBeNull();
+    expect(await checkAdminAuth(req)).toBeNull();
   });
 });

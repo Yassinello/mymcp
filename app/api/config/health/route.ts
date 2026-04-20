@@ -23,7 +23,7 @@ export interface HealthResponse {
  * the Vercel auto-deploy path is available.
  */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   let tokenStatus: TokenStatus;

@@ -10,7 +10,7 @@ import { rollbackSkill } from "@/connectors/skills/store";
  * with the old content — history is append-only.
  */
 export async function POST(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   let body: { id?: string; version?: number };

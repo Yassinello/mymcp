@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     return Response.json({ ok: true, version: VERSION });
   }
 
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const registry = resolveRegistry();

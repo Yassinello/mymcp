@@ -24,11 +24,11 @@ export async function POST(request: Request) {
   // Post-setup: accept admin auth (cookie or token) so the Connectors
   // tab can test credentials from the dashboard.
   if (process.env.MCP_AUTH_TOKEN) {
-    const authError = checkAdminAuth(request);
+    const authError = await checkAdminAuth(request);
     if (authError) return authError;
   } else {
     // First-run mode: accept loopback or claimer cookie
-    if (!isLoopbackRequest(request) && !isClaimer(request)) {
+    if (!isLoopbackRequest(request) && !(await isClaimer(request))) {
       return NextResponse.json(
         { error: "Unauthorized — claim this instance via /welcome first" },
         { status: 401 }

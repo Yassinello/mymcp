@@ -19,7 +19,7 @@ import { getTenantId, TenantError } from "@/core/tenant";
  * Admin-auth-gated.
  */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   // Tenant scoping: if x-mymcp-tenant header is present, filter logs

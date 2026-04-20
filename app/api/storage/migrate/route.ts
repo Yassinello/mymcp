@@ -25,7 +25,7 @@ import { getEnvStore } from "@/core/env-store";
  * retry just those.
  */
 export async function POST(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   let body: { direction?: string; dryRun?: boolean };

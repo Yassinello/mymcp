@@ -10,7 +10,7 @@ import { setToolDisabled } from "@/core/tool-toggles";
  * Writes to KV + emits env.changed to invalidate registry.
  */
 export async function POST(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   let body: { tool?: string; disabled?: boolean };

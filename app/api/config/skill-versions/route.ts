@@ -12,7 +12,7 @@ import {
  * Returns all versions for a skill with their metadata.
  */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const url = new URL(request.url);

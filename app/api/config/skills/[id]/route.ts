@@ -13,7 +13,7 @@ interface RouteContext {
 }
 
 export async function GET(request: Request, ctx: RouteContext) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
   const { id } = await ctx.params;
   const skill = await getSkill(id);
@@ -24,7 +24,7 @@ export async function GET(request: Request, ctx: RouteContext) {
 }
 
 export async function PATCH(request: Request, ctx: RouteContext) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
   const { id } = await ctx.params;
 
@@ -62,7 +62,7 @@ export async function PATCH(request: Request, ctx: RouteContext) {
 }
 
 export async function DELETE(request: Request, ctx: RouteContext) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
   const { id } = await ctx.params;
   const ok = await deleteSkill(id);

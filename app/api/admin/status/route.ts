@@ -10,7 +10,7 @@ import { VERSION } from "@/core/version";
  * Runs diagnose() on enabled packs to verify credentials actually work.
  */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const registry = resolveRegistry();

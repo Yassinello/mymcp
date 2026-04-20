@@ -45,7 +45,7 @@ async function persistKvSettings(kvVars: Record<string, string>): Promise<void> 
  * Returns current env vars. Sensitive values are masked unless `?reveal=1`.
  */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const url = new URL(request.url);
@@ -81,7 +81,7 @@ export async function GET(request: Request) {
  * Or: { key, value } — single write.
  */
 export async function PUT(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   let body: { vars?: Record<string, string>; key?: string; value?: string };

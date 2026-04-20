@@ -21,7 +21,7 @@ import { saveInstanceConfig, SETTINGS_ENV_KEYS } from "@/core/config";
  * even before re-enabling KV/file storage.
  */
 export async function POST(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const url = new URL(request.url);

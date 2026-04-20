@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Already initialized" }, { status: 409 });
   }
 
-  if (!isClaimer(request)) {
+  if (!(await isClaimer(request))) {
     return NextResponse.json({ error: "Forbidden — not the claimer" }, { status: 403 });
   }
 

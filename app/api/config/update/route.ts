@@ -47,7 +47,7 @@ function resolveRemote(): { ok: true; remote: string } | { ok: false; error: str
 }
 
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const disabled = disabledReason();
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const disabled = disabledReason();

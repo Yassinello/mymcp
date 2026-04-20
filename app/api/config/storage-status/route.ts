@@ -17,10 +17,10 @@ import {
  */
 export async function GET(request: Request) {
   if (process.env.MCP_AUTH_TOKEN) {
-    const authError = checkAdminAuth(request);
+    const authError = await checkAdminAuth(request);
     if (authError) return authError;
   } else {
-    if (!isLoopbackRequest(request) && !isClaimer(request)) {
+    if (!isLoopbackRequest(request) && !(await isClaimer(request))) {
       return NextResponse.json(
         { error: "Unauthorized — claim this instance via /welcome first" },
         { status: 401 }

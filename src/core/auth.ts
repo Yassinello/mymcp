@@ -198,7 +198,7 @@ export function checkCsrf(request: Request): Response | null {
  * different clients. Fix shipped in v0.5 phase 13 after route tests
  * caught that the prior single-string compare broke multi-token setups.
  */
-export function checkAdminAuth(request: Request): Response | null {
+export async function checkAdminAuth(request: Request): Promise<Response | null> {
   // CSRF first — doesn't depend on token state, so no info leak.
   const csrfError = checkCsrf(request);
   if (csrfError) return csrfError;
@@ -214,7 +214,11 @@ export function checkAdminAuth(request: Request): Response | null {
     //   (b) the request carries a valid first-run claim cookie (the user who
     //       initialized this instance via /welcome).
     if (isLoopbackRequest(request)) return null;
-    if (isClaimer(request)) return null;
+    try {
+      if (await isClaimer(request)) return null;
+    } catch {
+      // SigningSecretUnavailableError or any other failure → deny.
+    }
     return new Response("Unauthorized", { status: 401 });
   }
 

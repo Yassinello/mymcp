@@ -19,7 +19,7 @@ interface RateLimitScope {
  * KV key format: `ratelimit:{tenantId}:{scope}:{idHash}:{minuteBucket}`
  */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const defaultLimit = Math.max(1, parseInt(process.env.MYMCP_RATE_LIMIT_RPM ?? "60", 10) || 60);

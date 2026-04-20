@@ -17,7 +17,7 @@ import { checkAdminAuth } from "@/core/auth";
  * an unauthorized caller cannot tell them apart.
  */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const token = (process.env.MCP_AUTH_TOKEN || "").split(",")[0]?.trim();

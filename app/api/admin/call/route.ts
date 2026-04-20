@@ -7,7 +7,7 @@ import { withLogging } from "@/core/logging";
  * Requires ADMIN_AUTH_TOKEN. Returns the tool's raw response.
  */
 export async function POST(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const body = await request.json();

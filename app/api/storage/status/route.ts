@@ -33,8 +33,8 @@ export async function GET(request: Request) {
   // force the admin-auth branch on any lambda that has rehydrated the
   // bootstrap, rejecting welcome's status polls with 401. A valid claim
   // cookie is itself proof of being the operator (see isClaimer notes).
-  if (!isLoopbackRequest(request) && !isClaimer(request)) {
-    const authError = checkAdminAuth(request);
+  if (!isLoopbackRequest(request) && !(await isClaimer(request))) {
+    const authError = await checkAdminAuth(request);
     if (authError) return authError;
   }
 

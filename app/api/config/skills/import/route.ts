@@ -35,17 +35,25 @@ function inferNameFromUrl(url: string): string {
     const u = new URL(url);
     const path = u.pathname.split("/").filter(Boolean);
     const last = path[path.length - 1] || "imported-skill";
-    return last.replace(/\.(md|markdown|txt)$/i, "").replace(/[^a-z0-9-]/gi, "-").toLowerCase();
+    return last
+      .replace(/\.(md|markdown|txt)$/i, "")
+      .replace(/[^a-z0-9-]/gi, "-")
+      .toLowerCase();
   } catch {
     return "imported-skill";
   }
 }
 
-function buildSkillFromContent(url: string, content: string): { skill: ParsedSkill; warnings: string[] } {
+function buildSkillFromContent(
+  url: string,
+  content: string
+): { skill: ParsedSkill; warnings: string[] } {
   const { meta, body, warnings } = parseFrontmatter(content);
 
   const name =
-    typeof meta.name === "string" && meta.name.trim() ? (meta.name as string).trim() : inferNameFromUrl(url);
+    typeof meta.name === "string" && meta.name.trim()
+      ? (meta.name as string).trim()
+      : inferNameFromUrl(url);
   const description =
     typeof meta.description === "string" ? (meta.description as string).trim() : "";
 
@@ -76,7 +84,7 @@ function buildSkillFromContent(url: string, content: string): { skill: ParsedSki
 }
 
 export async function POST(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   let body: { url?: string; action?: "preview" | "save" };
@@ -119,7 +127,12 @@ export async function POST(request: Request) {
         description: a.description ?? "",
         required: a.required ?? false,
       })),
-      source: { type: "remote", url, cachedContent: fetched.content, cachedAt: new Date().toISOString() },
+      source: {
+        type: "remote",
+        url,
+        cachedContent: fetched.content,
+        cachedAt: new Date().toISOString(),
+      },
     });
     return NextResponse.json({ ok: true, id: created.id });
   } catch (err) {

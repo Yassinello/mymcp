@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     }
   } else {
     // Post first-run: standard admin auth.
-    const authError = checkAdminAuth(request);
+    const authError = await checkAdminAuth(request);
     if (authError) return authError;
   }
 

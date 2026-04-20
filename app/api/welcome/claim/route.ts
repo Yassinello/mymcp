@@ -23,7 +23,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "already-initialized" });
   }
 
-  const result = getOrCreateClaim(request);
+  let result;
+  try {
+    result = await getOrCreateClaim(request);
+  } catch (err) {
+    // SEC-05: refuse to mint claims on deploys without a durable secret.
+    const { SigningSecretUnavailableError } = await import("@/core/signing-secret");
+    if (err instanceof SigningSecretUnavailableError) {
+      return NextResponse.json(
+        {
+          status: "signing_secret_unavailable",
+          error: "signing_secret_unavailable",
+          message: err.message,
+          hint: "Set UPSTASH_REDIS_REST_URL (Upstash) or, for local dev, MYMCP_ALLOW_EPHEMERAL_SECRET=1. See docs/SECURITY-ADVISORIES.md#sec-05.",
+        },
+        { status: 503 }
+      );
+    }
+    throw err;
+  }
 
   if (!result.isClaimer) {
     return NextResponse.json({ status: "claimed-by-other" }, { status: 423 });

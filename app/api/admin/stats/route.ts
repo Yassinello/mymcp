@@ -6,7 +6,7 @@ import { getToolStats } from "@/core/logging";
  * Returns aggregated stats: total calls, error rate, per-tool breakdown.
  */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const stats = getToolStats();

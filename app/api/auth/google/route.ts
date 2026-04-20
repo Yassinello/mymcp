@@ -7,7 +7,7 @@ import { checkAdminAuth } from "@/core/auth";
  * Admin auth required.
  */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const clientId = process.env.GOOGLE_CLIENT_ID;

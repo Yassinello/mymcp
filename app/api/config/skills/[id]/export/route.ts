@@ -18,7 +18,7 @@ interface RouteContext {
  *   {content}
  */
 export async function GET(request: Request, ctx: RouteContext) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
   const { id } = await ctx.params;
 

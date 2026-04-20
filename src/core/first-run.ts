@@ -29,6 +29,11 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getKVStore } from "./kv-store";
+import {
+  getSigningSecret,
+  rotateSigningSecret,
+  SigningSecretUnavailableError,
+} from "./signing-secret";
 
 const KV_BOOTSTRAP_KEY = "mymcp:firstrun:bootstrap";
 
@@ -115,12 +120,9 @@ async function deleteBootstrapFromKv(): Promise<void> {
   }
 }
 
-function getSigningSecret(): string {
-  return `mymcp-firstrun-v1:${process.env.VERCEL_GIT_COMMIT_SHA || "local-dev-secret"}`;
-}
-
-function sign(value: string): string {
-  return createHmac("sha256", getSigningSecret()).update(value).digest("hex");
+async function sign(value: string): Promise<string> {
+  const secret = await getSigningSecret();
+  return createHmac("sha256", secret).update(value).digest("hex");
 }
 
 function safeEqHex(a: string, b: string): boolean {
@@ -132,21 +134,21 @@ function safeEqHex(a: string, b: string): boolean {
   }
 }
 
-function encodeCookie(claimId: string): string {
-  return `${claimId}.${sign(claimId)}`;
+async function encodeCookie(claimId: string): Promise<string> {
+  return `${claimId}.${await sign(claimId)}`;
 }
 
-function decodeCookie(raw: string): string | null {
+async function decodeCookie(raw: string): Promise<string | null> {
   const dot = raw.indexOf(".");
   if (dot < 0) return null;
   const claimId = raw.slice(0, dot);
   const sig = raw.slice(dot + 1);
   if (!claimId || !sig) return null;
-  if (!safeEqHex(sig, sign(claimId))) return null;
+  if (!safeEqHex(sig, await sign(claimId))) return null;
   return claimId;
 }
 
-function readClaimCookie(request: Request): string | null {
+async function readClaimCookie(request: Request): Promise<string | null> {
   const cookieHeader = request.headers.get("cookie");
   if (!cookieHeader) return null;
   const re = new RegExp(`(?:^|;\\s*)${FIRST_RUN_COOKIE_NAME}=([^;]+)`);
@@ -187,11 +189,14 @@ export interface ClaimResult {
  * Get the existing claim (if the request carries a valid claim cookie) or
  * create a new one. Only ONE active claim is allowed at a time — first writer
  * wins, second visitor is told the instance is locked.
+ *
+ * Async as of v0.10 (SEC-04): the HMAC signing secret is now KV-persisted
+ * and read at verify/mint time.
  */
-export function getOrCreateClaim(request: Request): ClaimResult {
+export async function getOrCreateClaim(request: Request): Promise<ClaimResult> {
   pruneExpired();
 
-  const existingId = readClaimCookie(request);
+  const existingId = await readClaimCookie(request);
   if (existingId && claims.has(existingId)) {
     return { claimId: existingId, isNewClaim: false, isClaimer: true };
   }
@@ -215,31 +220,32 @@ export function getOrCreateClaim(request: Request): ClaimResult {
     claimId,
     isNewClaim: true,
     isClaimer: true,
-    cookieToSet: encodeCookie(claimId),
+    cookieToSet: await encodeCookie(claimId),
   };
 }
 
 /**
  * True if the request carries a valid first-run claim cookie.
  *
- * The cookie is HMAC-signed with a secret derived from the deployment's
- * commit SHA (see `getSigningSecret`), so a valid signature is itself proof
- * that the bearer received the cookie from `/api/welcome/claim` on this
- * deployment. The in-memory `claims` Map and `activeBootstrap` are hot-path
- * hints — on serverless platforms without Upstash, cold lambdas have
- * neither, and the original "must match in-memory state" check would reject
- * every cross-lambda welcome call with 403. "First writer wins" is still
- * enforced at cookie issuance time by `getOrCreateClaim`.
+ * As of v0.10 (SEC-04) the cookie is HMAC-signed with a random 32-byte
+ * secret persisted in KV at `mymcp:firstrun:signing-secret`. A valid
+ * signature is proof the bearer received the cookie from
+ * `/api/welcome/claim` on this deployment. The in-memory `claims` Map and
+ * `activeBootstrap` are hot-path hints — on serverless platforms without
+ * Upstash, cold lambdas have neither, and the original "must match
+ * in-memory state" check would reject every cross-lambda welcome call
+ * with 403. "First writer wins" is still enforced at cookie issuance
+ * time by `getOrCreateClaim`.
  *
- * Reset caveat: because the signing secret is keyed to the commit SHA, a
- * bare `MYMCP_RECOVERY_RESET=1` redeploy does NOT invalidate outstanding
- * cookies (same commit → same secret). If that matters (handing the
- * instance to someone else), push any commit to rotate the secret, or
- * expect the previous owner's cookie to still count as a claimer.
+ * Rotation: `MYMCP_RECOVERY_RESET=1` now rotates the signing secret via
+ * `rotateSigningSecret()` (called from `rehydrateBootstrapFromTmp`), so
+ * any pre-reset cookies no longer verify. This closes SEC-05.
+ *
+ * Async as of v0.10 because the signing secret is KV-backed.
  */
-export function isClaimer(request: Request): boolean {
+export async function isClaimer(request: Request): Promise<boolean> {
   pruneExpired();
-  return readClaimCookie(request) !== null;
+  return (await readClaimCookie(request)) !== null;
 }
 
 /**
@@ -325,8 +331,16 @@ export function forceReset(): void {
 export function rehydrateBootstrapFromTmp(): void {
   if (process.env.MYMCP_RECOVERY_RESET === "1") {
     forceReset();
+    // SEC-05: rotate the signing secret so pre-reset claim cookies no
+    // longer verify. Fire-and-forget — rotation failure on KV outage
+    // should not block cold-start.
+    void rotateSigningSecret().catch((err: unknown) => {
+      console.info(
+        `[Kebab MCP first-run] rotateSigningSecret skipped: ${err instanceof Error ? err.message : String(err)}`
+      );
+    });
     console.warn(
-      "[Kebab MCP first-run] MYMCP_RECOVERY_RESET=1 detected — bootstrap reset. Remove the env var after recovery."
+      "[Kebab MCP first-run] MYMCP_RECOVERY_RESET=1 detected — bootstrap reset and signing secret rotated. Remove the env var after recovery."
     );
     return;
   }
@@ -416,6 +430,9 @@ export const __internals = {
   BOOTSTRAP_PATH,
   encodeCookie,
 };
+
+// Re-export for tests that need to assert the 503 path.
+export { SigningSecretUnavailableError };
 
 // Side effect: try to hydrate on first import (cold-start safe).
 rehydrateBootstrapFromTmp();

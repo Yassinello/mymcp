@@ -11,7 +11,7 @@ import { checkRateLimit } from "@/core/rate-limit";
  * Admin-auth-gated. Rate limited to 20/min.
  */
 export async function POST(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   // Rate limit using the shared KV-backed limiter (survives cold starts).

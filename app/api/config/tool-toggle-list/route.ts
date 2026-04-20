@@ -10,7 +10,7 @@ import { getTenantId, TenantError } from "@/core/tenant";
  * When x-mymcp-tenant header is present, returns tenant-scoped toggles.
  */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   let tenantId: string | null = null;

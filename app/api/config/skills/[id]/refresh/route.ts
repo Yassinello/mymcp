@@ -12,7 +12,7 @@ interface RouteContext {
  * Forces an immediate re-fetch of a remote skill. No-op for inline skills.
  */
 export async function POST(request: Request, ctx: RouteContext) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
   const { id } = await ctx.params;
 

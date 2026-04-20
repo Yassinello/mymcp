@@ -13,7 +13,7 @@ import type { z } from "zod";
  * Returns a list of all registered tools with name + description + connector.
  */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   const { searchParams } = new URL(request.url);

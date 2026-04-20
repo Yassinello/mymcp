@@ -53,74 +53,74 @@ describe("isFirstRunMode", () => {
 });
 
 describe("getOrCreateClaim", () => {
-  it("creates a new claim with cookie on first call", () => {
-    const result = getOrCreateClaim(makeRequest());
+  it("creates a new claim with cookie on first call", async () => {
+    const result = await getOrCreateClaim(makeRequest());
     expect(result.isNewClaim).toBe(true);
     expect(result.isClaimer).toBe(true);
     expect(result.claimId).toMatch(/^[0-9a-f]{64}$/);
     expect(result.cookieToSet).toBeTruthy();
   });
 
-  it("recognizes the same claimer via cookie", () => {
-    const first = getOrCreateClaim(makeRequest());
+  it("recognizes the same claimer via cookie", async () => {
+    const first = await getOrCreateClaim(makeRequest());
     const cookieValue = encodeURIComponent(first.cookieToSet || "");
-    const second = getOrCreateClaim(makeRequest(`mymcp_firstrun_claim=${cookieValue}`));
+    const second = await getOrCreateClaim(makeRequest(`mymcp_firstrun_claim=${cookieValue}`));
     expect(second.isNewClaim).toBe(false);
     expect(second.isClaimer).toBe(true);
     expect(second.claimId).toBe(first.claimId);
   });
 
-  it("locks out a second visitor with no cookie", () => {
-    getOrCreateClaim(makeRequest());
-    const other = getOrCreateClaim(makeRequest());
+  it("locks out a second visitor with no cookie", async () => {
+    await getOrCreateClaim(makeRequest());
+    const other = await getOrCreateClaim(makeRequest());
     expect(other.isClaimer).toBe(false);
   });
 
-  it("rejects a request with a forged/unsigned cookie", () => {
-    getOrCreateClaim(makeRequest());
-    const forged = getOrCreateClaim(makeRequest("mymcp_firstrun_claim=garbage"));
+  it("rejects a request with a forged/unsigned cookie", async () => {
+    await getOrCreateClaim(makeRequest());
+    const forged = await getOrCreateClaim(makeRequest("mymcp_firstrun_claim=garbage"));
     expect(forged.isClaimer).toBe(false);
   });
 });
 
 describe("isClaimer", () => {
-  it("true for the original claimer", () => {
-    const c = getOrCreateClaim(makeRequest());
+  it("true for the original claimer", async () => {
+    const c = await getOrCreateClaim(makeRequest());
     const cookie = `mymcp_firstrun_claim=${encodeURIComponent(c.cookieToSet || "")}`;
-    expect(isClaimer(makeRequest(cookie))).toBe(true);
+    expect(await isClaimer(makeRequest(cookie))).toBe(true);
   });
-  it("false for an unrelated visitor", () => {
-    getOrCreateClaim(makeRequest());
-    expect(isClaimer(makeRequest())).toBe(false);
+  it("false for an unrelated visitor", async () => {
+    await getOrCreateClaim(makeRequest());
+    expect(await isClaimer(makeRequest())).toBe(false);
   });
 });
 
 describe("bootstrapToken", () => {
-  it("generates a 64-char hex token and mutates process.env", () => {
-    const c = getOrCreateClaim(makeRequest());
+  it("generates a 64-char hex token and mutates process.env", async () => {
+    const c = await getOrCreateClaim(makeRequest());
     const { token } = bootstrapToken(c.claimId);
     expect(token).toMatch(/^[0-9a-f]{64}$/);
     expect(process.env.MCP_AUTH_TOKEN).toBe(token);
     expect(isBootstrapActive()).toBe(true);
   });
 
-  it("is idempotent for the same claim id", () => {
-    const c = getOrCreateClaim(makeRequest());
+  it("is idempotent for the same claim id", async () => {
+    const c = await getOrCreateClaim(makeRequest());
     const a = bootstrapToken(c.claimId);
     const b = bootstrapToken(c.claimId);
     expect(a.token).toBe(b.token);
   });
 
-  it("persists to the bootstrap /tmp file", () => {
-    const c = getOrCreateClaim(makeRequest());
+  it("persists to the bootstrap /tmp file", async () => {
+    const c = await getOrCreateClaim(makeRequest());
     bootstrapToken(c.claimId);
     expect(existsSync(__internals.BOOTSTRAP_PATH)).toBe(true);
   });
 });
 
 describe("clearBootstrap", () => {
-  it("removes in-memory and on-disk state", () => {
-    const c = getOrCreateClaim(makeRequest());
+  it("removes in-memory and on-disk state", async () => {
+    const c = await getOrCreateClaim(makeRequest());
     bootstrapToken(c.claimId);
     clearBootstrap();
     expect(isBootstrapActive()).toBe(false);
@@ -129,8 +129,8 @@ describe("clearBootstrap", () => {
 });
 
 describe("forceReset", () => {
-  it("clears in-memory and on-disk state", () => {
-    const c = getOrCreateClaim(makeRequest());
+  it("clears in-memory and on-disk state", async () => {
+    const c = await getOrCreateClaim(makeRequest());
     bootstrapToken(c.claimId);
     expect(isBootstrapActive()).toBe(true);
     forceReset();
@@ -209,7 +209,7 @@ describe("KV cross-instance bootstrap persistence", () => {
   });
 
   it("persistBootstrapToKv is called when KV is available (via bootstrapToken)", async () => {
-    const c = getOrCreateClaim(new Request("http://localhost/api/welcome/claim"));
+    const c = await getOrCreateClaim(new Request("http://localhost/api/welcome/claim"));
     bootstrapToken(c.claimId);
     // Fire-and-forget: wait a microtask tick.
     await new Promise((r) => setTimeout(r, 10));
@@ -269,7 +269,7 @@ describe("KV cross-instance bootstrap persistence", () => {
   });
 
   it("clearBootstrap also deletes from KV", async () => {
-    const c = getOrCreateClaim(new Request("http://localhost/api/welcome/claim"));
+    const c = await getOrCreateClaim(new Request("http://localhost/api/welcome/claim"));
     bootstrapToken(c.claimId);
     await new Promise((r) => setTimeout(r, 10));
     stubKv.delete.mockClear();
@@ -281,7 +281,7 @@ describe("KV cross-instance bootstrap persistence", () => {
   });
 
   it("forceReset also deletes from KV", async () => {
-    const c = getOrCreateClaim(new Request("http://localhost/api/welcome/claim"));
+    const c = await getOrCreateClaim(new Request("http://localhost/api/welcome/claim"));
     bootstrapToken(c.claimId);
     await new Promise((r) => setTimeout(r, 10));
     stubKv.delete.mockClear();

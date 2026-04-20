@@ -10,7 +10,7 @@ import { getInstanceConfigAsync, SETTINGS_ENV_KEYS } from "@/core/config";
  * Auth-gated. KV credentials take precedence over env vars.
  */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   try {

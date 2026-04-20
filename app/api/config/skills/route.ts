@@ -10,7 +10,7 @@ import { getEnabledPacks } from "@/core/registry";
 
 /** GET /api/config/skills — list all skills. */
 export async function GET(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   try {
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
  * Body: SkillCreateInput (name, description, content, arguments, source)
  */
 export async function POST(request: Request) {
-  const authError = checkAdminAuth(request);
+  const authError = await checkAdminAuth(request);
   if (authError) return authError;
 
   let body: unknown;
