@@ -48,7 +48,21 @@ export async function POST(request: Request) {
   // — the in-flight Upstash SET is cancelled and the bootstrap key
   // stays empty, so every cold lambda after that sees first-run mode
   // and locks the user out of /config behind a /welcome redirect loop.
-  await flushBootstrapToKv();
+  // We surface flush failures (auth error, rate limit, network) as a
+  // 500 so the UI shows a real error rather than a "success" that
+  // leaves the user with a doomed token.
+  try {
+    await flushBootstrapToKv();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[Kebab MCP first-run] flushBootstrapToKv failed: ${msg}`);
+    return NextResponse.json(
+      {
+        error: "Token minted but persistence to KV failed — please retry. Details: " + msg,
+      },
+      { status: 500 }
+    );
+  }
 
   const proto = request.headers.get("x-forwarded-proto") || "https";
   const host = request.headers.get("host") || "your-instance.vercel.app";

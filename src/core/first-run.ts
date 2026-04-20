@@ -290,10 +290,19 @@ export function bootstrapToken(claimId: string): { token: string } {
  * after `bootstrapToken()` so the KV write is durable before the lambda
  * is reaped. No-op when there's nothing to persist (e.g. test paths
  * without an active bootstrap).
+ *
+ * Unlike the fire-and-forget `persistBootstrapToKv` inside
+ * `bootstrapToken()`, this variant propagates failures — if the Upstash
+ * SET itself fails (rate limit, auth error, network), the caller gets a
+ * thrown error instead of silent "welcome looked fine, but /api/mcp
+ * returns 503 forever". Init surfaces this to the UI as a visible
+ * failure so the user can retry rather than save a doomed token.
  */
 export async function flushBootstrapToKv(): Promise<void> {
   if (!activeBootstrap) return;
-  await persistBootstrapToKv(activeBootstrap);
+  if (!isExternalKvAvailable()) return;
+  const kv = getKVStore();
+  await kv.set(KV_BOOTSTRAP_KEY, JSON.stringify(activeBootstrap));
 }
 
 /**
