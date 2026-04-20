@@ -1,7 +1,7 @@
 import { createMcpHandler } from "mcp-handler";
 import { withLogging } from "@/core/logging";
 import { checkMcpAuth, extractToken } from "@/core/auth";
-import { isFirstRunMode } from "@/core/first-run";
+import { isFirstRunMode, rehydrateBootstrapAsync } from "@/core/first-run";
 import { checkRateLimit } from "@/core/rate-limit";
 import { getEnabledPacks, logRegistryState } from "@/core/registry";
 import { hydrateCredentialsFromKV } from "@/core/credential-store";
@@ -144,6 +144,18 @@ async function buildHandler(
 }
 
 async function handler(request: Request): Promise<Response> {
+  // Rehydrate first-run bootstrap state from /tmp (same container) or
+  // KV (cross-container) before the isFirstRunMode check. On Vercel
+  // without auto-magic, the welcome flow mints MCP_AUTH_TOKEN into the
+  // minting lambda's process.env only — cold lambdas that respond to
+  // Claude Desktop / Cursor / etc. have to pull the token back from
+  // persistent storage on first request, otherwise every MCP call
+  // returns 503 until someone manually pastes the token into Vercel
+  // env vars. The durable-backend welcome flow writes the bootstrap
+  // to KV at mint time (see persistBootstrapToKv), so this restore is
+  // effectively instant on any request after setup completes.
+  await rehydrateBootstrapAsync();
+
   // Zero-config / first-run guard: if the instance has not yet been
   // initialized via /welcome, refuse all MCP traffic with a clear message.
   if (isFirstRunMode()) {

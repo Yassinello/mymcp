@@ -18,7 +18,7 @@ export default function Compatibility() {
           ))}
         </div>
         <div className="flex justify-center gap-8 text-sm text-slate-500 font-mono">
-          <span>65+ integrations</span>
+          <span>86 tools · 14 connectors</span>
           <span>·</span>
           <span>MIT License</span>
           <span>·</span>

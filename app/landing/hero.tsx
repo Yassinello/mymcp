@@ -10,9 +10,12 @@ export default function Hero() {
         <h1 className="text-5xl sm:text-6xl font-bold text-white leading-tight tracking-tight mb-6">
           Your Personal MCP Server
         </h1>
-        <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-          Give your AI assistant access to everything that matters — calendar, email, files, GitHub,
-          and 65+ more tools — with a single Vercel deploy.
+        <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-8 leading-relaxed">
+          Give your AI assistant access to Gmail, Calendar, Notion, GitHub, Slack, Linear — 86 tools
+          across 14 connectors — with a single Vercel deploy. Upstash included.
+        </p>
+        <p className="text-sm text-slate-500 max-w-xl mx-auto mb-10">
+          Your keys, your data, your infra. Open source, MIT licensed, no SaaS middleman.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <a

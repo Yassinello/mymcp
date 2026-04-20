@@ -17,7 +17,7 @@ const FEATURES = [
     ),
   },
   {
-    title: "65+ tools, ready to use.",
+    title: "86 tools, ready to use.",
     description:
       "Calendar, email, contacts, Notion, GitHub, Slack, Exa search, memory, and more — every tool you reach for is already built. Connect what you need, skip what you don't.",
     icon: (
