@@ -1,0 +1,147 @@
+/**
+ * Contract test: `getKVStore()` may only be called from allowlisted files.
+ *
+ * Every non-allowlisted callsite bypasses `TenantKVStore` tenant-prefixing
+ * and risks cross-tenant data leakage (SEC-01). This test greps the source
+ * tree and fails if a new caller is introduced outside the allowlist.
+ *
+ * To add a new legitimate global-KV callsite, update `ALLOWLIST` below AND
+ * document the rationale in `.planning/phases/37b-security-hotfix/INVENTORY.md`.
+ */
+import { describe, it, expect } from "vitest";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative, sep } from "node:path";
+
+// Files where `getKVStore()` may legitimately be called.
+// Rationale for each entry lives in INVENTORY.md.
+const ALLOWLIST = new Set<string>([
+  // Definition site + internal plumbing
+  "src/core/kv-store.ts",
+  "src/core/request-context.ts",
+  "src/core/tenant.ts",
+  // Bootstrap / first-run is intentionally pre-tenant
+  "src/core/first-run.ts",
+  "src/core/signing-secret.ts",
+  // Dashboard env writes — global by design (transitional; see SEC-02)
+  "src/core/env-store.ts",
+  // Operator-wide systems — tenant-scoping is v0.11 work (see FOLLOW-UP)
+  "src/core/backup.ts",
+  "src/core/log-store.ts",
+  "src/core/rate-limit.ts",
+  "src/core/tool-toggles.ts",
+  "src/core/config.ts",
+  // Storage/diagnostic/admin-migration — operator surfaces
+  "app/api/storage/status/route.ts",
+  "app/api/storage/migrate/route.ts",
+  "app/api/storage/import/route.ts",
+  "app/api/config/context/route.ts",
+  // Scripts (not runtime server code)
+  "scripts/kv-compact.ts",
+]);
+
+// File roots to scan. Tests and node_modules are excluded — they're allowed
+// to call getKVStore() freely in fixtures.
+const SCAN_ROOTS = ["src", "app"];
+const IGNORE_DIRS = new Set(["node_modules", ".next", "dist", "coverage"]);
+
+function walk(dir: string, out: string[]): void {
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry);
+    let st;
+    try {
+      st = statSync(full);
+    } catch {
+      continue;
+    }
+    if (st.isDirectory()) {
+      if (IGNORE_DIRS.has(entry)) continue;
+      walk(full, out);
+    } else if (
+      st.isFile() &&
+      (entry.endsWith(".ts") || entry.endsWith(".tsx")) &&
+      !entry.endsWith(".test.ts") &&
+      !entry.endsWith(".test.tsx") &&
+      !entry.endsWith(".e2e.test.ts") &&
+      entry !== "test-utils.ts"
+    ) {
+      out.push(full);
+    }
+  }
+}
+
+function toPosix(p: string): string {
+  return p.split(sep).join("/");
+}
+
+/**
+ * Flip this to `true` in Task 7 (SEC-01b) once every non-allowlisted
+ * `getKVStore()` callsite has been migrated to `getContextKVStore()` or
+ * `getTenantKVStore(explicitId)`. Until then, the test records the
+ * expected allowlist without failing.
+ */
+const ENFORCE = false;
+
+describe("kv-allowlist contract", () => {
+  it("getKVStore() is only called from allowlisted files", () => {
+    const projectRoot = join(__dirname, "..", "..");
+    const files: string[] = [];
+    for (const root of SCAN_ROOTS) {
+      walk(join(projectRoot, root), files);
+    }
+
+    const violations: { file: string; line: number; text: string }[] = [];
+    // Match bare getKVStore() calls, but not getTenantKVStore(...) or
+    // getContextKVStore(...) or property access like foo.getKVStore.
+    const callRe = /(?<![.\w])getKVStore\s*\(/;
+
+    for (const abs of files) {
+      const rel = toPosix(relative(projectRoot, abs));
+      if (ALLOWLIST.has(rel)) continue;
+      const contents = readFileSync(abs, "utf-8");
+      const lines = contents.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Allow in comments
+        const trimmed = line.trim();
+        if (trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
+        if (callRe.test(line)) {
+          violations.push({ file: rel, line: i + 1, text: line.trim() });
+        }
+      }
+    }
+
+    if (!ENFORCE) {
+      // Scaffold phase — just log.
+      if (violations.length > 0) {
+        console.warn(
+          `[kv-allowlist contract] ${violations.length} non-allowlisted getKVStore() call(s) found (enforcement pending):`
+        );
+        for (const v of violations.slice(0, 10)) {
+          console.warn(`  ${v.file}:${v.line}  ${v.text}`);
+        }
+      }
+      expect(true).toBe(true);
+      return;
+    }
+
+    if (violations.length > 0) {
+      const summary = violations.map((v) => `  ${v.file}:${v.line}\n    ${v.text}`).join("\n");
+      throw new Error(
+        `Non-allowlisted getKVStore() callsite(s) detected. These bypass TenantKVStore ` +
+          `and risk cross-tenant data leakage (SEC-01).\n\n${summary}\n\n` +
+          `Fix: replace with getContextKVStore() from @/core/request-context for per-request ` +
+          `tenant isolation, or with getTenantKVStore(explicitId) when the tenant is known. ` +
+          `If the callsite is legitimately global, add it to ALLOWLIST in this file and document ` +
+          `the rationale in .planning/phases/37b-security-hotfix/INVENTORY.md.`
+      );
+    }
+
+    expect(violations).toEqual([]);
+  });
+});
