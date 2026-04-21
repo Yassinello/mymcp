@@ -92,8 +92,6 @@ export async function ensureBootstrapRehydratedFromUpstash(): Promise<void> {
     if (typeof parsed.token !== "string" || parsed.token.length < 10) return;
     edgeBootstrapAuthTokenCache = parsed.token;
   } catch {
-    // Network hiccup, malformed payload, timeout — any failure leaves
-    // the edge cache as-is and the middleware proceeds with its existing
-    // first-time-setup logic. Graceful degradation.
+    // silent-swallow-ok: Edge-runtime rehydrate is best-effort — network hiccup, malformed payload, or 1s timeout falls back to existing first-time-setup logic without breaking middleware; logging here would require an Edge-compatible logger that depends on process.env reads already confirmed to work above
   }
 }

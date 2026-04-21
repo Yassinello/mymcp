@@ -35,6 +35,9 @@ import {
   SigningSecretUnavailableError,
 } from "./signing-secret";
 import { hasUpstashCreds } from "./upstash-env";
+import { getLogger } from "./logging";
+
+const firstRunLog = getLogger("FIRST-RUN");
 // Note: the v0.10 tenant-prefix migration trigger lives in
 // `src/core/with-bootstrap-rehydrate.ts` (DUR-02). See the docstring on
 // `rehydrateBootstrapAsync` below for the rationale.
@@ -303,11 +306,12 @@ export function bootstrapToken(claimId: string): { token: string } {
   activeBootstrap = { claimId, token, createdAt: Date.now() };
 
   let persisted = false;
+  // silent-swallow-ok: /tmp may be read-only in some containers (Fly, Cloud Run sandbox); /tmp is a warm-path optimization — in-memory cache + KV are the authoritative state
   try {
     writeFileSync(BOOTSTRAP_PATH, JSON.stringify(activeBootstrap), { encoding: "utf-8" });
     persisted = true;
   } catch {
-    // Best effort: /tmp may be read-only in some environments.
+    // Read-only filesystem — fall back to in-memory + KV.
   }
 
   // DUR-04: the previous `void persistBootstrapToKv(activeBootstrap)`
@@ -352,10 +356,11 @@ export function forceReset(): void {
   activeBootstrap = null;
   bootstrapAuthTokenCache = null;
   claims.clear();
+  // silent-swallow-ok: recovery-reset cleanup; missing /tmp file is the success case, not a failure
   try {
     if (existsSync(BOOTSTRAP_PATH)) unlinkSync(BOOTSTRAP_PATH);
   } catch {
-    // Ignore.
+    // Best-effort unlink.
   }
   // fire-and-forget OK: recovery cleanup of KV bootstrap key; caller does not depend on KV ack
   void deleteBootstrapFromKv();
@@ -379,6 +384,7 @@ export function rehydrateBootstrapFromTmp(): void {
     );
     return;
   }
+  // silent-swallow-ok: a malformed or missing /tmp bootstrap is a normal cold-start / first-run state; caller proceeds to KV rehydrate
   try {
     if (!existsSync(BOOTSTRAP_PATH)) return;
     const raw = readFileSync(BOOTSTRAP_PATH, "utf-8");
@@ -395,7 +401,7 @@ export function rehydrateBootstrapFromTmp(): void {
       `[Kebab MCP first-run] re-hydrated bootstrap from /tmp (claim=${parsed.claimId.slice(0, 8)}…, age=${Math.round((Date.now() - parsed.createdAt) / 1000)}s)`
     );
   } catch {
-    // Ignore malformed/missing bootstrap state.
+    // Treat malformed /tmp as missing — caller falls through to KV.
   }
 }
 
@@ -404,10 +410,11 @@ export function clearBootstrap(): void {
   activeBootstrap = null;
   bootstrapAuthTokenCache = null;
   claims.clear();
+  // silent-swallow-ok: clearBootstrap is an idempotent teardown; missing /tmp is the success state
   try {
     if (existsSync(BOOTSTRAP_PATH)) unlinkSync(BOOTSTRAP_PATH);
   } catch {
-    // Ignore.
+    // Best-effort unlink.
   }
   // fire-and-forget OK: recovery cleanup path; caller does not wait on KV ack
   void deleteBootstrapFromKv();
@@ -434,9 +441,9 @@ async function recordRehydrateSuccess(): Promise<void> {
     await kv.set(REHYDRATE_META_LAST_KEY, now);
     await incrementRehydrateCount();
   } catch (err) {
-    console.info(
-      `[Kebab MCP first-run] rehydrate-meta write skipped: ${err instanceof Error ? err.message : String(err)}`
-    );
+    firstRunLog.warn("rehydrate-meta write skipped", {
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -461,9 +468,9 @@ async function incrementRehydrateCount(): Promise<void> {
     if (parsed.events.length > 10_000) parsed.events = parsed.events.slice(-1000);
     await kv.set(REHYDRATE_COUNT_KV_KEY, JSON.stringify(parsed));
   } catch (err) {
-    console.info(
-      `[Kebab MCP first-run] rehydrate-count increment skipped: ${err instanceof Error ? err.message : String(err)}`
-    );
+    firstRunLog.warn("rehydrate-count increment skipped", {
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -541,10 +548,11 @@ export async function rehydrateBootstrapAsync(): Promise<void> {
     bootstrapAuthTokenCache = fromKv.token;
   }
   // Mirror back to /tmp for warm-instance fast path.
+  // silent-swallow-ok: /tmp mirror is an optimization; KV is the source of truth
   try {
     writeFileSync(BOOTSTRAP_PATH, JSON.stringify(fromKv), { encoding: "utf-8" });
   } catch {
-    // Ignore.
+    // Read-only filesystem — KV remains authoritative.
   }
   console.info(
     `[Kebab MCP first-run] re-hydrated bootstrap from KV (claim=${fromKv.claimId.slice(0, 8)}…)`
@@ -558,10 +566,11 @@ export function __resetFirstRunForTests(): void {
   claims.clear();
   activeBootstrap = null;
   bootstrapAuthTokenCache = null;
+  // silent-swallow-ok: test-helper cleanup; missing /tmp is the success state
   try {
     if (existsSync(BOOTSTRAP_PATH)) unlinkSync(BOOTSTRAP_PATH);
   } catch {
-    // Ignore.
+    // Ignore absent /tmp file.
   }
   // fire-and-forget OK: test-helper cleanup; test runner awaits via __resetFirstRunForTestsAsync() when the KV ack actually matters
   void deleteBootstrapFromKv();

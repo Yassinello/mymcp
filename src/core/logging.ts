@@ -3,6 +3,48 @@ import { McpToolError } from "./errors";
 import type { ToolResult } from "./types";
 import { startToolSpan, endToolSpan } from "./tracing";
 
+// ── OBS-03: tagged structured logger ───────────────────────────────
+//
+// Thin facade over console that prefixes messages with a `[TAG]` so
+// grep'ing production logs for a subsystem is one-line. Each sweep in
+// Phase 38 standardized its tag:
+//   [FIRST-RUN]        — src/core/first-run*.ts
+//   [KV]               — src/core/kv-store.ts
+//   [WELCOME]          — app/api/welcome/**/route.ts
+//   [CONNECTOR:skills] — src/connectors/skills/*
+//   [LOG-STORE]        — src/core/log-store.ts
+//   [API:<route>]      — app/api/**/route.ts via errorResponse()
+//   [TOOL:<name>]      — tool-timeout path
+//
+// Keep the Logger interface minimal — we don't need pino-level
+// structured fields yet, and staying on `console.*` means we keep
+// working in edge / workers runtimes without a platform-specific
+// dependency.
+
+export interface Logger {
+  info(msg: string, meta?: Record<string, unknown>): void;
+  warn(msg: string, meta?: Record<string, unknown>): void;
+  error(msg: string, meta?: Record<string, unknown>): void;
+  debug(msg: string, meta?: Record<string, unknown>): void;
+}
+
+export function getLogger(tag?: string): Logger {
+  const prefix = tag ? `[${tag}] ` : "";
+  return {
+    info: (msg, meta) =>
+      meta ? console.log(`${prefix}${msg}`, meta) : console.log(`${prefix}${msg}`),
+    warn: (msg, meta) =>
+      meta ? console.warn(`${prefix}${msg}`, meta) : console.warn(`${prefix}${msg}`),
+    error: (msg, meta) =>
+      meta ? console.error(`${prefix}${msg}`, meta) : console.error(`${prefix}${msg}`),
+    debug: (msg, meta) => {
+      if (process.env.MYMCP_DEBUG !== "1") return;
+      if (meta) console.log(`[DEBUG]${prefix}${msg}`, meta);
+      else console.log(`[DEBUG]${prefix}${msg}`);
+    },
+  };
+}
+
 export interface ToolLog {
   tool: string;
   durationMs: number;

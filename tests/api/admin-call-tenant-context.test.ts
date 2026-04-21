@@ -90,6 +90,14 @@ vi.mock("@/core/logging", () => ({
     (_name: string, fn: (p: Record<string, unknown>) => Promise<unknown>) =>
     (p: Record<string, unknown>) =>
       fn(p),
+  // OBS-03: first-run.ts imports getLogger; provide a noop so the
+  // transitive module graph resolves.
+  getLogger: (_tag?: string) => ({
+    info: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+    debug: () => undefined,
+  }),
 }));
 
 // Bypass admin auth for the test harness.

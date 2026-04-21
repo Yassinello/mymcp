@@ -22,10 +22,11 @@ async function checkWelcomeAuth(request: Request): Promise<Response | null> {
   const adminError = await checkAdminAuth(request);
   if (!adminError) return null;
   // Fall back to the first-run claimer cookie.
+  // silent-swallow-ok: SigningSecretUnavailableError here is not a bug — it means KV is absent; fall through to the adminError response below
   try {
     if (await isClaimer(request)) return null;
   } catch {
-    // SigningSecretUnavailableError → deny via admin error.
+    // Deliberate fallthrough to adminError below.
   }
   return adminError;
 }
