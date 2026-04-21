@@ -18,6 +18,8 @@
   <a href="#connectors">Connectors</a> &middot;
   <a href="#architecture">Architecture</a> &middot;
   <a href="#configuration">Configuration</a> &middot;
+  <a href="docs/TROUBLESHOOTING.md">Troubleshooting</a> &middot;
+  <a href="docs/HOSTING.md">Hosting</a> &middot;
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
@@ -645,10 +647,22 @@ npm run build           # Production build
 npm run lint            # ESLint
 npm run format          # Prettier
 npm run test:contract   # Verify tool contracts
-npm run test:e2e        # E2E smoke test (starts server, checks tools/list)
+npm run test:e2e        # Playwright welcome-flow E2E (runs against a live dev server)
+npm run test:e2e:legacy # Pre-v0.10 Stateful HTTP smoke (tools/list)
 ```
 
 Pre-commit hook (via Husky): `lint-staged` + `contract test`
+
+## Documentation
+
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — symptom → fix index for every shipped bug + security finding
+- [docs/HOSTING.md](docs/HOSTING.md) — host compatibility matrix (Vercel, Docker, Fly, Render, Cloud Run, bare-metal)
+- [docs/CONNECTORS.md](docs/CONNECTORS.md) — per-connector setup and env var reference
+- [docs/SECURITY-ADVISORIES.md](docs/SECURITY-ADVISORIES.md) — published advisory index
+- [CLAUDE.md](CLAUDE.md) — developer / fork-maintainer guide (durable bootstrap pattern, conventions)
+- [CHANGELOG.md](CHANGELOG.md) — version history
+- [CONTRIBUTING.md](CONTRIBUTING.md) — contribution guide
+- [SECURITY.md](SECURITY.md) — vulnerability reporting
 
 ## Contributing
 
