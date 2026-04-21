@@ -1,4 +1,59 @@
 /**
+ * fetch-utils — shared helpers for HTTP fetches across connectors.
+ *
+ * Exports:
+ *   - fetchWithTimeout(url, init?, timeoutMs?) — cancels after timeoutMs
+ *   - fetchWithByteCap(url, init, maxBytes)    — streams with a byte ceiling
+ *   - FetchCapResult                           — return shape of fetchWithByteCap
+ *
+ * Phase 44 SCM-05b — fetchWithTimeout consolidates 5 prior inline copies
+ * (apify/client.ts, vault/github.ts, paywall/fetch-html.ts,
+ * skills/remote-fetcher.ts, core/storage-mode.ts). Default 15_000ms is
+ * a safety net; every call site passes its prior explicit default so
+ * behavior is unchanged.
+ */
+
+/**
+ * fetchWithTimeout — wrap `fetch` with an abort controller that fires
+ * after `timeoutMs`. If the caller supplies `init.signal`, it is linked
+ * to the internal controller (either firing aborts the fetch).
+ *
+ * - Default timeout: 15_000ms. Every existing call site passes its prior
+ *   explicit default; the 15s default is a safety net for future callers.
+ * - Rethrows raw AbortError on timeout (callers wrap for friendly messages).
+ * - Clears the timer in `finally`, no leaked handles.
+ */
+export async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs: number = 15_000
+): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+
+  // Link caller-supplied signal so either source can abort the fetch.
+  const callerSignal = init.signal;
+  let onCallerAbort: (() => void) | null = null;
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      ctrl.abort();
+    } else {
+      onCallerAbort = () => ctrl.abort();
+      callerSignal.addEventListener("abort", onCallerAbort, { once: true });
+    }
+  }
+
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+    if (callerSignal && onCallerAbort) {
+      callerSignal.removeEventListener("abort", onCallerAbort);
+    }
+  }
+}
+
+/**
  * fetchWithByteCap — fetch a URL and stream the body, aborting if it
  * exceeds `maxBytes`. Returns `{ text, truncated }` where `truncated`
  * is true when the cap was hit before the stream completed.

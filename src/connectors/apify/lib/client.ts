@@ -4,9 +4,12 @@
  * `Authorization: Bearer ${token}` header (read endpoints).
  */
 
+import { fetchWithTimeout } from "@/core/fetch-utils";
+
 const APIFY_BASE = "https://api.apify.com/v2";
 const RUN_SYNC_TIMEOUT_SECONDS = 55;
-const FETCH_TIMEOUT_MS = 60_000;
+// Phase 44 SCM-05b: 60s explicit timeout preserved from prior local helper.
+const APIFY_FETCH_TIMEOUT_MS = 60_000;
 
 function getToken(): string {
   const t = process.env.APIFY_TOKEN;
@@ -19,16 +22,6 @@ function sanitize(text: string): string {
   const token = process.env.APIFY_TOKEN;
   if (!token) return text;
   return text.split(token).join("<redacted>");
-}
-
-async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Response> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-  try {
-    return await fetch(url, { ...init, signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 /**
@@ -49,14 +42,18 @@ export async function runActor(
 
   let res: Response;
   try {
-    res = await fetchWithTimeout(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+    res = await fetchWithTimeout(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(input),
       },
-      body: JSON.stringify(input),
-    });
+      APIFY_FETCH_TIMEOUT_MS
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(sanitize(`Apify fetch failed: ${msg}`), { cause: err });
@@ -89,9 +86,13 @@ export async function apifyGet<T = unknown>(pathAndQuery: string): Promise<T> {
   const url = `${APIFY_BASE}${pathAndQuery}`;
   let res: Response;
   try {
-    res = await fetchWithTimeout(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    res = await fetchWithTimeout(
+      url,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+      APIFY_FETCH_TIMEOUT_MS
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(sanitize(`Apify fetch failed: ${msg}`), { cause: err });

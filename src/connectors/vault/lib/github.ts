@@ -1,7 +1,9 @@
 import { VaultNotFoundError, VaultAuthError } from "@/core/connector-errors";
+import { fetchWithTimeout } from "@/core/fetch-utils";
 
 const GITHUB_API = "https://api.github.com";
-const FETCH_TIMEOUT = 10_000; // 10 seconds
+// Phase 44 SCM-05b: 10s default preserved from prior local helper.
+const FETCH_TIMEOUT = 10_000;
 
 function getConfig() {
   const pat = process.env.GITHUB_PAT;
@@ -94,22 +96,6 @@ export function validateVaultPath(path: string): void {
   }
 }
 
-// --- Fetch with timeout ---
-
-async function fetchWithTimeout(
-  url: string,
-  options: RequestInit = {},
-  timeoutMs = FETCH_TIMEOUT
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 // --- Read ---
 
 export async function vaultRead(path: string): Promise<VaultFile> {
@@ -117,7 +103,8 @@ export async function vaultRead(path: string): Promise<VaultFile> {
   const { pat, repo } = getConfig();
   const res = await fetchWithTimeout(
     `${GITHUB_API}/repos/${repo}/contents/${encodeURIPath(path)}`,
-    { headers: headers(pat) }
+    { headers: headers(pat) },
+    FETCH_TIMEOUT
   );
 
   if (!res.ok) {
@@ -148,7 +135,7 @@ export async function vaultWrite(
   // Use known SHA if provided, otherwise fetch
   let existingSha = knownSha;
   if (!existingSha) {
-    const getRes = await fetchWithTimeout(url, { headers: headers(pat) });
+    const getRes = await fetchWithTimeout(url, { headers: headers(pat) }, FETCH_TIMEOUT);
     if (getRes.ok) {
       const existing = (await getRes.json()) as GitHubContentResponse;
       existingSha = existing.sha;
@@ -165,11 +152,15 @@ export async function vaultWrite(
     body.sha = existingSha;
   }
 
-  const putRes = await fetchWithTimeout(url, {
-    method: "PUT",
-    headers: headers(pat),
-    body: JSON.stringify(body),
-  });
+  const putRes = await fetchWithTimeout(
+    url,
+    {
+      method: "PUT",
+      headers: headers(pat),
+      body: JSON.stringify(body),
+    },
+    FETCH_TIMEOUT
+  );
 
   if (!putRes.ok) {
     const err = await putRes.text();
@@ -198,7 +189,7 @@ export async function vaultDelete(
   // Use known SHA if provided, otherwise fetch
   let sha = knownSha;
   if (!sha) {
-    const getRes = await fetchWithTimeout(url, { headers: headers(pat) });
+    const getRes = await fetchWithTimeout(url, { headers: headers(pat) }, FETCH_TIMEOUT);
     if (!getRes.ok) {
       if (getRes.status === 404) throw new VaultNotFoundError(path);
       if (getRes.status === 401 || getRes.status === 403)
@@ -209,14 +200,18 @@ export async function vaultDelete(
     sha = existing.sha;
   }
 
-  const delRes = await fetchWithTimeout(url, {
-    method: "DELETE",
-    headers: headers(pat),
-    body: JSON.stringify({
-      message: message || `Delete ${path} via Kebab MCP`,
-      sha,
-    }),
-  });
+  const delRes = await fetchWithTimeout(
+    url,
+    {
+      method: "DELETE",
+      headers: headers(pat),
+      body: JSON.stringify({
+        message: message || `Delete ${path} via Kebab MCP`,
+        sha,
+      }),
+    },
+    FETCH_TIMEOUT
+  );
 
   if (!delRes.ok) {
     const err = await delRes.text();
@@ -232,9 +227,11 @@ export async function vaultList(folder?: string): Promise<VaultListEntry[]> {
   if (folder) validateVaultPath(folder);
   const { pat, repo } = getConfig();
   const pathSegment = folder ? `/${encodeURIPath(folder)}` : "";
-  const res = await fetchWithTimeout(`${GITHUB_API}/repos/${repo}/contents${pathSegment}`, {
-    headers: headers(pat),
-  });
+  const res = await fetchWithTimeout(
+    `${GITHUB_API}/repos/${repo}/contents${pathSegment}`,
+    { headers: headers(pat) },
+    FETCH_TIMEOUT
+  );
 
   if (!res.ok) {
     if (res.status === 404) throw new VaultNotFoundError(folder || "/");
@@ -308,7 +305,8 @@ async function tryCodeSearch(
         ...headers(pat),
         Accept: "application/vnd.github.text-match+json",
       },
-    }
+    },
+    FETCH_TIMEOUT
   );
 
   if (!res.ok) return { results: [], totalCount: 0 };
@@ -335,7 +333,8 @@ async function treeGrep(
   // Get full file tree
   const treeRes = await fetchWithTimeout(
     `${GITHUB_API}/repos/${repo}/git/trees/${process.env.GITHUB_BRANCH || "main"}?recursive=1`,
-    { headers: headers(pat) }
+    { headers: headers(pat) },
+    FETCH_TIMEOUT
   );
 
   if (!treeRes.ok) throw new Error(`GitHub Trees error: ${treeRes.status}`);
@@ -380,7 +379,8 @@ async function treeGrep(
     try {
       const res = await fetchWithTimeout(
         `${GITHUB_API}/repos/${repo}/contents/${encodeURIPath(file.path)}`,
-        { headers: headers(pat) }
+        { headers: headers(pat) },
+        FETCH_TIMEOUT
       );
       if (!res.ok) return null;
 
@@ -472,9 +472,11 @@ export async function vaultRecentCommits(
     if (results.length >= limit) break;
 
     // Fetch commit details to get file list
-    const detailRes = await fetchWithTimeout(`${GITHUB_API}/repos/${repo}/commits/${commit.sha}`, {
-      headers: headers(pat),
-    });
+    const detailRes = await fetchWithTimeout(
+      `${GITHUB_API}/repos/${repo}/commits/${commit.sha}`,
+      { headers: headers(pat) },
+      FETCH_TIMEOUT
+    );
     if (!detailRes.ok) continue;
 
     const detail = (await detailRes.json()) as {
@@ -513,7 +515,8 @@ export async function vaultTree(folder?: string): Promise<TreeFile[]> {
 
   const res = await fetchWithTimeout(
     `${GITHUB_API}/repos/${repo}/git/trees/${process.env.GITHUB_BRANCH || "main"}?recursive=1`,
-    { headers: headers(pat) }
+    { headers: headers(pat) },
+    FETCH_TIMEOUT
   );
 
   if (!res.ok) throw new Error(`GitHub Trees error: ${res.status}`);
@@ -543,9 +546,11 @@ export async function checkVaultHealth(): Promise<{
 }> {
   const { pat, repo } = getConfig();
 
-  const res = await fetchWithTimeout(`${GITHUB_API}/repos/${repo}`, {
-    headers: headers(pat),
-  });
+  const res = await fetchWithTimeout(
+    `${GITHUB_API}/repos/${repo}`,
+    { headers: headers(pat) },
+    FETCH_TIMEOUT
+  );
 
   const rateLimitRemaining = parseInt(res.headers.get("x-ratelimit-remaining") || "0");
   const rateLimitTotal = parseInt(res.headers.get("x-ratelimit-limit") || "0");

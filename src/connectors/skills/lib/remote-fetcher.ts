@@ -3,6 +3,13 @@ import { replaceSkill } from "../store";
 import { fetchWithByteCap } from "@/core/fetch-utils";
 import { isPublicUrl } from "@/core/url-safety";
 
+// Phase 44 SCM-05b: this file retains an inline `new AbortController() +
+// setTimeout` in fetchRemote because it composes with fetchWithByteCap
+// (which needs the signal to cancel mid-stream). The shared fetchWithTimeout
+// helper is used where a plain fetch() is replaced; it cannot layer over
+// fetchWithByteCap without changing byte-cap semantics. Same justification
+// applies to paywall/lib/fetch-html.ts.
+
 /**
  * Remote fetcher for skills that point at a GitHub raw / Gist / https URL.
  *

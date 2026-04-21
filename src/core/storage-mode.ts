@@ -34,6 +34,7 @@ import { randomBytes } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { getUpstashCreds } from "./upstash-env";
+import { fetchWithTimeout } from "./fetch-utils";
 
 export type StorageMode = "kv" | "file" | "static" | "kv-degraded";
 
@@ -132,19 +133,21 @@ async function pingUpstash(
   url: string,
   token: string
 ): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
+  // Phase 44 SCM-05b: 1500ms explicit timeout preserved via shared helper.
   const started = Date.now();
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 1500);
   try {
-    const res = await fetch(url.replace(/\/$/, ""), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
+    const res = await fetchWithTimeout(
+      url.replace(/\/$/, ""),
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(["PING"]),
       },
-      body: JSON.stringify(["PING"]),
-      signal: ctrl.signal,
-    });
+      1500
+    );
     const latencyMs = Date.now() - started;
     if (!res.ok) {
       return { ok: false, latencyMs, error: `HTTP ${res.status}` };
@@ -166,8 +169,6 @@ async function pingUpstash(
       latencyMs,
       error: err instanceof Error ? err.message : String(err),
     };
-  } finally {
-    clearTimeout(timer);
   }
 }
 
