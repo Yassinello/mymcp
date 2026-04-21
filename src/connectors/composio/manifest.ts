@@ -1,5 +1,6 @@
 import { defineTool, type ConnectorManifest } from "@/core/types";
 import { composioActionSchema, composioListSchema } from "./schemas";
+import { getConfig } from "@/core/config-facade";
 
 export const composioConnector: ConnectorManifest = {
   id: "composio",
@@ -31,7 +32,7 @@ A Composio account. You'll connect each target app _inside_ the Composio dashboa
   diagnose: async () => {
     try {
       const { Composio } = await import("@composio/core");
-      const client = new Composio({ apiKey: process.env.COMPOSIO_API_KEY! });
+      const client = new Composio({ apiKey: getConfig("COMPOSIO_API_KEY")! });
       const accounts = await client.connectedAccounts.list();
       const count = Array.isArray(accounts) ? accounts.length : 0;
       return { ok: true, message: `${count} connected account(s)` };

@@ -1,4 +1,5 @@
 import { McpToolError, ErrorCode } from "@/core/errors";
+import { getConfig } from "@/core/config-facade";
 
 let cachedToken: { access_token: string; expires_at: number } | null = null;
 
@@ -8,9 +9,9 @@ export async function getGoogleAccessToken(): Promise<string> {
     return cachedToken.access_token;
   }
 
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  const clientId = getConfig("GOOGLE_CLIENT_ID");
+  const clientSecret = getConfig("GOOGLE_CLIENT_SECRET");
+  const refreshToken = getConfig("GOOGLE_REFRESH_TOKEN");
 
   if (!clientId || !clientSecret || !refreshToken) {
     const missing = [

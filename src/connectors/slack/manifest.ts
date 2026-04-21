@@ -5,6 +5,7 @@ import { slackSendSchema, handleSlackSend } from "./tools/slack-send";
 import { slackSearchSchema, handleSlackSearch } from "./tools/slack-search";
 import { slackThreadSchema, handleSlackThread } from "./tools/slack-thread";
 import { slackProfileSchema, handleSlackProfile } from "./tools/slack-profile";
+import { getConfig } from "@/core/config-facade";
 
 export const slackConnector: ConnectorManifest = {
   id: "slack",
@@ -56,7 +57,7 @@ Admin access (or approval) to install a custom app in a Slack workspace. Free Sl
     try {
       const res = await fetch("https://slack.com/api/auth.test", {
         method: "POST",
-        headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` },
+        headers: { Authorization: `Bearer ${getConfig("SLACK_BOT_TOKEN") ?? ""}` },
       });
       const data = (await res.json()) as { ok: boolean; team?: string; error?: string };
       if (data.ok) return { ok: true, message: `Connected to ${data.team}` };

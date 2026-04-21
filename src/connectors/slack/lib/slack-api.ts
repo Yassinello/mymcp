@@ -1,5 +1,6 @@
 import { McpToolError, ErrorCode } from "@/core/errors";
 import { SlackRateLimitError, SlackAuthError } from "@/core/connector-errors";
+import { getConfig } from "@/core/config-facade";
 
 const SLACK_API = "https://slack.com/api";
 
@@ -12,7 +13,7 @@ async function slackFetch<T extends SlackResponse>(
   method: string,
   params: Record<string, string | number | boolean | undefined> = {}
 ): Promise<T> {
-  const token = process.env.SLACK_BOT_TOKEN;
+  const token = getConfig("SLACK_BOT_TOKEN");
   if (!token)
     throw new McpToolError({
       code: ErrorCode.CONFIGURATION_ERROR,
@@ -239,7 +240,7 @@ export async function searchMessages(
   count?: number
 ): Promise<{ text: string; channel: string; user: string; ts: string; date: string }[]> {
   // Note: search requires a user token (xoxp-), not a bot token
-  const token = process.env.SLACK_USER_TOKEN || process.env.SLACK_BOT_TOKEN;
+  const token = getConfig("SLACK_USER_TOKEN") || getConfig("SLACK_BOT_TOKEN");
   if (!token)
     throw new McpToolError({
       code: ErrorCode.CONFIGURATION_ERROR,

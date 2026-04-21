@@ -1,3 +1,5 @@
+import { getConfig } from "@/core/config-facade";
+
 const NOTION_API = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
 
@@ -5,7 +7,7 @@ async function notionFetch<T>(
   path: string,
   opts: { method?: string; body?: unknown } = {}
 ): Promise<T> {
-  const token = process.env.NOTION_API_KEY;
+  const token = getConfig("NOTION_API_KEY");
   if (!token) throw new Error("NOTION_API_KEY not configured");
 
   const res = await fetch(`${NOTION_API}${path}`, {

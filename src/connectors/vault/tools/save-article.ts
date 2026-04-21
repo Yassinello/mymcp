@@ -1,6 +1,7 @@
 import { z } from "zod";
 import yaml from "js-yaml";
 import { vaultWrite } from "../lib/github";
+import { getConfig } from "@/core/config-facade";
 
 const MAX_ARTICLE_SIZE = 5 * 1024 * 1024; // 5MB
 const JINA_TIMEOUT = 15_000; // 15 seconds
@@ -31,7 +32,7 @@ export async function handleSaveArticle(params: {
   const timeout = setTimeout(() => controller.abort(), isMedium ? 20_000 : JINA_TIMEOUT);
 
   const jinaHeaders: Record<string, string> = { Accept: "text/markdown" };
-  const mediumSid = process.env.MEDIUM_SID?.trim();
+  const mediumSid = getConfig("MEDIUM_SID")?.trim();
   if (isMedium && mediumSid) {
     jinaHeaders["x-set-cookie"] = `sid=${mediumSid}`;
   }

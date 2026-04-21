@@ -1,10 +1,11 @@
 import { Composio } from "@composio/core";
+import { getConfig } from "@/core/config-facade";
 
 let client: Composio | null = null;
 
 export function getComposioClient(): Composio {
   if (!client) {
-    const apiKey = process.env.COMPOSIO_API_KEY;
+    const apiKey = getConfig("COMPOSIO_API_KEY");
     if (!apiKey) throw new Error("COMPOSIO_API_KEY not configured");
     client = new Composio({ apiKey });
   }

@@ -1,4 +1,5 @@
 import { McpToolError, ErrorCode } from "@/core/errors";
+import { getConfig } from "@/core/config-facade";
 
 const LINEAR_API = "https://api.linear.app/graphql";
 
@@ -6,7 +7,7 @@ export async function linearQuery<T>(
   query: string,
   variables: Record<string, unknown> = {}
 ): Promise<T> {
-  const apiKey = process.env.LINEAR_API_KEY;
+  const apiKey = getConfig("LINEAR_API_KEY");
   if (!apiKey) {
     throw new McpToolError({
       code: ErrorCode.CONFIGURATION_ERROR,

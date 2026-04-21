@@ -14,10 +14,12 @@
  * rationale and v3 surface analysis.
  */
 
+import { getConfig } from "@/core/config-facade";
+
 export type BrowserConnectorVersion = "v2" | "v3";
 
 export function getBrowserConnectorVersion(): BrowserConnectorVersion {
-  const raw = process.env.KEBAB_BROWSER_CONNECTOR_V2;
+  const raw = getConfig("KEBAB_BROWSER_CONNECTOR_V2");
   if (raw === "1" || raw === "true") return "v3";
   return "v2";
 }

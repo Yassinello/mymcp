@@ -4,6 +4,7 @@ import { cacheEvictSchema, handleCacheEvict } from "./tools/cache-evict";
 import { backupExportSchema, handleBackupExport } from "./tools/backup-export";
 import { backupImportSchema, handleBackupImport } from "./tools/backup-import";
 import { streamTestSchema, handleStreamTest } from "./tools/stream-test";
+import { getConfig } from "@/core/config-facade";
 
 const baseTools = [
   // PILOT: defineTool() migration (v0.5 phase 12, T1).
@@ -45,7 +46,7 @@ const baseTools = [
 ];
 
 // MEDIUM-5: Only include the stream-test diagnostic tool outside production.
-if (process.env.NODE_ENV !== "production") {
+if (getConfig("NODE_ENV") !== "production") {
   baseTools.push(
     defineTool({
       name: "admin_stream_test",

@@ -5,6 +5,7 @@
  */
 
 import { fetchWithTimeout } from "@/core/fetch-utils";
+import { getConfig } from "@/core/config-facade";
 
 const APIFY_BASE = "https://api.apify.com/v2";
 const RUN_SYNC_TIMEOUT_SECONDS = 55;
@@ -12,14 +13,14 @@ const RUN_SYNC_TIMEOUT_SECONDS = 55;
 const APIFY_FETCH_TIMEOUT_MS = 60_000;
 
 function getToken(): string {
-  const t = process.env.APIFY_TOKEN;
+  const t = getConfig("APIFY_TOKEN");
   if (!t) throw new Error("APIFY_TOKEN is not set");
   return t;
 }
 
 /** Strip the token from any string (URLs, error bodies) before returning it. */
 function sanitize(text: string): string {
-  const token = process.env.APIFY_TOKEN;
+  const token = getConfig("APIFY_TOKEN");
   if (!token) return text;
   return text.split(token).join("<redacted>");
 }

@@ -1,9 +1,10 @@
 import { McpToolError, ErrorCode } from "@/core/errors";
+import { getConfig } from "@/core/config-facade";
 
 const AIRTABLE_BASE_URL = "https://api.airtable.com/v0";
 
 export async function airtableRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const apiKey = process.env.AIRTABLE_API_KEY;
+  const apiKey = getConfig("AIRTABLE_API_KEY");
   if (!apiKey) {
     throw new McpToolError({
       code: ErrorCode.CONFIGURATION_ERROR,

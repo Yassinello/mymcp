@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { runActor } from "../lib/client";
+import { getConfig } from "@/core/config-facade";
 
 export const apifyRunActorSchema = {
   actorId: z.string().describe("Apify actor ID (e.g. 'owner/name' or 'owner~name')"),
@@ -17,7 +18,7 @@ export async function handleApifyRunActor(params: {
   actorId: string;
   input: Record<string, unknown>;
 }) {
-  const raw = process.env.APIFY_ACTORS;
+  const raw = getConfig("APIFY_ACTORS");
   if (raw && raw.trim()) {
     const allow = raw
       .split(",")

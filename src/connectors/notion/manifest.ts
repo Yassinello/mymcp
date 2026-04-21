@@ -4,6 +4,7 @@ import { notionReadSchema, handleNotionRead } from "./tools/notion-read";
 import { notionCreateSchema, handleNotionCreate } from "./tools/notion-create";
 import { notionUpdateSchema, handleNotionUpdate } from "./tools/notion-update";
 import { notionQuerySchema, handleNotionQuery } from "./tools/notion-query";
+import { getConfig } from "@/core/config-facade";
 
 export const notionConnector: ConnectorManifest = {
   id: "notion",
@@ -49,7 +50,7 @@ A Notion workspace where you can install integrations. Notion integrations only 
     try {
       const res = await fetch("https://api.notion.com/v1/users/me", {
         headers: {
-          Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
+          Authorization: `Bearer ${getConfig("NOTION_API_KEY") ?? ""}`,
           "Notion-Version": "2022-06-28",
         },
       });

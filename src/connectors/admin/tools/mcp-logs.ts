@@ -1,6 +1,7 @@
 import { getInstanceConfig } from "@/core/config";
 import { z } from "zod";
 import { getRecentLogs, getDurableLogs } from "@/core/logging";
+import { getConfig } from "@/core/config-facade";
 
 export const mcpLogsSchema = {
   count: z.number().optional().describe("Number of recent logs to return (default: 20, max: 100)"),
@@ -14,7 +15,7 @@ export async function handleMcpLogs(params: {
   count?: number;
   filter?: "all" | "errors" | "success";
 }) {
-  const durableEnabled = process.env.MYMCP_DURABLE_LOGS === "true";
+  const durableEnabled = getConfig("MYMCP_DURABLE_LOGS") === "true";
   const filter = params.filter ?? "all";
 
   let logs;

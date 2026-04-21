@@ -6,6 +6,7 @@ import { kvScanAll } from "@/core/kv-store";
 import { getContextKVStore } from "@/core/request-context";
 import { hasUpstashCreds } from "@/core/upstash-env";
 import { getLogger } from "@/core/logging";
+import { getConfig } from "@/core/config-facade";
 
 const skillsLog = getLogger("CONNECTOR:skills");
 
@@ -78,7 +79,7 @@ export type SkillUpdateInput = z.infer<typeof skillUpdateInputSchema>;
 
 /** Legacy filesystem path override. When set, bypasses KVStore. */
 function getLegacySkillsPath(): string | null {
-  const override = process.env.MYMCP_SKILLS_PATH?.trim();
+  const override = getConfig("MYMCP_SKILLS_PATH")?.trim();
   return override ? path.resolve(override) : null;
 }
 

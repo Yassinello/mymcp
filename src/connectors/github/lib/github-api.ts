@@ -1,9 +1,10 @@
 import { McpToolError, ErrorCode } from "@/core/errors";
+import { getConfig } from "@/core/config-facade";
 
 const GITHUB_API = "https://api.github.com";
 
 export function getDefaultRepo(): string | undefined {
-  return process.env.GITHUB_DEFAULT_REPO;
+  return getConfig("GITHUB_DEFAULT_REPO");
 }
 
 export function resolveRepo(repoParam?: string): string {
@@ -22,7 +23,7 @@ export function resolveRepo(repoParam?: string): string {
 }
 
 export async function githubFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = process.env.GITHUB_TOKEN;
+  const token = getConfig("GITHUB_TOKEN");
   if (!token) {
     throw new McpToolError({
       code: ErrorCode.CONFIGURATION_ERROR,

@@ -1,13 +1,14 @@
 import { VaultNotFoundError, VaultAuthError } from "@/core/connector-errors";
 import { fetchWithTimeout } from "@/core/fetch-utils";
+import { getConfig as readConfig } from "@/core/config-facade";
 
 const GITHUB_API = "https://api.github.com";
 // Phase 44 SCM-05b: 10s default preserved from prior local helper.
 const FETCH_TIMEOUT = 10_000;
 
 function getConfig() {
-  const pat = process.env.GITHUB_PAT;
-  const repo = process.env.GITHUB_REPO;
+  const pat = readConfig("GITHUB_PAT");
+  const repo = readConfig("GITHUB_REPO");
   if (!pat || !repo) {
     throw new Error("Missing GITHUB_PAT or GITHUB_REPO env vars");
   }
@@ -332,7 +333,7 @@ async function treeGrep(
 
   // Get full file tree
   const treeRes = await fetchWithTimeout(
-    `${GITHUB_API}/repos/${repo}/git/trees/${process.env.GITHUB_BRANCH || "main"}?recursive=1`,
+    `${GITHUB_API}/repos/${repo}/git/trees/${readConfig("GITHUB_BRANCH") || "main"}?recursive=1`,
     { headers: headers(pat) },
     FETCH_TIMEOUT
   );
@@ -514,7 +515,7 @@ export async function vaultTree(folder?: string): Promise<TreeFile[]> {
   const { pat, repo } = getConfig();
 
   const res = await fetchWithTimeout(
-    `${GITHUB_API}/repos/${repo}/git/trees/${process.env.GITHUB_BRANCH || "main"}?recursive=1`,
+    `${GITHUB_API}/repos/${repo}/git/trees/${readConfig("GITHUB_BRANCH") || "main"}?recursive=1`,
     { headers: headers(pat) },
     FETCH_TIMEOUT
   );

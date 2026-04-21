@@ -31,6 +31,7 @@ import {
 } from "./tools/linkedin-company-insights";
 import { apifySearchActorsSchema, handleApifySearchActors } from "./tools/search-actors";
 import { apifyRunActorSchema, handleApifyRunActor } from "./tools/run-actor";
+import { getConfig } from "@/core/config-facade";
 
 interface WrapperDef {
   actorId: string;
@@ -185,7 +186,7 @@ An [Apify](https://apify.com) account with credits or a paid plan. The LinkedIn 
   },
   diagnose: async () => {
     try {
-      const token = process.env.APIFY_TOKEN;
+      const token = getConfig("APIFY_TOKEN");
       if (!token) return { ok: false, message: "APIFY_TOKEN not set" };
       const res = await fetch("https://api.apify.com/v2/users/me", {
         headers: { Authorization: `Bearer ${token}` },

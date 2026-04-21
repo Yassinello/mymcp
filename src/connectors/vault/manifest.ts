@@ -13,6 +13,7 @@ import { vaultStatsSchema, handleVaultStats } from "./tools/vault-stats";
 import { vaultBacklinksSchema, handleVaultBacklinks } from "./tools/vault-backlinks";
 import { vaultDueSchema, handleVaultDue } from "./tools/vault-due";
 import { handleMyContext } from "./tools/my-context";
+import { getConfig } from "@/core/config-facade";
 
 export const vaultConnector: ConnectorManifest = {
   id: "vault",
@@ -66,8 +67,8 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
   },
   diagnose: async () => {
     try {
-      const repo = process.env.GITHUB_REPO;
-      const pat = process.env.GITHUB_PAT;
+      const repo = getConfig("GITHUB_REPO");
+      const pat = getConfig("GITHUB_PAT");
       const res = await fetch(`https://api.github.com/repos/${repo}`, {
         headers: { Authorization: `token ${pat}` },
       });

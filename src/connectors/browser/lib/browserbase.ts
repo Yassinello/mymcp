@@ -2,6 +2,7 @@ import { getInstanceConfig } from "@/core/config";
 import { isPublicUrlSync } from "@/core/url-safety";
 import { Stagehand } from "@browserbasehq/stagehand";
 import Browserbase from "@browserbasehq/sdk";
+import { getConfig } from "@/core/config-facade";
 
 export function sanitizeError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
@@ -41,7 +42,7 @@ export function validatePublicUrl(url: string): void {
 let bb: Browserbase | null = null;
 function getBrowserbase(): Browserbase {
   if (!bb) {
-    bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY! });
+    bb = new Browserbase({ apiKey: getConfig("BROWSERBASE_API_KEY")! });
   }
   return bb;
 }
@@ -55,7 +56,7 @@ async function getOrCreateContext(name: string): Promise<string> {
 
   // Check env var for persistent context IDs (survives cold starts)
   const envKey = `BROWSERBASE_CONTEXT_${name.toUpperCase()}`;
-  const envId = process.env[envKey];
+  const envId = getConfig(envKey);
   if (envId) {
     contextCache[name] = envId;
     return envId;
@@ -63,7 +64,7 @@ async function getOrCreateContext(name: string): Promise<string> {
 
   // Create a new context via Browserbase SDK
   const context = await getBrowserbase().contexts.create({
-    projectId: process.env.BROWSERBASE_PROJECT_ID!,
+    projectId: getConfig("BROWSERBASE_PROJECT_ID")!,
   });
   contextCache[name] = context.id;
   return context.id;
@@ -84,8 +85,8 @@ interface RateLimitData {
 export async function checkAndIncrementDailyLimit(
   limit: number
 ): Promise<{ allowed: boolean; count: number }> {
-  const repo = process.env.GITHUB_REPO!;
-  const pat = process.env.GITHUB_PAT!;
+  const repo = getConfig("GITHUB_REPO")!;
+  const pat = getConfig("GITHUB_PAT")!;
   const today = new Date().toLocaleDateString("en-CA", {
     timeZone: getInstanceConfig().timezone,
   }); // YYYY-MM-DD
@@ -143,8 +144,8 @@ export async function createBrowserSession(contextName = "default"): Promise<Sta
 
   const stagehand = new Stagehand({
     env: "BROWSERBASE",
-    apiKey: process.env.BROWSERBASE_API_KEY!,
-    projectId: process.env.BROWSERBASE_PROJECT_ID!,
+    apiKey: getConfig("BROWSERBASE_API_KEY")!,
+    projectId: getConfig("BROWSERBASE_PROJECT_ID")!,
     browserbaseSessionCreateParams: {
       browserSettings: {
         context: {
@@ -156,7 +157,7 @@ export async function createBrowserSession(contextName = "default"): Promise<Sta
     // LLM via OpenRouter (OPENROUTER_API_KEY env var)
     model: {
       modelName: "openai/gpt-4o",
-      apiKey: process.env.OPENROUTER_API_KEY!,
+      apiKey: getConfig("OPENROUTER_API_KEY")!,
       baseURL: "https://openrouter.ai/api/v1",
     },
     disableAPI: true,
