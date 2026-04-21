@@ -83,6 +83,58 @@ Two paths cover ~95% of users — Vercel for click-and-go, self-hosted for full 
 
 That's it. The Welcome wizard walks you through connectors and shows the token paste-into-client snippet.
 
+#### Vercel deploy — troubleshooting FAQ
+
+**"I see 'Admin auth not configured' after deploy"**
+
+You're on a cold lambda that hasn't rehydrated `MCP_AUTH_TOKEN` from
+Upstash. Confirm the KV integration is attached (or that you pasted
+the token manually into the project's env vars) and reload. If the
+problem persists, see [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+— especially the BUG-07, BUG-10, BUG-11 case studies.
+
+**"Which Upstash env vars should I set?"**
+
+Kebab MCP reads both naming variants:
+
+- `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` — manual Upstash setup.
+- `KV_REST_API_URL` + `KV_REST_API_TOKEN` — Vercel Marketplace Upstash KV
+  integration (auto-injected).
+
+Set either pair. If both are present, `UPSTASH_REDIS_REST_*` wins
+(explicit config over Marketplace default). See
+[BUG-09](docs/TROUBLESHOOTING.md#bug-09--middleware-didnt-read-kv_rest_api_url)
+for the regression history.
+
+**"What does `MYMCP_RECOVERY_RESET=1` do?"**
+
+It wipes persisted bootstrap state (admin token + signing secret)
+and forces a fresh welcome flow on the next request. Useful for
+"I lost the token, let me start over."
+
+**Do NOT set it permanently** — every cold lambda wipes state on
+boot, so any token minted while the var is set vanishes within
+minutes. Since v0.10 (commit `5273add`), `/api/welcome/init` refuses
+with 409 while the var is still set, so you can't accidentally mint
+a doomed token. Remove the env var after recovery. See
+[BUG-05](docs/TROUBLESHOOTING.md#bug-05--mymcp_recovery_reset1-silently-wiped-tokens-on-every-cold-lambda).
+
+**"Welcome flow loops me back to `/welcome`"**
+
+Usually one of:
+
+- KV not configured AND `MYMCP_ALLOW_EPHEMERAL_SECRET=1` unset —
+  the welcome routes refuse to mint claims on production Vercel
+  without a durable signing secret (SEC-05). Either attach Upstash
+  or add `MYMCP_ALLOW_EPHEMERAL_SECRET=1` for local-only dev.
+- Cold-lambda rehydrate failing silently — check `/api/admin/status`
+  for `bootstrap.state` and `firstRun.rehydrateCount`.
+- `INSTANCE_MODE=showcase` accidentally set — that mode treats the
+  deploy as a read-only template (no admin, no wizard).
+
+Full symptom → fix index:
+[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
 ---
 
 ### Option B — Self-hosted (Docker or local dev)
