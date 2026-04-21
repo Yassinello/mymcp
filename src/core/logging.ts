@@ -2,6 +2,43 @@ import { getLogStore, type LogEntry } from "./log-store";
 import { McpToolError } from "./errors";
 import type { ToolResult } from "./types";
 import { startToolSpan, endToolSpan } from "./tracing";
+import { getToolTimeout } from "./config";
+
+// ── T10: MYMCP_TOOL_TIMEOUT enforcement at the transport ─────────
+//
+// getToolTimeout() was defined but never called pre-v0.10 — tools ran
+// until Vercel's 60s lambda kill, returning 504 instead of a clean
+// MCP error. Phase 38 wires the value into withLogging via
+// Promise.race so a slow tool returns ToolTimeoutError with
+// errorCode: "TOOL_TIMEOUT" (distinct from the platform's timeout).
+
+export class ToolTimeoutError extends Error {
+  public readonly errorCode = "TOOL_TIMEOUT";
+  constructor(
+    public readonly toolName: string,
+    public readonly timeoutMs: number
+  ) {
+    super(`Tool ${toolName} exceeded MYMCP_TOOL_TIMEOUT (${timeoutMs}ms)`);
+    this.name = "ToolTimeoutError";
+  }
+}
+
+/** Race a handler promise against the configured tool timeout. */
+function withToolTimeout<T>(toolName: string, promise: Promise<T>): Promise<T> {
+  const timeoutMs = getToolTimeout();
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race<T>([
+    promise,
+    new Promise<T>((_, reject) => {
+      timeoutHandle = setTimeout(
+        () => reject(new ToolTimeoutError(toolName, timeoutMs)),
+        timeoutMs
+      );
+    }),
+  ]).finally(() => {
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+  });
+}
 
 // ── OBS-03: tagged structured logger ───────────────────────────────
 //
@@ -234,7 +271,10 @@ export function withLogging<TParams>(
     const span = startToolSpan(toolName, connectorId ?? "unknown", argKeys, requestId);
     const start = Date.now();
     try {
-      const result = await handler(params);
+      // T10: race the handler against MYMCP_TOOL_TIMEOUT so a slow tool
+      // returns a ToolTimeoutError with errorCode=TOOL_TIMEOUT instead
+      // of being killed by the platform's 504.
+      const result = await withToolTimeout(toolName, handler(params));
 
       // STREAM-01..04: When a tool returns a stream, collect chunks into
       // the content buffer so the MCP SDK receives a complete response.
@@ -303,6 +343,37 @@ export function withLogging<TParams>(
       const durationMs = Date.now() - start;
       const timestamp = new Date().toISOString();
       endToolSpan(span, "error", durationMs);
+
+      // T10: dedicated logging for TOOL_TIMEOUT so ops can filter.
+      if (error instanceof ToolTimeoutError) {
+        getLogger(`TOOL:${toolName}`).error("timeout", {
+          errorCode: error.errorCode,
+          toolName: error.toolName,
+          timeoutMs: error.timeoutMs,
+        });
+        logToolCall({
+          tool: toolName,
+          durationMs,
+          status: "error",
+          error: error.message,
+          errorCode: error.errorCode,
+          timestamp,
+          ...(callerTokenId ? { tokenId: callerTokenId } : {}),
+          ...(requestId ? { requestId } : {}),
+        });
+        // Surface as an MCP tool error so the client sees a structured
+        // error rather than the platform's 504.
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Tool "${toolName}" timed out after ${error.timeoutMs}ms (MYMCP_TOOL_TIMEOUT).`,
+            },
+          ],
+          isError: true,
+          errorCode: error.errorCode,
+        };
+      }
 
       if (error instanceof McpToolError) {
         // Log the detailed internalRecovery server-side (contains env var
