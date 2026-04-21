@@ -27,6 +27,16 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+
+  experimental: {
+    // PERF-04 (v0.11 Phase 43): prune unused exports from barrel packages.
+    // Every tool schema imports `z` — without this, even tools that only
+    // use `z.string()` drag the full zod runtime into the chunk.
+    // `@opentelemetry/api` is imported across tracing.ts + logging.ts for
+    // named exports; barrel-free resolution shaves ~5-10 KB per chunk.
+    optimizePackageImports: ["zod", "@opentelemetry/api"],
+  },
+
   async headers() {
     return [
       {
@@ -37,5 +47,11 @@ const nextConfig: NextConfig = {
   },
 };
 
-// Heaviest server chunks (Apr 2026): stagehand+browserbase (~2.3 MB), composio (~2.3 MB), zod (~280 KB each x2)
+// Heaviest server chunks (Apr 2026): stagehand+browserbase (~2.3 MB),
+// composio (~2.3 MB), zod (~280 KB). `serverExternalPackages` was
+// evaluated in Phase 43 but tripled the `/api/[transport]` nft.json
+// entries under Turbopack (417 → 1574) so it was NOT adopted; see
+// 43-02-SUMMARY.md "PERF-03 deferred" for the specific measurement
+// and the Turbopack tracing rationale. Revisit when Turbopack's
+// `serverExternalPackages` trace-handling matures.
 export default analyzeBundle(nextConfig);
