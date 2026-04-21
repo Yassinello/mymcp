@@ -28,7 +28,7 @@ const ALLOWLIST = new Set<string>([
   "src/core/backup.ts",
   // log-store.ts migrated to getContextKVStore (Phase 42 / TEN-02)
   // rate-limit.ts migrated to getContextKVStore (Phase 42 / TEN-01)
-  "src/core/tool-toggles.ts",
+  // tool-toggles.ts migrated to getContextKVStore (Phase 42 / TEN-03)
   "src/core/config.ts",
   // Migration scanner — intentionally global to inventory legacy keys
   "src/core/migrations/v0.10-tenant-prefix.ts",
