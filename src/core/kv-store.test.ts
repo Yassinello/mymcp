@@ -167,15 +167,17 @@ describe("kvScanAll cycle guard", () => {
 });
 
 describe("backup.ts uses mget and kvScanAll", () => {
-  it("exportBackup reads all keys via mget", async () => {
+  it("exportBackup reads all keys via mget (Phase 42 v2 signature)", async () => {
     const kv = getKVStore();
     await kv.set("key1", "val1");
     await kv.set("key2", "val2");
 
-    // Dynamically import to use the actual KV instance
-    const { exportBackup } = await import("./backup");
-    const backup = await exportBackup(kv);
-    expect(backup.version).toBe(1);
+    // Phase 42 / TEN-04: exportBackup now accepts an options object.
+    // Pass the store explicitly to preserve the pre-v0.11 behaviour
+    // of scanning the supplied KV as-is.
+    const { exportBackup, BACKUP_VERSION } = await import("./backup");
+    const backup = await exportBackup({ kv });
+    expect(backup.version).toBe(BACKUP_VERSION);
     expect(backup.entries).toEqual({ key1: "val1", key2: "val2" });
   });
 });

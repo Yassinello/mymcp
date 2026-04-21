@@ -25,6 +25,9 @@ const ALLOWLIST = new Set<string>([
   // Dashboard env writes — global by design (transitional; see SEC-02)
   "src/core/env-store.ts",
   // Operator-wide systems — tenant-scoping is v0.11 work (see FOLLOW-UP)
+  // backup.ts defaults to getContextKVStore (Phase 42 / TEN-04).
+  // Retains conditional `getKVStore()` behind `scope === "all"` for the
+  // root-operator cross-tenant restore path — hence still allowlisted.
   "src/core/backup.ts",
   // log-store.ts migrated to getContextKVStore (Phase 42 / TEN-02)
   // rate-limit.ts migrated to getContextKVStore (Phase 42 / TEN-01)

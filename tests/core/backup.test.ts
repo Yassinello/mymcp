@@ -1,48 +1,93 @@
 /**
  * Tests for backup/restore roundtrip and version validation.
+ *
+ * Phase 42 (TEN-04): `exportBackup` default scope is the current
+ * tenant; `opts.scope === "all"` restores the pre-v0.11 full-scan
+ * behaviour for root-operator admin flows. BACKUP_VERSION bumped to
+ * 2; v1 backups still importable via a compat branch.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockKV: Record<string, string> = {};
 
-const mockKVInstance = {
-  kind: "filesystem" as const,
-  get: vi.fn(async (key: string) => mockKV[key] ?? null),
-  set: vi.fn(async (key: string, value: string) => {
-    mockKV[key] = value;
-  }),
-  delete: vi.fn(async (key: string) => {
-    delete mockKV[key];
-  }),
-  list: vi.fn(async (prefix?: string) => {
-    const keys = Object.keys(mockKV);
-    return prefix ? keys.filter((k) => k.startsWith(prefix)) : keys;
-  }),
-};
+// Raw (unwrapped) store. Used by `getKVStore()` / `scope: "all"` path.
+function baseStore() {
+  return {
+    kind: "filesystem" as const,
+    get: vi.fn(async (key: string) => mockKV[key] ?? null),
+    set: vi.fn(async (key: string, value: string) => {
+      mockKV[key] = value;
+    }),
+    delete: vi.fn(async (key: string) => {
+      delete mockKV[key];
+    }),
+    list: vi.fn(async (prefix?: string) => {
+      const keys = Object.keys(mockKV);
+      return prefix ? keys.filter((k) => k.startsWith(prefix)) : keys;
+    }),
+  };
+}
+
+// Tenant-wrapped store — reads/writes go through `tenant:<id>:<key>`.
+function wrappedStore(tenantId: string | null) {
+  if (tenantId === null) return baseStore();
+  const pk = (k: string) => `tenant:${tenantId}:${k}`;
+  return {
+    kind: "filesystem" as const,
+    get: vi.fn(async (key: string) => mockKV[pk(key)] ?? null),
+    set: vi.fn(async (key: string, value: string) => {
+      mockKV[pk(key)] = value;
+    }),
+    delete: vi.fn(async (key: string) => {
+      delete mockKV[pk(key)];
+    }),
+    list: vi.fn(async (prefix?: string) => {
+      const full = pk(prefix ?? "");
+      return Object.keys(mockKV)
+        .filter((k) => k.startsWith(full))
+        .map((k) => k.slice(`tenant:${tenantId}:`.length));
+    }),
+  };
+}
 
 vi.mock("@/core/kv-store", async () => {
   const actual = await vi.importActual<typeof import("@/core/kv-store")>("@/core/kv-store");
   return {
     ...actual,
-    getKVStore: () => mockKVInstance,
-    getTenantKVStore: () => mockKVInstance,
+    getKVStore: () => baseStore(),
+    getTenantKVStore: (tenantId: string | null) => wrappedStore(tenantId),
+  };
+});
+
+let mockTenantId: string | null = null;
+vi.mock("@/core/request-context", async () => {
+  const kvMod = await import("@/core/kv-store");
+  return {
+    getCurrentTenantId: () => mockTenantId,
+    getContextKVStore: () => kvMod.getTenantKVStore(mockTenantId),
   };
 });
 
 import { exportBackup, importBackup, BACKUP_VERSION } from "@/core/backup";
 
-describe("backup export/import", () => {
+describe("backup export/import — v2 baseline", () => {
   beforeEach(() => {
     for (const key of Object.keys(mockKV)) delete mockKV[key];
+    mockTenantId = null;
   });
 
-  it("exports all KV entries", async () => {
+  it("BACKUP_VERSION is 2 (Phase 42 / TEN-04)", () => {
+    expect(BACKUP_VERSION).toBe(2);
+  });
+
+  it("exports all KV entries (null tenant, default scope)", async () => {
     mockKV["settings:name"] = "TestUser";
     mockKV["webhook:last:stripe"] = '{"payload":"test"}';
 
     const data = await exportBackup();
     expect(data.version).toBe(BACKUP_VERSION);
     expect(data.exportedAt).toBeTruthy();
+    expect(data.scope).toBe("default");
     expect(data.entries["settings:name"]).toBe("TestUser");
     expect(data.entries["webhook:last:stripe"]).toBe('{"payload":"test"}');
   });
@@ -128,21 +173,110 @@ describe("backup export/import", () => {
   });
 });
 
+describe("backup — Phase 42 tenant scoping (TEN-04)", () => {
+  beforeEach(() => {
+    for (const key of Object.keys(mockKV)) delete mockKV[key];
+    mockTenantId = null;
+  });
+
+  it("export under tenantId alpha returns only alpha's keys with scope=tenant:alpha", async () => {
+    mockKV["tenant:alpha:settings:foo"] = "alpha-val";
+    mockKV["tenant:beta:settings:foo"] = "beta-val";
+    mockKV["bare:key"] = "null-tenant-val";
+
+    mockTenantId = "alpha";
+    const data = await exportBackup();
+    expect(data.scope).toBe("tenant:alpha");
+    // TenantKVStore.list returns keys with the `tenant:alpha:` prefix
+    // stripped — matches production behaviour.
+    expect(data.entries["settings:foo"]).toBe("alpha-val");
+    expect(Object.keys(data.entries)).not.toContain("tenant:beta:settings:foo");
+    expect(Object.keys(data.entries)).not.toContain("bare:key");
+  });
+
+  it("export with scope=all returns every tenant's keys with scope=all", async () => {
+    mockKV["tenant:alpha:a"] = "1";
+    mockKV["tenant:beta:b"] = "2";
+    mockKV["bare"] = "3";
+
+    const data = await exportBackup({ scope: "all" });
+    expect(data.scope).toBe("all");
+    expect(data.entries["tenant:alpha:a"]).toBe("1");
+    expect(data.entries["tenant:beta:b"]).toBe("2");
+    expect(data.entries["bare"]).toBe("3");
+  });
+
+  it("import of scope=all backup into a tenant namespace WITHOUT explicit override rejects", async () => {
+    const allScopeBackup = {
+      version: BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      scope: "all" as const,
+      entries: { "tenant:beta:leak": "leak-value" },
+    };
+
+    mockTenantId = "alpha";
+    const result = await importBackup(allScopeBackup);
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/scope=all/);
+  });
+
+  it("import of scope=all backup with explicit scope:all succeeds and writes via raw KV", async () => {
+    const allScopeBackup = {
+      version: BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      scope: "all" as const,
+      entries: {
+        "tenant:alpha:restored": "a",
+        "tenant:beta:restored": "b",
+      },
+    };
+
+    const result = await importBackup(allScopeBackup, { scope: "all" });
+    expect(result.ok).toBe(true);
+    // Raw KV writes — both tenants' keys land at their full paths.
+    expect(mockKV["tenant:alpha:restored"]).toBe("a");
+    expect(mockKV["tenant:beta:restored"]).toBe("b");
+  });
+
+  it("import of v1 backup into tenant context logs compat warning and succeeds", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    mockTenantId = "alpha";
+    const v1Backup = {
+      version: 1,
+      entries: { "settings:foo": "legacy-val" },
+    };
+    const result = await importBackup(v1Backup);
+    expect(result.ok).toBe(true);
+    // Written into alpha's namespace (tenant-wrapped).
+    expect(mockKV["tenant:alpha:settings:foo"]).toBe("legacy-val");
+
+    warnSpy.mockRestore();
+  });
+
+  it("fresh export writes version 2", async () => {
+    mockKV["sample"] = "v";
+    const data = await exportBackup();
+    expect(data.version).toBe(2);
+  });
+});
+
 describe("backup admin tools", () => {
   beforeEach(() => {
     for (const key of Object.keys(mockKV)) delete mockKV[key];
+    mockTenantId = null;
   });
 
-  it("mcp_backup_export returns JSON", async () => {
+  it("mcp_backup_export returns JSON (v2 backups post-TEN-04)", async () => {
     mockKV["test"] = "data";
     const { handleBackupExport } = await import("@/connectors/admin/tools/backup-export");
     const result = await handleBackupExport();
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.version).toBe(1);
+    expect(parsed.version).toBe(2);
     expect(parsed.entries.test).toBe("data");
   });
 
-  it("mcp_backup_import writes to KV", async () => {
+  it("mcp_backup_import writes to KV (v1 compat)", async () => {
     const { handleBackupImport } = await import("@/connectors/admin/tools/backup-import");
     const backup = JSON.stringify({ version: 1, entries: { k: "v" } });
     const result = await handleBackupImport({ data: backup });

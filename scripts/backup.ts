@@ -3,8 +3,13 @@
  * Kebab MCP Backup CLI — export / import KV store data.
  *
  * Usage:
- *   npx tsx scripts/backup.ts export          → JSON to stdout
- *   npx tsx scripts/backup.ts import backup.json  → reads file, writes to KV
+ *   npx tsx scripts/backup.ts export [--scope=all]
+ *   npx tsx scripts/backup.ts import backup.json [--mode=merge|replace] [--scope=all]
+ *
+ * Phase 42 (TEN-04) — default scope is the current tenant. The CLI
+ * runs outside any HTTP request context, so there is no tenant
+ * header; the null-tenant (default / single-tenant) path is used
+ * unless `--scope=all` opts into the full cross-tenant export.
  */
 
 import { promises as fs } from "node:fs";
@@ -16,15 +21,21 @@ async function main() {
   const [command, ...rest] = process.argv.slice(2);
 
   if (command === "export") {
-    const data = await exportBackup();
+    let scope: "tenant" | "all" = "tenant";
+    for (const arg of rest) {
+      if (arg === "--scope=all") scope = "all";
+      else if (arg === "--scope=tenant") scope = "tenant";
+    }
+    const data = await exportBackup({ scope });
     process.stdout.write(JSON.stringify(data, null, 2) + "\n");
     process.exit(0);
   }
 
   if (command === "import") {
-    // Parse optional --mode=replace|merge flag
+    // Parse optional --mode=replace|merge and --scope=all flags
     let filePath: string | undefined;
     let mode: "merge" | "replace" = "merge";
+    let scope: "tenant" | "all" = "tenant";
     for (const arg of rest) {
       if (arg.startsWith("--mode=")) {
         const val = arg.slice(7);
@@ -33,12 +44,18 @@ async function main() {
           console.error(`Invalid mode: ${val}. Use "merge" or "replace".`);
           process.exit(1);
         }
+      } else if (arg === "--scope=all") {
+        scope = "all";
+      } else if (arg === "--scope=tenant") {
+        scope = "tenant";
       } else {
         filePath = arg;
       }
     }
     if (!filePath) {
-      console.error("Usage: npx tsx scripts/backup.ts import <file.json> [--mode=merge|replace]");
+      console.error(
+        "Usage: npx tsx scripts/backup.ts import <file.json> [--mode=merge|replace] [--scope=all]"
+      );
       process.exit(1);
     }
     const raw = await fs.readFile(filePath, "utf-8");
@@ -49,13 +66,15 @@ async function main() {
       console.error("Error: invalid JSON in", filePath);
       process.exit(1);
     }
-    const result = await importBackup(data, { mode });
+    const result = await importBackup(data, { mode, scope });
     console.log(result.message);
     process.exit(result.ok ? 0 : 1);
   }
 
   console.error(`Unknown command: ${command}`);
-  console.error("Usage: npx tsx scripts/backup.ts <export|import> [file] [--mode=merge|replace]");
+  console.error(
+    "Usage: npx tsx scripts/backup.ts <export|import> [file] [--mode=merge|replace] [--scope=all]"
+  );
   console.error(`Backup format version: ${BACKUP_VERSION}`);
   process.exit(1);
 }
