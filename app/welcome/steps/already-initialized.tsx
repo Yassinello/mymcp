@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, type JSX } from "react";
+import { useEffect, useState, type JSX } from "react";
 import { extractTokenFromInput } from "@/core/welcome-url-parser";
+import { useClaimStatus } from "../hooks/useClaimStatus";
+import { useWelcomeDispatch } from "../WelcomeStateContext";
 
 /**
- * AlreadyInitializedPanel — Phase 45 Task 4 (UX-01a).
+ * AlreadyInitializedPanel — Phase 45 Task 4 (UX-01a) + Phase 47 WIRE-01d (live).
  *
  * Alt-flow terminal screen: the instance is already bootstrapped +
  * has a durable token. The user visited /welcome but setup is done;
@@ -13,22 +15,39 @@ import { extractTokenFromInput } from "@/core/welcome-url-parser";
  * hands off to `/config?token=…` — middleware turns the query param
  * into a `mymcp_admin_token` cookie + clean redirect.
  *
- * This module mirrors the legacy `AlreadyInitializedPanel` closure
- * in `welcome-client.tsx:2098` verbatim, minus the parallel copy of
- * `extractTokenFromInput` — the named export from
- * `src/core/welcome-url-parser.ts` (Phase 45 Task 1) is imported
- * directly, closing Phase 40 FOLLOW-UP A's "parallel
- * re-implementation" concern at the UI-import site too.
+ * Includes the "Lost your token?" recovery details block (commit
+ * bc31b69 + 4e6fa0c precedent) — a pragmatic inline hint that replaces
+ * the bare /config link that pre-bc31b69 produced a bare 401 at the
+ * very end of the flow.
  *
- * This component is dormant in this commit (welcome-client still
- * routes to its inline copy). Task 5's WelcomeShell swap is what
- * activates it.
+ * Phase 47 WIRE-01d: optionally drives a CLAIM_RESOLVED dispatch to
+ * keep the reducer in sync when this panel renders in response to
+ * `useClaimStatus()` returning "already-initialized". Callers that
+ * already know the claim state (e.g. WelcomeShell's outer claim hook)
+ * can skip the internal hook by passing `skipClaimSync`.
  */
-export function AlreadyInitializedPanel(): JSX.Element {
+export function AlreadyInitializedPanel({
+  skipClaimSync,
+}: {
+  /** When true, don't invoke useClaimStatus() — caller already owns the claim. */
+  skipClaimSync?: boolean;
+} = {}): JSX.Element {
   const [tokenInput, setTokenInput] = useState("");
   const extracted = extractTokenFromInput(tokenInput);
   const href = extracted ? `/config?token=${encodeURIComponent(extracted)}` : undefined;
   const inputLooksLikeUrl = /^https?:\/\//i.test(tokenInput.trim());
+
+  const dispatch = useWelcomeDispatch();
+  // Internal claim re-sync: only relevant when this panel is rendered
+  // without the orchestrator having already resolved the claim. Always
+  // calling the hook (React rules) but gating the dispatch.
+  const { claim } = useClaimStatus();
+  useEffect(() => {
+    if (skipClaimSync) return;
+    if (claim === "already-initialized") {
+      dispatch({ type: "CLAIM_RESOLVED", claim: "already-initialized" });
+    }
+  }, [skipClaimSync, claim, dispatch]);
 
   return (
     <section aria-label="Already initialized" className="max-w-xl">
@@ -77,6 +96,16 @@ export function AlreadyInitializedPanel(): JSX.Element {
       >
         Open dashboard →
       </a>
+      <details className="mt-8 text-xs text-slate-500">
+        <summary className="cursor-pointer hover:text-slate-300">Lost your token?</summary>
+        <p className="mt-2 leading-relaxed">
+          Check the password manager where you saved it during /welcome, or look for{" "}
+          <code className="font-mono">MCP_AUTH_TOKEN</code> in your Vercel project env vars if
+          auto-magic wrote it. If it&apos;s truly gone, use the Recover-access flow below to wipe
+          state and mint a new one — just remember any MCP clients still using the old token will
+          need to be updated.
+        </p>
+      </details>
     </section>
   );
 }

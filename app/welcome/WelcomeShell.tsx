@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { KebabLogo } from "../components/kebab-logo";
-import { extractTokenFromInput } from "@/core/welcome-url-parser";
 import {
   WelcomeStateProvider,
   useWelcomeDispatch,
@@ -12,6 +11,8 @@ import {
 import { StorageStep } from "./steps/storage";
 import { MintStep } from "./steps/mint";
 import { TestStep } from "./steps/test";
+import { AlreadyInitializedPanel } from "./steps/already-initialized";
+import { useClaimStatus } from "./hooks/useClaimStatus";
 
 type ClaimStatus = "loading" | "new" | "claimer" | "claimed-by-other" | "already-initialized";
 
@@ -93,30 +94,36 @@ function WelcomeShellInner({
     [dispatch]
   );
 
-  const [claim, setClaim] = useState<ClaimStatus>(previewMode ? "claimer" : "loading");
-
-  // Step 1: claim the instance. The previous auto-init-on-bootstrap
-  // branch now lives inside <MintStep /> (Phase 47 WIRE-01b), which
-  // fires mint.mint() on mount when `initialBootstrap && state.token === null`.
+  // Step 0: claim the instance via the shared `useClaimStatus` hook
+  // (Phase 47 WIRE-01d). Preview mode bypasses the hook by seeding
+  // the reducer initial state with claim="claimer" — the hook still
+  // runs but the ClaimStatus result is ignored here.
+  const claimHook = useClaimStatus(previewMode ? "claimer" : "loading");
+  const claim: ClaimStatus = previewMode ? "claimer" : claimHook.claim;
+  // Bridge: mirror hook result into reducer so `state.claim` is the
+  // single read surface for step components (e.g. isTerminal predicate).
   useEffect(() => {
     if (previewMode) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/welcome/claim", { method: "POST" });
-        const data = (await res.json()) as { status: ClaimStatus };
-        if (cancelled) return;
-        setClaim(data.status);
-      } catch {
-        if (!cancelled) {
-          dispatch({ type: "ERROR_SET", error: "Could not reach this instance. Try refreshing." });
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [previewMode, dispatch]);
+    if (claim === "loading") return;
+    // Reducer's `WelcomeState.claim` only accepts "claimer" |
+    // "waiting" | "already-initialized" | "loading" — map the hook's
+    // wider vocabulary ("new" | "claimed-by-other") to reducer-
+    // compatible values. "new" → "claimer" (both mean first-mover);
+    // "claimed-by-other" stays unmapped (orchestrator handles the
+    // dedicated "Instance locked" render path and never dispatches).
+    if (claim === "new" || claim === "claimer") {
+      dispatch({ type: "CLAIM_RESOLVED", claim: "claimer" });
+    } else if (claim === "already-initialized") {
+      dispatch({ type: "CLAIM_RESOLVED", claim: "already-initialized" });
+    }
+  }, [claim, previewMode, dispatch]);
+
+  // Surface hook-level fetch errors via the reducer's error channel.
+  useEffect(() => {
+    if (claimHook.error) {
+      dispatch({ type: "ERROR_SET", error: "Could not reach this instance. Try refreshing." });
+    }
+  }, [claimHook.error, dispatch]);
 
   // Storage detection + ack + Upstash polling now live inside
   // <StorageStep /> (Phase 47 WIRE-01a). The reducer's
@@ -148,7 +155,12 @@ function WelcomeShellInner({
   }
 
   if (claim === "already-initialized") {
-    return <AlreadyInitializedPanel />;
+    return (
+      <Shell>
+        <AlreadyInitializedPanel skipClaimSync />
+        <RecoveryFooter />
+      </Shell>
+    );
   }
 
   if (claim === "claimed-by-other") {
@@ -365,88 +377,9 @@ function WizardStepper({
 // Phase 47 WIRE-01c: TestMcpPanel / TokenUsagePanel / MultiClientNote
 // / StarterSkillsPanel moved to app/welcome/steps/test.tsx.
 
-/**
- * Shown when the caller lands on /welcome but claim returns
- * "already-initialized" (the server sees a durable token). We can't
- * forward to /config automatically because middleware admin-gates it
- * and we don't have the cookie yet — but we can accept the user's
- * saved token and hand off via `?token=`, which the middleware turns
- * into a `mymcp_admin_token` cookie + clean redirect.
- *
- * Without this form, the link back to /config produces a bare 401 at
- * the very end of an otherwise-smooth flow.
- */
-// Note: extractTokenFromInput lives in `src/core/welcome-url-parser.ts`
-// (extracted in Phase 45 Task 1 / UX-02a). It's imported at the top of
-// this file so the regression suite can reach it directly instead of
-// maintaining a parallel re-implementation.
-
-function AlreadyInitializedPanel() {
-  const [tokenInput, setTokenInput] = useState("");
-  const extracted = extractTokenFromInput(tokenInput);
-  const href = extracted ? `/config?token=${encodeURIComponent(extracted)}` : undefined;
-  const inputLooksLikeUrl = /^https?:\/\//i.test(tokenInput.trim());
-  return (
-    <Shell>
-      <h1 className="text-2xl font-bold text-white mb-2">Already initialized</h1>
-      <p className="text-slate-400 mb-6 leading-relaxed">
-        This instance has a durable token — setup is done. Paste your saved token OR the full MCP
-        URL below to unlock the dashboard. We&apos;ll set the cookie and strip the token from the
-        URL on the next hop so nothing leaks into your browser history.
-      </p>
-      <label className="block mb-2 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-        Your auth token (or full MCP URL)
-      </label>
-      <input
-        type="password"
-        value={tokenInput}
-        onChange={(e) => setTokenInput(e.target.value)}
-        placeholder="64-char hex OR https://…/api/mcp?token=…"
-        autoComplete="off"
-        spellCheck={false}
-        className="w-full font-mono text-sm bg-slate-950 border border-slate-800 rounded-md px-3 py-2 text-blue-200 focus:outline-none focus:border-blue-600 mb-2"
-      />
-      {inputLooksLikeUrl && extracted && (
-        <p className="text-[11px] text-emerald-400 mb-4">
-          ✓ Detected MCP URL — token extracted from the <code className="font-mono">?token=</code>{" "}
-          parameter.
-        </p>
-      )}
-      {inputLooksLikeUrl && !extracted && (
-        <p className="text-[11px] text-amber-400 mb-4">
-          URL detected but no <code className="font-mono">?token=</code> parameter found — paste the
-          token directly, or the full URL that contains it.
-        </p>
-      )}
-      {!inputLooksLikeUrl && <div className="mb-4" />}
-      <a
-        href={href}
-        aria-disabled={!href}
-        onClick={(e) => {
-          if (!href) e.preventDefault();
-        }}
-        className={`inline-block px-5 py-2.5 rounded-lg font-semibold text-sm transition-colors ${
-          href
-            ? "bg-blue-500 hover:bg-blue-400 text-white"
-            : "bg-slate-800 text-slate-500 cursor-not-allowed"
-        }`}
-      >
-        Open dashboard →
-      </a>
-      <details className="mt-8 text-xs text-slate-500">
-        <summary className="cursor-pointer hover:text-slate-300">Lost your token?</summary>
-        <p className="mt-2 leading-relaxed">
-          Check the password manager where you saved it during /welcome, or look for{" "}
-          <code className="font-mono">MCP_AUTH_TOKEN</code> in your Vercel project env vars if
-          auto-magic wrote it. If it&apos;s truly gone, use the Recover-access flow below to wipe
-          state and mint a new one — just remember any MCP clients still using the old token will
-          need to be updated.
-        </p>
-      </details>
-      <RecoveryFooter />
-    </Shell>
-  );
-}
+// Phase 47 WIRE-01d: AlreadyInitializedPanel moved to
+// app/welcome/steps/already-initialized.tsx (includes the "Lost your
+// token?" details). Orchestrator wraps it in <Shell> + <RecoveryFooter>.
 
 function RecoveryFooter() {
   return (
