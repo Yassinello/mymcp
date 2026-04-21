@@ -1,0 +1,86 @@
+# Playwright E2E — welcome flow end-to-end coverage (TEST-02, TEST-05).
+#
+# Does NOT block merges on missing Upstash secrets — the welcome spec
+# skips durability scenarios gracefully when env is incomplete. The
+# happy-path assertions (landing-page auth handoff, /welcome render,
+# paste-token form) run unconditionally.
+#
+# Runs on:
+#  - workflow_dispatch (manual)
+#  - pull_request touching welcome / middleware / bootstrap surfaces
+#  - push to main (same path filter)
+name: Playwright E2E
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/welcome/**"
+      - "app/api/welcome/**"
+      - "app/api/storage/**"
+      - "proxy.ts"
+      - "src/core/first-run*.ts"
+      - "src/core/signing-secret.ts"
+      - "playwright.config.ts"
+      - "tests/e2e/**"
+      - ".github/workflows/test-e2e.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app/welcome/**"
+      - "app/api/welcome/**"
+      - "app/api/storage/**"
+      - "proxy.ts"
+      - "src/core/first-run*.ts"
+      - "src/core/signing-secret.ts"
+      - "playwright.config.ts"
+      - "tests/e2e/**"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Build
+        run: npm run build
+      - name: Start dev server
+        run: |
+          # Run dev in the background; pipe logs for debuggability.
+          nohup npm run dev > dev-server.log 2>&1 &
+          echo "Started dev server as PID $!"
+        env:
+          MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN_E2E || 'ci-e2e-token-placeholder-16chars-min' }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL || '' }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN || '' }}
+          MYMCP_ALLOW_EPHEMERAL_SECRET: "1"
+      - name: Wait for dev server
+        run: npx wait-on http://localhost:3000/api/health --timeout 60000
+      - name: Run Playwright e2e
+        run: npm run test:e2e
+        env:
+          MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN_E2E || 'ci-e2e-token-placeholder-16chars-min' }}
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          CI: "1"
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+      - name: Upload dev server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-server-log
+          path: dev-server.log
+          retention-days: 7
