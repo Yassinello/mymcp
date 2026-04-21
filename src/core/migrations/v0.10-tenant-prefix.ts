@@ -32,8 +32,10 @@
  */
 
 import { getKVStore, kvScanAll } from "../kv-store";
+import { getLogger } from "../logging";
 
 const MIGRATION_KEY = "mymcp:migrations:v0.10-tenant-prefix";
+const logger = getLogger("MIGRATION");
 
 let migrationStarted = false;
 
@@ -78,14 +80,14 @@ export async function runV010TenantPrefixMigration(): Promise<void> {
       })
     );
     if (legacyCred + legacySkills > 0) {
-      console.info(
-        `[Kebab MCP migration v0.10-tenant-prefix] noted ${legacyCred} legacy cred:* + ${legacySkills} legacy skills:* keys (served via null-tenant path unchanged)`
+      logger.info(
+        `v0.10-tenant-prefix: noted ${legacyCred} legacy cred:* + ${legacySkills} legacy skills:* keys (served via null-tenant path unchanged)`
       );
     }
   } catch (err) {
     // Never fail boot — migration is idempotent best-effort.
-    console.info(
-      `[Kebab MCP migration v0.10-tenant-prefix] skipped: ${err instanceof Error ? err.message : String(err)}`
+    logger.info(
+      `v0.10-tenant-prefix: skipped (${err instanceof Error ? err.message : String(err)})`
     );
   }
 }

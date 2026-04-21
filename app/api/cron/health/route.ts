@@ -6,6 +6,9 @@ import {
   rateLimitStep,
   type PipelineContext,
 } from "@/core/pipeline";
+import { getLogger } from "@/core/logging";
+
+const logger = getLogger("cron.health");
 
 /**
  * Hourly cron health check (Vercel Cron).
@@ -64,10 +67,14 @@ async function cronHealthHandler(_ctx: PipelineContext): Promise<Response> {
           }),
         });
       } catch (err) {
+        // Phase 45 QA-02: swapped console.info for the structured logger
+        // so the breadcrumb obeys the same routing as the rest of the
+        // cron handler.
         // silent-swallow-ok: error-webhook alert is best-effort observability; a failed alert must not break the cron health response
-        console.info(
-          `[Kebab MCP] error-webhook alert failed: ${err instanceof Error ? err.message : String(err)}`
-        );
+        logger.warn("error-webhook alert failed", {
+          error: err instanceof Error ? err.message : String(err),
+          packs: degraded.length,
+        });
       }
     }
   }

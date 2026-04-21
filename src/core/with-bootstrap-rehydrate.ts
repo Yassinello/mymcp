@@ -55,7 +55,13 @@ export function withBootstrapRehydrate<H extends AnyHandler>(handler: H): H {
     await rehydrateBootstrapAsync();
     if (!migrationScheduled) {
       migrationScheduled = true;
-      // fire-and-forget OK: v0.10 one-shot tenant-prefix migration; KV-flagged idempotent, never blocks request path
+      // Phase 45 QA-02 judgment call: the inner migration logs via
+      // `getLogger("MIGRATION")` on both the legacy-key-counted path and
+      // the error-caught path (see
+      // src/core/migrations/v0.10-tenant-prefix.ts). Re-logging the same
+      // outcome here would double-emit, so the outer .catch intentionally
+      // swallows; the inner logger is authoritative.
+      // fire-and-forget OK: v0.10 one-shot tenant-prefix migration; KV-flagged idempotent, never blocks request path; inner MIGRATION logger is authoritative
       void runV010TenantPrefixMigration().catch(() => {});
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

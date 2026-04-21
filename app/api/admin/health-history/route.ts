@@ -2,6 +2,9 @@ import { kvScanAll } from "@/core/kv-store";
 import { getContextKVStore } from "@/core/request-context";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { getLogger } from "@/core/logging";
+
+const logger = getLogger("admin.health-history");
 
 /**
  * GET /api/admin/health-history — admin-gated.
@@ -70,7 +73,17 @@ async function getHandler(ctx: PipelineContext) {
     return Number.isFinite(ts) && ts < cutoff;
   });
   if (staleKeys.length > 0) {
-    Promise.all(staleKeys.map((k) => kv.delete(k))).catch(() => {});
+    // Phase 45 QA-02: log partial failures instead of silently swallowing.
+    // Cleanup stays fire-and-forget (the response to the operator
+    // shouldn't block on KV delete success — TTL is the primary
+    // eviction path), but a partial failure now leaves a breadcrumb.
+    // fire-and-forget OK: stale-sample cleanup is defense-in-depth; TTL is the primary eviction
+    void Promise.all(staleKeys.map((k) => kv.delete(k))).catch((err) => {
+      logger.warn("stale-sample cleanup partial failure", {
+        error: err instanceof Error ? err.message : String(err),
+        attempted: staleKeys.length,
+      });
+    });
   }
 
   return Response.json(samples);
