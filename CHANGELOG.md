@@ -2,6 +2,84 @@
 
 All notable changes to Kebab MCP.
 
+## [Unreleased] — v0.11 — Multi-tenant real
+
+### Phase 41 — Composable request pipeline
+
+The hand-rolled preamble that accumulated across the 6 entry-point
+routes through v0.10 (`withBootstrapRehydrate` HOC → `isFirstRunMode()`
+→ `checkMcpAuth` → `MYMCP_RATE_LIMIT_ENABLED` → `hydrateCredentialsFromKV`
+→ `requestContext.run`) is now a single middleware-style composition:
+
+```ts
+export const POST = composeRequestPipeline(
+  [rehydrateStep, firstRunGateStep, authStep("mcp"),
+   rateLimitStep({ scope: "mcp", keyFrom: "token" }),
+   hydrateCredentialsStep],
+  transportHandler,
+);
+```
+
+- **NEW** `src/core/pipeline.ts` — `composeRequestPipeline(steps, handler)`
+  Koa-style `(ctx, next) => Promise<Response>`. 7 first-party steps:
+  `rehydrateStep`, `firstRunGateStep`, `authStep('mcp' | 'admin' | 'cron')`,
+  `rateLimitStep({ scope, keyFrom })`, `hydrateCredentialsStep`,
+  `bodyParseStep({ maxBytes })`, `csrfStep`.
+- **NEW** `src/core/with-admin-auth.ts` — thin HOC for the 27 admin
+  routes that just need `rehydrate → admin-auth`. Collapses the 40-site
+  `const authError = await checkAdminAuth(req); if (authError) return
+  authError;` preamble to a single wrapper call. `grep 'checkAdminAuth('
+  app/api/` drops from 34 to 6 (the 6 remaining are legit conditional
+  auth ladders: storage-status, config/storage-status,
+  welcome/starter-skills, setup/test, setup/save, health?deep=1).
+- **FIX (CORRECTNESS)** Tenant-scoped rate-limit keys
+  (POST-V0.10-AUDIT §B.2). `requestContext.run` now wraps the WHOLE
+  pipeline, and `authStep` re-enters `requestContext.run({ tenantId })`
+  on the MCP path so `rate-limit.ts:85 getCurrentTenantId()` observes
+  the real tenant instead of always resolving to `"global"`. A 2-tenant
+  integration test in `tests/core/pipeline/rate-limit-step.test.ts` and
+  `tests/regression/transport-pipeline.test.ts` asserts the closure
+  (tenant-A bursting a shared token does NOT 429 tenant-B).
+- **NEW** Rate-limit gates on 4 surfaces (opt-in via
+  `MYMCP_RATE_LIMIT_ENABLED=true`): `/api/webhook/[name]` (IP-keyed,
+  30/min), `/api/cron/health` (CRON_SECRET tokenId-keyed, 120/min),
+  `/api/welcome/claim` (IP-keyed, 10/min). `/api/[transport]` token-
+  keyed gate was already present — now also sees tenantId.
+- **MIGRATION** 6 entry-point routes converted to the pipeline:
+  `[transport]`, `admin/call`, `welcome/init`, `storage/status`,
+  `webhook/[name]`, `cron/health`. 27 admin routes converted to
+  `withAdminAuth()` HOC. 5 routes with bespoke auth ladders converted
+  to partial pipelines (rehydrate only): `welcome/starter-skills`,
+  `welcome/status`, `welcome/test-mcp`, `setup/test`, `setup/save`,
+  `config/storage-status`.
+- **NEW** Contract test `tests/contract/pipeline-coverage.test.ts` —
+  fails the build if a new `app/api/**/route.ts` exports a handler
+  without `composeRequestPipeline(` / `withAdminAuth(` usage or a
+  first-10-lines `PIPELINE_EXEMPT: <reason>` marker. Two routes
+  grandfathered exempt: `app/api/health/route.ts` (1.5s budget on
+  uptime-monitor hot path), `app/api/auth/google/callback/route.ts`
+  (public OAuth redirect with no state to wire through).
+- **CLEANUP** (T20 fold-in) `src/core/first-run.ts:609` module-load
+  `rehydrateBootstrapFromTmp()` disk-read side effect removed —
+  pipeline's `rehydrateStep` is the single deterministic entry. Fixes
+  test-order dependence documented in ARCH-AUDIT §3.
+- **CLEANUP** `app/api/cron/health/route.ts` historical silent swallow
+  (`.catch(() => {})`) around error-webhook alert converted to
+  log-then-swallow, keeping `no-silent-swallows` contract green.
+- **COMPAT** `withBootstrapRehydrate` remains exported (PIPE-07) and is
+  the implementation backing `rehydrateStep` (same `rehydrateBootstrapAsync`
+  + one-shot migration trigger, same module flag). Existing
+  `BOOTSTRAP_EXEMPT:` markers still honored by `route-rehydrate-coverage`
+  contract (now also accepts `composeRequestPipeline(` /
+  `withAdminAuth(` as rehydrate-on-entry shapes). **No public endpoint
+  contract changes** — all URL paths + response shapes + status codes
+  preserved.
+
+Test delta: 554 → 636 (+82 new tests, 18 pipeline core + 29 step units + 4
+withAdminAuth unit + 6 transport regression + 14 admin/welcome/storage
+regression + 9 rate-limit regression + 1 enforced pipeline-coverage
+contract + 1 enabled pipeline-coverage contract).
+
 ## [0.10.0] — Unreleased — Durability audit hardening
 
 The v0.10 milestone is the preventive hardening pass triggered by the

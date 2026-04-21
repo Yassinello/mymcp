@@ -1,4 +1,5 @@
 // BOOTSTRAP_EXEMPT: public OAuth redirect target; reads only deploy-time GOOGLE_CLIENT_ID/SECRET + VERCEL_URL, never bootstrap state or MCP_AUTH_TOKEN.
+// PIPELINE_EXEMPT: public OAuth redirect receiver; no auth/rate-limit/tenant state to wire through the pipeline, and reply is a redirect not a JSON contract.
 import { Google } from "arctic";
 
 /**

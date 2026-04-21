@@ -226,6 +226,69 @@ light up on deploy.
   `getKVStore()` directly in connector code — fix by switching to
   `getContextKVStore()`.
 
+## Route authoring — the request pipeline (as of v0.11.0 / Phase 41)
+
+New API routes under `app/api/**/route.ts` MUST compose their handler
+through `composeRequestPipeline(...)` OR the `withAdminAuth(...)` HOC
+OR carry a documented `PIPELINE_EXEMPT:` marker. A contract test
+(`tests/contract/pipeline-coverage.test.ts`) fails the build if this is
+not satisfied.
+
+### Concept
+
+A pipeline is an ordered list of Koa-style `(ctx, next) => Promise<Response>`
+steps that concentrate request-scoped policy (rehydrate, auth,
+rate-limit, body-parse, CSRF, credentials) at one composition site.
+The step(s) run in declaration order; `next()` yields to the next
+step; returning without calling `next()` short-circuits.
+
+### The 7 built-in steps
+
+All exported from `@/core/pipeline`:
+
+| Step                    | Purpose                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| `rehydrateStep`         | Awaits `rehydrateBootstrapAsync()` + fires one-shot v0.10 tenant-prefix migration (replaces `withBootstrapRehydrate`). |
+| `firstRunGateStep`      | Returns 503 JSON when `isFirstRunMode()`; otherwise calls `next()`.                                  |
+| `authStep(kind)`        | `'mcp'` / `'admin'` / `'cron'`. On MCP success, writes `ctx.tenantId` + `ctx.tokenId` AND re-enters `requestContext.run({ tenantId })` so downstream steps see it via `getCurrentTenantId()`. |
+| `rateLimitStep(opts)`   | `opts: { scope, keyFrom: 'token' \| 'ip' \| 'cronSecretTokenId', limit?, enabledEnv? }`. Opt-in via `MYMCP_RATE_LIMIT_ENABLED=true`. Must run AFTER `authStep` on paths that resolve tenantId so buckets key correctly. |
+| `hydrateCredentialsStep`| Hydrates `cred:*` KV entries into the in-process snapshot; runs the continuation under `runWithCredentials` so tool handlers see `getCredential()` values. |
+| `bodyParseStep(opts)`   | `opts: { maxBytes? }`. Buffers body with Content-Length + streaming size limits; best-effort JSON parse with raw-string fallback; populates `ctx.parsedBody`. |
+| `csrfStep`              | Delegates to `checkCsrf(request)`; returns 403 on mismatched Origin for mutations.                   |
+
+### When to use `composeRequestPipeline` vs. `withAdminAuth`
+
+- **Admin-only route with no extra state:** use `withAdminAuth(handler)`.
+  It's a thin HOC that expands to
+  `composeRequestPipeline([rehydrateStep, authStep('admin')], handler)`.
+  Handler signature: `(ctx: PipelineContext) => Promise<Response>`.
+- **Anything else (MCP transport, cron, webhook, multi-step auth, body
+  parse, rate limit):** compose a `composeRequestPipeline([...], handler)`
+  directly.
+
+### Marking a route exempt
+
+If a route legitimately cannot participate in the pipeline (public
+liveness endpoint with a hard latency budget, OAuth redirect receiver
+with no auth state to wire through), add this marker as one of the
+first 10 lines of the file (before imports):
+
+```ts
+// PIPELINE_EXEMPT: <reason ≥ 20 chars explaining why the pipeline doesn't apply>
+```
+
+Two routes are currently exempt: `app/api/health/route.ts` (1.5s budget
+on the uptime-monitor hot path) and `app/api/auth/google/callback/route.ts`
+(public OAuth redirect — no auth/rate-limit/tenant state to wire through,
+response is a redirect not a JSON contract).
+
+### Examples
+
+See `src/core/pipeline/*-step.ts` for step implementations and
+`app/api/[transport]/route.ts` / `app/api/webhook/[name]/route.ts` /
+`app/api/admin/call/route.ts` for compositions covering different
+combinations of the 7 steps.
+
 ## See also
 
 - `CLAUDE.md` — project architecture overview

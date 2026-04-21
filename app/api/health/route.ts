@@ -1,4 +1,5 @@
 // BOOTSTRAP_EXEMPT: public liveness endpoint — cannot block on KV rehydrate; handler has a hard 1.5s budget. Bootstrap state is surfaced as a read-only field (`bootstrap.state`) and never mutated here.
+// PIPELINE_EXEMPT: public liveness endpoint with 1.5s hard budget; cannot afford pipeline overhead on the uptime-monitor hot path. `?deep=1` branch does admin-auth inline.
 import { VERSION } from "@/core/version";
 import { resolveRegistry } from "@/core/registry";
 import { checkAdminAuth } from "@/core/auth";

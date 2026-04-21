@@ -17,9 +17,9 @@
  *      comment line of the route file (before imports).
  *   2. Document the rationale in the PR body.
  *
- * NOTE: This file is scaffolded with `describe.skip(...)` in Task 1 so
- * the build does not fail before the Task 3-6 migrations land. Task 7
- * removes the `.skip` to enforce the contract.
+ * Enforced as of Phase 41 Task 7 — un-skipped after all 6 entry-point
+ * migrations + 27 withAdminAuth migrations + 5 partial-pipeline
+ * migrations landed.
  */
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -84,7 +84,7 @@ function hasExportedVerb(source: string): boolean {
   return re.test(source);
 }
 
-describe.skip("pipeline-coverage contract (PIPE-06)", () => {
+describe("pipeline-coverage contract (PIPE-06)", () => {
   it("every route uses composeRequestPipeline or withAdminAuth or carries PIPELINE_EXEMPT marker", () => {
     const projectRoot = join(__dirname, "..", "..");
     const files: string[] = [];
