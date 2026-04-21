@@ -2,7 +2,17 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MemoryLogStore, FilesystemLogStore, UpstashLogStore, type LogEntry } from "./log-store";
+import {
+  MemoryLogStore,
+  FilesystemLogStore,
+  UpstashLogStore,
+  getLogStore,
+  resetLogStoreCache,
+  __getCachedLogStoresForTests,
+  type LogEntry,
+  type LogStore,
+} from "./log-store";
+import { requestContext } from "./request-context";
 
 function mk(ts: number, message: string, level: LogEntry["level"] = "info"): LogEntry {
   return { ts, level, message };
@@ -177,6 +187,10 @@ describe("UpstashLogStore — retry + circuit breaker", () => {
     // 3 failures then success
     const mockKv = makeMockKv(["5xx", "5xx", "5xx", "ok"]);
     vi.spyOn(await import("./kv-store"), "getKVStore").mockReturnValue(mockKv);
+    // Phase 42 (TEN-02): UpstashLogStore now reads through
+    // getContextKVStore() by default. Mock it too so the retry path
+    // hits our mockKv.
+    vi.spyOn(await import("./request-context"), "getContextKVStore").mockReturnValue(mockKv);
 
     const appendPromise = store.append(mk(1, "retry-test"));
     // Advance through retry delays: 100, 400, 1600
@@ -195,6 +209,10 @@ describe("UpstashLogStore — retry + circuit breaker", () => {
     // 2 appends × 4 = 8 calls, but we only need 5 consecutive failures at the store level.
     const mockKv = makeMockKv(Array(100).fill("5xx"));
     vi.spyOn(await import("./kv-store"), "getKVStore").mockReturnValue(mockKv);
+    // Phase 42 (TEN-02): UpstashLogStore now reads through
+    // getContextKVStore() by default. Mock it too so the retry path
+    // hits our mockKv.
+    vi.spyOn(await import("./request-context"), "getContextKVStore").mockReturnValue(mockKv);
 
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -225,6 +243,10 @@ describe("UpstashLogStore — retry + circuit breaker", () => {
 
     const mockKv = makeMockKv(["ok"]);
     vi.spyOn(await import("./kv-store"), "getKVStore").mockReturnValue(mockKv);
+    // Phase 42 (TEN-02): UpstashLogStore now reads through
+    // getContextKVStore() by default. Mock it too so the retry path
+    // hits our mockKv.
+    vi.spyOn(await import("./request-context"), "getContextKVStore").mockReturnValue(mockKv);
 
     // Before 30s: still open
     await vi.advanceTimersByTimeAsync(15_000);
@@ -240,5 +262,98 @@ describe("UpstashLogStore — retry + circuit breaker", () => {
     expect(mockKv.lpushCapped).toHaveBeenCalledTimes(1);
     expect(store._circuit.state).toBe("closed");
     expect(store._circuit.consecutiveFailures).toBe(0);
+  });
+});
+
+// ── Phase 42 / TEN-02: tenant-scoped log-store factory ───────────────
+
+describe("getLogStore() — Phase 42 tenant scoping (TEN-02)", () => {
+  beforeEach(() => {
+    resetLogStoreCache();
+    // Ensure neither Vercel nor Upstash env paths are active → the
+    // factory builds FilesystemLogStore instances, keyed per-tenant by
+    // file name.
+    delete process.env.VERCEL;
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    delete process.env.KV_REST_API_URL;
+    delete process.env.KV_REST_API_TOKEN;
+  });
+
+  afterEach(() => {
+    resetLogStoreCache();
+  });
+
+  it("returns a distinct LogStore instance per tenant", async () => {
+    let alphaStore: LogStore | undefined;
+    let betaStore: LogStore | undefined;
+
+    await requestContext.run({ tenantId: "alpha" }, async () => {
+      alphaStore = getLogStore();
+    });
+    await requestContext.run({ tenantId: "beta" }, async () => {
+      betaStore = getLogStore();
+    });
+
+    expect(alphaStore).toBeDefined();
+    expect(betaStore).toBeDefined();
+    expect(alphaStore).not.toBe(betaStore);
+
+    const cache = __getCachedLogStoresForTests();
+    expect(cache.has("alpha")).toBe(true);
+    expect(cache.has("beta")).toBe(true);
+  });
+
+  it("returns the same instance on repeat calls under the same tenant", async () => {
+    await requestContext.run({ tenantId: "alpha" }, async () => {
+      const a = getLogStore();
+      const b = getLogStore();
+      expect(a).toBe(b);
+    });
+  });
+
+  it("FilesystemLogStore path includes tenantId when a tenant context is active", async () => {
+    await requestContext.run({ tenantId: "alpha" }, async () => {
+      const store = getLogStore();
+      // FilesystemLogStore exposes filePath via the instance shape.
+      const fsStore = store as unknown as { filePath: string };
+      expect(fsStore.filePath).toMatch(/logs\.alpha\.jsonl$/);
+    });
+  });
+
+  it("null tenant uses the legacy path `data/logs.jsonl` (back-compat)", () => {
+    const store = getLogStore();
+    const fsStore = store as unknown as { filePath: string };
+    expect(fsStore.filePath).toMatch(/logs\.jsonl$/);
+    expect(fsStore.filePath).not.toMatch(/logs\.null\.jsonl$/);
+  });
+
+  it("appends under alpha are invisible to recent() calls under beta (2-tenant isolation)", async () => {
+    // Use temp dirs so filesystem reads don't pick up artifacts from
+    // other test runs.
+    const dir = mkdtempSync(join(tmpdir(), "mymcp-ten02-"));
+    const savedCwd = process.cwd();
+    process.chdir(dir);
+    try {
+      await requestContext.run({ tenantId: "alpha" }, async () => {
+        await getLogStore().append(mk(1, "alpha-only"));
+      });
+      await requestContext.run({ tenantId: "beta" }, async () => {
+        const recent = await getLogStore().recent(10);
+        expect(recent.map((e) => e.message)).not.toContain("alpha-only");
+      });
+      // And alpha sees its own entry on a re-read.
+      await requestContext.run({ tenantId: "alpha" }, async () => {
+        const recent = await getLogStore().recent(10);
+        expect(recent.map((e) => e.message)).toContain("alpha-only");
+      });
+    } finally {
+      process.chdir(savedCwd);
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+    }
   });
 });

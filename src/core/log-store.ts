@@ -18,9 +18,10 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { getKVStore } from "./kv-store";
+import { getContextKVStore, getCurrentTenantId } from "./request-context";
 import { hasUpstashCreds } from "./upstash-env";
 import { getLogger } from "./logging";
+import type { KVStore } from "./kv-store";
 
 const logStoreLog = getLogger("LOG-STORE");
 
@@ -275,6 +276,7 @@ export class UpstashLogStore implements LogStore {
   private listKey: string;
   private maxEntries: number;
   private maxAgeSeconds?: number;
+  private kvOverride?: KVStore;
   /** Exposed for testing. */
   _circuit: CircuitBreakerState = {
     consecutiveFailures: 0,
@@ -282,10 +284,28 @@ export class UpstashLogStore implements LogStore {
     openedAt: 0,
   };
 
-  constructor(opts?: { listKey?: string; maxEntries?: number; maxAgeSeconds?: number }) {
+  constructor(opts?: {
+    listKey?: string;
+    maxEntries?: number;
+    maxAgeSeconds?: number;
+    /**
+     * Phase 42 (TEN-02): when provided, all reads/writes go through this
+     * store. The factory supplies a `getContextKVStore()` instance,
+     * so the bare listKey `mymcp:logs` auto-wraps to
+     * `tenant:<id>:mymcp:logs` per-tenant. Falls back to
+     * `getContextKVStore()` at call time if not set (preserves old
+     * behaviour for callers that construct the store directly).
+     */
+    kv?: KVStore;
+  }) {
     this.listKey = opts?.listKey ?? "mymcp:logs";
     this.maxEntries = opts?.maxEntries ?? envMaxEntries();
     this.maxAgeSeconds = opts?.maxAgeSeconds ?? envMaxAgeSeconds();
+    this.kvOverride = opts?.kv;
+  }
+
+  private kv(): KVStore {
+    return this.kvOverride ?? getContextKVStore();
   }
 
   private shouldAllow(): boolean {
@@ -322,7 +342,7 @@ export class UpstashLogStore implements LogStore {
       return;
     }
 
-    const kv = getKVStore();
+    const kv = this.kv();
     if (typeof kv.lpushCapped !== "function") {
       throw new Error("UpstashLogStore requires KVStore.lpushCapped");
     }
@@ -361,7 +381,7 @@ export class UpstashLogStore implements LogStore {
   }
 
   async recent(n: number): Promise<LogEntry[]> {
-    const kv = getKVStore();
+    const kv = this.kv();
     if (typeof kv.lrange !== "function") {
       throw new Error("UpstashLogStore requires KVStore.lrange");
     }
@@ -413,47 +433,88 @@ function sleep(ms: number): Promise<void> {
 }
 
 // ── Factory ──────────────────────────────────────────────────────────
+//
+// Phase 42 (TEN-02) — log-store is now per-tenant.
+//
+// Pre-v0.11: single module-cached `LogStore` shared across all tenants.
+// All Upstash writes hit a single global list `mymcp:logs`; all
+// filesystem writes hit a single global JSONL.
+//
+// v0.11+: cache keyed by tenantId. `getContextKVStore()` wraps the
+// UpstashLogStore's bare `mymcp:logs` listKey into
+// `tenant:<id>:mymcp:logs`. Filesystem path uses
+// `data/logs.<tenantId>.jsonl` when a tenant context is active.
+// MemoryLogStore gets a dedicated instance per tenant.
+//
+// Tenant validation: the factory enforces `TENANT_ID_RE` (defined in
+// `./tenant.ts`) as a defense in depth before using tenantId in a
+// filesystem path. Production path is the route layer (getTenantId
+// already validated) so this is belt-and-braces.
 
-let cached: LogStore | null = null;
+const TENANT_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+const cachedByTenant = new Map<string, LogStore>();
+
+function tenantKey(tenantId: string | null): string {
+  return tenantId ?? "__null__";
+}
 
 export function getLogStore(): LogStore {
-  if (cached) return cached;
+  const tenantId = getCurrentTenantId();
+  const key = tenantKey(tenantId);
+  const existing = cachedByTenant.get(key);
+  if (existing) return existing;
+
+  let store: LogStore;
 
   if (hasUpstashCreds()) {
-    cached = new UpstashLogStore();
-    return cached;
-  }
-
-  if (process.env.VERCEL === "1") {
+    // The factory binds the store to the CURRENT tenant's KV context.
+    // Because the cache is keyed per-tenant, the next request under a
+    // different tenant context hits a fresh factory call and gets its
+    // own instance with its own (tenant-wrapped) KV.
+    store = new UpstashLogStore({ kv: getContextKVStore() });
+  } else if (process.env.VERCEL === "1") {
     console.warn(
       "[Kebab MCP] LogStore: running on Vercel without UPSTASH_REDIS_REST_URL/TOKEN " +
         "(or KV_REST_API_URL/TOKEN for Vercel Marketplace setups) — " +
         "using MemoryLogStore (ephemeral, lost on cold start)."
     );
-    cached = new MemoryLogStore();
-    return cached;
+    store = new MemoryLogStore();
+  } else {
+    // Filesystem: per-tenant JSONL file. Validate the tenantId shape
+    // before building the path (defence in depth — route layer also
+    // validates via getTenantId).
+    const fileName =
+      tenantId && TENANT_ID_RE.test(tenantId) ? `logs.${tenantId}.jsonl` : "logs.jsonl";
+    store = new FilesystemLogStore(path.resolve(process.cwd(), "data", fileName));
   }
 
-  cached = new FilesystemLogStore(path.resolve(process.cwd(), "data", "logs.jsonl"));
-  return cached;
+  cachedByTenant.set(key, store);
+  return store;
 }
 
-/** Test-only: reset the cached instance. */
+/** Test-only: reset all cached instances (every tenant). */
 export function resetLogStoreCache(): void {
-  cached = null;
+  cachedByTenant.clear();
 }
 
 /**
- * Clear the in-memory buffer of the current LogStore instance.
- * For MemoryLogStore this empties the ring buffer. For other backends
- * this is a no-op (they don't buffer locally).
+ * Clear the in-memory buffer of all cached LogStore instances
+ * (per-tenant). For MemoryLogStore this empties the ring buffer. For
+ * other backends this is a no-op (they don't buffer locally).
  */
 export function clearLogStoreBuffer(): void {
-  if (!cached) return;
-  if (cached.kind === "memory") {
-    const mem = cached as unknown as { buf: unknown[] };
-    if (Array.isArray(mem.buf)) {
-      mem.buf.length = 0;
+  for (const cached of cachedByTenant.values()) {
+    if (cached.kind === "memory") {
+      const mem = cached as unknown as { buf: unknown[] };
+      if (Array.isArray(mem.buf)) {
+        mem.buf.length = 0;
+      }
     }
   }
+}
+
+/** Test-only: inspect the per-tenant cache Map. */
+export function __getCachedLogStoresForTests(): Map<string, LogStore> {
+  return cachedByTenant;
 }
