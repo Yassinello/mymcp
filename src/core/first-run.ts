@@ -41,6 +41,13 @@ import { hasUpstashCreds } from "./upstash-env";
 
 const KV_BOOTSTRAP_KEY = "mymcp:firstrun:bootstrap";
 
+// OBS-01 / OBS-02: rehydrate observability metadata. Persisted to KV so
+// /api/admin/status can diagnose cold-start health without tailing
+// Vercel logs. "last" = ISO timestamp of most-recent successful rehydrate;
+// "count" = { total, events: [{at}] } with 24h sliding window.
+const REHYDRATE_META_LAST_KEY = "mymcp:firstrun:rehydrate-meta:last";
+const REHYDRATE_COUNT_KV_KEY = "mymcp:firstrun:rehydrate-count";
+
 export const FIRST_RUN_COOKIE_NAME = "mymcp_firstrun_claim";
 export const CLAIM_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const BOOTSTRAP_TTL_MS = 15 * 60 * 1000; // 15 minutes (Vercel /tmp lifetime)
@@ -406,6 +413,97 @@ export function clearBootstrap(): void {
   void deleteBootstrapFromKv();
 }
 
+// ── OBS-01 / OBS-02: rehydrate observability metadata ──────────────
+
+/**
+ * Bootstrap state as seen by observers (/api/health, /api/admin/status).
+ * - `active` — process has a real or bootstrap-minted MCP_AUTH_TOKEN
+ * - `pending` — first-run mode, no token yet
+ * - `error`  — reserved for future use when rehydrate fails persistently
+ */
+export function getBootstrapState(): "pending" | "active" | "error" {
+  if (isFirstRunMode()) return "pending";
+  return "active";
+}
+
+async function recordRehydrateSuccess(): Promise<void> {
+  if (!isExternalKvAvailable()) return;
+  try {
+    const kv = getKVStore();
+    const now = new Date().toISOString();
+    await kv.set(REHYDRATE_META_LAST_KEY, now);
+    await incrementRehydrateCount();
+  } catch (err) {
+    console.info(
+      `[Kebab MCP first-run] rehydrate-meta write skipped: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+interface RehydrateCountRecord {
+  total: number;
+  events: { at: string }[];
+}
+
+async function incrementRehydrateCount(): Promise<void> {
+  try {
+    const kv = getKVStore();
+    const raw = await kv.get(REHYDRATE_COUNT_KV_KEY);
+    const parsed: RehydrateCountRecord = raw
+      ? (JSON.parse(raw) as RehydrateCountRecord)
+      : { total: 0, events: [] };
+    const nowMs = Date.now();
+    const cutoff = nowMs - 24 * 60 * 60 * 1000;
+    parsed.total += 1;
+    parsed.events = parsed.events.filter((e) => new Date(e.at).getTime() > cutoff);
+    parsed.events.push({ at: new Date(nowMs).toISOString() });
+    // Defensive cap — long-lived deploys should never let this balloon.
+    if (parsed.events.length > 10_000) parsed.events = parsed.events.slice(-1000);
+    await kv.set(REHYDRATE_COUNT_KV_KEY, JSON.stringify(parsed));
+  } catch (err) {
+    console.info(
+      `[Kebab MCP first-run] rehydrate-count increment skipped: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+/**
+ * Most recent successful rehydrate timestamp, or null if no rehydrate
+ * has ever landed on this KV backend (fresh deploy, KV not configured,
+ * or never-initialized instance).
+ */
+export async function getLastRehydrateAt(): Promise<Date | null> {
+  if (!isExternalKvAvailable()) return null;
+  try {
+    const kv = getKVStore();
+    const iso = await kv.get(REHYDRATE_META_LAST_KEY);
+    return iso ? new Date(iso) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Rehydrate count in aggregate (`total`) and in the last 24h rolling
+ * window. Last24h is recomputed from the event log on every read so a
+ * lambda that has been warm for >24h still returns the correct sliding
+ * count.
+ */
+export async function getRehydrateCount(): Promise<{ total: number; last24h: number }> {
+  if (!isExternalKvAvailable()) return { total: 0, last24h: 0 };
+  try {
+    const kv = getKVStore();
+    const raw = await kv.get(REHYDRATE_COUNT_KV_KEY);
+    if (!raw) return { total: 0, last24h: 0 };
+    const parsed = JSON.parse(raw) as RehydrateCountRecord;
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const last24h = parsed.events.filter((e) => new Date(e.at).getTime() > cutoff).length;
+    return { total: parsed.total, last24h };
+  } catch {
+    return { total: 0, last24h: 0 };
+  }
+}
+
 /**
  * Async re-hydration: first try /tmp (sync, fast path), then KV if /tmp
  * came up empty. If KV had a payload that /tmp didn't, mirror it back to
@@ -424,6 +522,14 @@ export function clearBootstrap(): void {
  */
 export async function rehydrateBootstrapAsync(): Promise<void> {
   rehydrateBootstrapFromTmp();
+  // OBS-02 design note: we only record a rehydrate event when the KV
+  // path actually did work (KV-hit below). The /tmp fast path runs on
+  // every auth-gated request via withBootstrapRehydrate — counting it
+  // would spam the counter with "hot lambda serving a normal request"
+  // events and defeat the diagnostic purpose (distinguishing cold
+  // starts that needed a KV roundtrip). Tests in src/core/first-run.test.ts
+  // assert this: after a /tmp hit, `kv.get` is NOT called for
+  // rehydrate-count bookkeeping.
   if (activeBootstrap) return;
   if (!isExternalKvAvailable()) return;
   const fromKv = await loadBootstrapFromKv();
@@ -443,6 +549,8 @@ export async function rehydrateBootstrapAsync(): Promise<void> {
   console.info(
     `[Kebab MCP first-run] re-hydrated bootstrap from KV (claim=${fromKv.claimId.slice(0, 8)}…)`
   );
+  // fire-and-forget OK: observability metadata write; losing a sample does not affect correctness of the rehydrate
+  void recordRehydrateSuccess();
 }
 
 /** Test-only helper. Resets all module-level state. */

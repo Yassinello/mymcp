@@ -21,7 +21,39 @@ import { promises as fs } from "node:fs";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { withTenantPrefix } from "./tenant";
-import { getUpstashCreds } from "./upstash-env";
+import { getUpstashCreds, hasUpstashCreds } from "./upstash-env";
+
+// ── OBS-02: in-process KV latency ring buffer ───────────────────────
+//
+// Populated by pingKV() + any future per-operation tracing hook; read
+// by /api/admin/status. Capped at 20 samples so the buffer never grows
+// unbounded in a long-running process.
+
+export interface KVLatencySample {
+  at: string;
+  op: string;
+  durationMs: number;
+}
+
+const MAX_KV_LATENCY_SAMPLES = 20;
+const kvLatencyBuffer: KVLatencySample[] = [];
+
+/** Test-only: clear the ring buffer. */
+export function __resetKVLatencyBufferForTests(): void {
+  kvLatencyBuffer.length = 0;
+}
+
+/** Returns a copy of the ring buffer — newest samples at the end. */
+export function getKVLatencySamples(): KVLatencySample[] {
+  return [...kvLatencyBuffer];
+}
+
+function recordKVLatency(op: string, durationMs: number): void {
+  kvLatencyBuffer.push({ at: new Date().toISOString(), op, durationMs });
+  if (kvLatencyBuffer.length > MAX_KV_LATENCY_SAMPLES) {
+    kvLatencyBuffer.shift();
+  }
+}
 
 export interface KVStore {
   kind: "filesystem" | "upstash";
@@ -622,4 +654,50 @@ export function getTenantKVStore(tenantId: string | null): KVStore {
   const inner = getKVStore();
   if (tenantId === null) return inner;
   return new TenantKVStore(inner, tenantId);
+}
+
+// ── OBS-01 / OBS-02: KV reachability + latency helpers ─────────────
+
+/**
+ * True when the active KV backend is cross-instance durable (Upstash or
+ * a non-Vercel filesystem). Mirrors the old `isExternalKvAvailable`
+ * helper in first-run.ts — exposed here so callers outside first-run
+ * (e.g. /api/health) can make the same distinction without pulling in
+ * first-run's module.
+ */
+export function isExternalKvAvailable(): boolean {
+  if (hasUpstashCreds()) return true;
+  if (process.env.VERCEL !== "1") return true;
+  return false;
+}
+
+/**
+ * 1-second reachability probe for the current KV backend. Returns
+ * `reachable: true` immediately for filesystem/memory backends (no
+ * network round-trip). For Upstash, issues a lightweight GET against a
+ * well-known key (null result is fine — we only care that the command
+ * returned) and hard-caps the probe at 1 second so /api/health itself
+ * cannot hang.
+ *
+ * Records a latency sample on success (consumed by OBS-02).
+ */
+export async function pingKV(): Promise<{ reachable: boolean; latencyMs?: number }> {
+  const kv = getKVStore();
+  if (kv.kind !== "upstash") {
+    return { reachable: true, latencyMs: 0 };
+  }
+  const started = Date.now();
+  try {
+    await Promise.race([
+      kv.get("mymcp:health:ping"),
+      new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error("kv-ping-timeout-1s")), 1000)
+      ),
+    ]);
+    const latencyMs = Date.now() - started;
+    recordKVLatency("ping", latencyMs);
+    return { reachable: true, latencyMs };
+  } catch {
+    return { reachable: false };
+  }
 }

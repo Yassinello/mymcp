@@ -1,29 +1,85 @@
-// BOOTSTRAP_EXEMPT: public liveness endpoint — cannot block on KV rehydrate; returns minimal { ok, version } and (with ?deep=1) per-connector diagnose(). Bootstrap state is never read here.
+// BOOTSTRAP_EXEMPT: public liveness endpoint — cannot block on KV rehydrate; handler has a hard 1.5s budget. Bootstrap state is surfaced as a read-only field (`bootstrap.state`) and never mutated here.
 import { VERSION } from "@/core/version";
 import { resolveRegistry } from "@/core/registry";
 import { checkAdminAuth } from "@/core/auth";
 import { withTimeout } from "@/core/timeout";
 import { getContextKVStore } from "@/core/request-context";
+import { pingKV } from "@/core/kv-store";
+import { getBootstrapState, getLastRehydrateAt } from "@/core/first-run";
+import { getActiveDestructiveVars } from "@/core/env-safety";
 
 /**
  * Public health endpoint.
  *
- * `GET /api/health` — liveness only. Returns `{ok, version}`. No
- * connector details, no env var info. Safe for public uptime monitors.
+ * `GET /api/health` — liveness + lightweight observability (OBS-01, SAFE-02).
+ * Returns:
+ *   {
+ *     ok,
+ *     version,
+ *     bootstrap: { state: "pending" | "active" | "error" },
+ *     kv: { reachable, lastRehydrateAt: ISO | null },
+ *     warnings?: [{ code, var, message }]   // omitted when empty
+ *   }
+ * No secrets, no env values, no tenant info. Hard-capped at 1.5 s total
+ * so Vercel's uptime monitors never time out on a slow Upstash.
  *
  * `GET /api/health?deep=1` — admin-gated deep health check. Runs each
  * enabled connector's `diagnose()` hook in parallel and returns
  * per-connector status. The response reveals which connectors are
  * active and their raw error messages (fingerprinting risk), so this
- * path requires admin auth. Use for internal monitoring (Grafana,
- * Healthchecks.io) behind a Bearer token.
+ * path requires admin auth.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const deep = url.searchParams.get("deep") === "1";
 
   if (!deep) {
-    return Response.json({ ok: true, version: VERSION });
+    // OBS-01 / SAFE-02: enriched public payload. Everything inside this
+    // block has to finish in <1500 ms — use Promise.race / timeouts
+    // defensively so a slow KV cannot hang a public liveness probe.
+    const HEALTH_BUDGET_MS = 1500;
+    const started = Date.now();
+    const body: Record<string, unknown> = {
+      ok: true,
+      version: VERSION,
+      bootstrap: { state: getBootstrapState() },
+      kv: { reachable: false, lastRehydrateAt: null as string | null },
+    };
+    try {
+      const kvWork = Promise.all([pingKV(), getLastRehydrateAt()]);
+      const [kvStatus, lastRehydrate] = (await Promise.race([
+        kvWork,
+        new Promise<[{ reachable: boolean }, Date | null]>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("health-budget-exceeded")),
+            HEALTH_BUDGET_MS - (Date.now() - started)
+          )
+        ),
+      ])) as [{ reachable: boolean }, Date | null];
+      body.kv = {
+        reachable: kvStatus.reachable,
+        lastRehydrateAt: lastRehydrate ? lastRehydrate.toISOString() : null,
+      };
+    } catch {
+      // Budget exceeded or KV backend unavailable. Report unreachable and
+      // move on — liveness itself is still "ok" as long as the handler
+      // returns a 200 within the budget.
+      body.kv = { reachable: false, lastRehydrateAt: null };
+    }
+
+    // SAFE-02: surface destructive env vars that are active in an
+    // environment they were not designed for. Only present when the
+    // array is non-empty — keeps the happy-path payload minimal.
+    const activeDestructive = getActiveDestructiveVars().filter((a) => !a.allowed);
+    if (activeDestructive.length > 0) {
+      body.warnings = activeDestructive.map((a) => ({
+        code: "DESTRUCTIVE_ENV_VAR_ACTIVE",
+        var: a.var.name,
+        message: `${a.var.name} is set in a ${process.env.NODE_ENV || "unknown"} deployment; ${a.var.effect}`,
+      }));
+    }
+
+    return Response.json(body);
   }
 
   const authError = await checkAdminAuth(request);
@@ -94,6 +150,7 @@ export async function GET(request: Request) {
   const sample = { ts: sampleTs, overall, connectors: connectorMap };
   const HEALTH_SAMPLE_TTL_SECONDS = 7 * 24 * 3600;
   const kv = getContextKVStore();
+  // fire-and-forget OK: deep-health sample is best-effort telemetry; caller returns the live response regardless
   void kv
     .set(`health:sample:${sampleTs}`, JSON.stringify(sample), HEALTH_SAMPLE_TTL_SECONDS)
     .catch((err: Error) => console.error("[Kebab MCP] Health sample write failed:", err.message));
