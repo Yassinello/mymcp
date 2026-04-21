@@ -1,15 +1,11 @@
-import { checkAdminAuth } from "@/core/auth";
 import { resolveRegistry } from "@/core/registry";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
 
 /**
  * Run diagnose() on all enabled packs and return results.
  * Used by the setup page for live credential verification.
  */
-async function getHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
+async function getHandler() {
   const registry = resolveRegistry();
 
   const results = await Promise.all(
@@ -40,4 +36,4 @@ async function getHandler(request: Request) {
   return Response.json({ packs: results });
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
+export const GET = withAdminAuth(getHandler);

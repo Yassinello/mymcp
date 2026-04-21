@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
 
 /**
  * POST /api/welcome/test-mcp
@@ -12,7 +12,8 @@ import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
  * Body: { token: string }
  * Response: { ok, authPassed, status, toolsCount?, error? }
  */
-async function postHandler(request: Request) {
+async function postHandler(ctx: PipelineContext) {
+  const request = ctx.request;
   let token: string | undefined;
   try {
     const body = (await request.json()) as { token?: string };
@@ -79,4 +80,4 @@ async function postHandler(request: Request) {
   }
 }
 
-export const POST = withBootstrapRehydrate(postHandler);
+export const POST = composeRequestPipeline([rehydrateStep], postHandler);

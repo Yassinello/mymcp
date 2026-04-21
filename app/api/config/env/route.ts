@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { checkAdminAuth } from "@/core/auth";
 import { getEnvStore, maskValue } from "@/core/env-store";
 import { saveInstanceConfig, SETTINGS_ENV_KEYS } from "@/core/config";
 import {
@@ -8,8 +7,9 @@ import {
   resetCredentialHydration,
 } from "@/core/credential-store";
 import { detectStorageMode, clearStorageModeCache } from "@/core/storage-mode";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
 import { errorResponse } from "@/core/error-response";
+import type { PipelineContext } from "@/core/pipeline";
 
 /**
  * v0.6 (A1): these four env-var-style keys are now backed by KVStore,
@@ -46,11 +46,8 @@ async function persistKvSettings(kvVars: Record<string, string>): Promise<void> 
  * GET /api/config/env
  * Returns current env vars. Sensitive values are masked unless `?reveal=1`.
  */
-async function getHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
-  const url = new URL(request.url);
+async function getHandler(ctx: PipelineContext) {
+  const url = new URL(ctx.request.url);
   const reveal = url.searchParams.get("reveal") === "1";
 
   try {
@@ -81,9 +78,8 @@ async function getHandler(request: Request) {
  * Body: { vars: Record<string, string> } — batch write.
  * Or: { key, value } — single write.
  */
-async function putHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
+async function putHandler(ctx: PipelineContext) {
+  const request = ctx.request;
 
   let body: { vars?: Record<string, string>; key?: string; value?: string };
   try {
@@ -217,5 +213,5 @@ async function putHandler(request: Request) {
   }
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
-export const PUT = withBootstrapRehydrate(putHandler);
+export const GET = withAdminAuth(getHandler);
+export const PUT = withAdminAuth(putHandler);

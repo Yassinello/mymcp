@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { checkAdminAuth } from "@/core/auth";
 import { detectStorageMode } from "@/core/storage-mode";
 import { saveCredentialsToKV, readAllCredentialsFromKV } from "@/core/credential-store";
 import { getEnvStore, parseEnvFile } from "@/core/env-store";
 import { saveInstanceConfig, SETTINGS_ENV_KEYS } from "@/core/config";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 
 /**
  * POST /api/storage/import
@@ -21,10 +21,8 @@ import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
  * so a user importing their backup can restore display name + timezone
  * even before re-enabling KV/file storage.
  */
-async function postHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
+async function postHandler(ctx: PipelineContext) {
+  const request = ctx.request;
   const url = new URL(request.url);
   const dryRun = url.searchParams.get("dryRun") === "1";
 
@@ -219,4 +217,4 @@ async function postHandler(request: Request) {
   });
 }
 
-export const POST = withBootstrapRehydrate(postHandler);
+export const POST = withAdminAuth(postHandler);

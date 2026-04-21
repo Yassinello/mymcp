@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { checkAdminAuth } from "@/core/auth";
 import {
   listSkills,
   skillCreateInputSchema,
@@ -7,13 +6,11 @@ import {
 } from "@/connectors/skills/store";
 import { refreshNow } from "@/connectors/skills/lib/remote-fetcher";
 import { getEnabledPacks } from "@/core/registry";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 
 /** GET /api/config/skills — list all skills. */
-async function getHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
+async function getHandler() {
   try {
     const skills = await listSkills();
     return NextResponse.json({ ok: true, skills });
@@ -29,9 +26,8 @@ async function getHandler(request: Request) {
  * POST /api/config/skills — create a new skill.
  * Body: SkillCreateInput (name, description, content, arguments, source)
  */
-async function postHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
+async function postHandler(ctx: PipelineContext) {
+  const request = ctx.request;
 
   let body: unknown;
   try {
@@ -100,5 +96,5 @@ function findToolCollision(toolName: string): string | null {
   return null;
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
-export const POST = withBootstrapRehydrate(postHandler);
+export const GET = withAdminAuth(getHandler);
+export const POST = withAdminAuth(postHandler);

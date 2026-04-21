@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { checkAdminAuth } from "@/core/auth";
 import { setToolDisabled } from "@/core/tool-toggles";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 
 /**
  * POST /api/config/tool-toggle
@@ -10,9 +10,8 @@ import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
  * Body: { tool: string, disabled: boolean }
  * Writes to KV + emits env.changed to invalidate registry.
  */
-async function postHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
+async function postHandler(ctx: PipelineContext) {
+  const request = ctx.request;
 
   let body: { tool?: string; disabled?: boolean };
   try {
@@ -50,4 +49,4 @@ async function postHandler(request: Request) {
   }
 }
 
-export const POST = withBootstrapRehydrate(postHandler);
+export const POST = withAdminAuth(postHandler);

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { checkAdminAuth } from "@/core/auth";
 import { getRecentLogs, getDurableLogs } from "@/core/logging";
 import { getLogStore } from "@/core/log-store";
 import { getTenantId, TenantError } from "@/core/tenant";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
 import { getLogger } from "@/core/logging";
+import type { PipelineContext } from "@/core/pipeline";
 
 const logsRouteLog = getLogger("API:config/logs");
 
@@ -22,9 +22,8 @@ const logsRouteLog = getLogger("API:config/logs");
  *
  * Admin-auth-gated.
  */
-async function getHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
+async function getHandler(ctx: PipelineContext) {
+  const request = ctx.request;
 
   // Tenant scoping: if x-mymcp-tenant header is present, filter logs
   // by tokenId prefix (tenant tokens are namespaced). When absent, show all.
@@ -69,4 +68,4 @@ async function getHandler(request: Request) {
   return NextResponse.json({ ok: true, logs, source: "memory" });
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
+export const GET = withAdminAuth(getHandler);

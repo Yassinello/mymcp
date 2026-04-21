@@ -1,9 +1,8 @@
-import { checkAdminAuth } from "@/core/auth";
 import { resolveRegistry } from "@/core/registry";
 import { getInstanceConfigAsync } from "@/core/config";
 import { getRecentLogs } from "@/core/logging";
 import { VERSION } from "@/core/version";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
 import { getRehydrateCount } from "@/core/first-run";
 import { getKVLatencySamples } from "@/core/kv-store";
 import { getEnvPresence } from "@/core/env-safety";
@@ -13,10 +12,7 @@ import { getEnvPresence } from "@/core/env-safety";
  * Returns detailed pack diagnostics, tool counts, config, and recent logs.
  * Runs diagnose() on enabled packs to verify credentials actually work.
  */
-async function getHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
+async function getHandler() {
   const registry = resolveRegistry();
   const config = await getInstanceConfigAsync();
   const logs = getRecentLogs();
@@ -86,4 +82,4 @@ async function getHandler(request: Request) {
   });
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
+export const GET = withAdminAuth(getHandler);

@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
 import { z, ZodError } from "zod";
-import { checkAdminAuth } from "@/core/auth";
 import { getEnabledPacks } from "@/core/registry";
 import { withLogging } from "@/core/logging";
 import { checkRateLimit } from "@/core/rate-limit";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 
 /**
  * POST /api/config/sandbox
  * Body: { toolName: string, args: Record<string, unknown>, confirm?: boolean }
  * Admin-auth-gated. Rate limited to 20/min.
  */
-async function postHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
+async function postHandler(ctx: PipelineContext) {
+  const request = ctx.request;
 
   // Rate limit using the shared KV-backed limiter (survives cold starts).
   // Identify by admin token or fallback to a fixed key.
@@ -91,4 +90,4 @@ async function postHandler(request: Request) {
   );
 }
 
-export const POST = withBootstrapRehydrate(postHandler);
+export const POST = withAdminAuth(postHandler);

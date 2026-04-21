@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getEnvStore } from "@/core/env-store";
 import { checkAdminAuth } from "@/core/auth";
 import { isLoopbackRequest } from "@/core/request-utils";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
 
 /**
  * POST /api/setup/save
@@ -15,7 +15,8 @@ import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
  *   (same as admin auth). Typically used by the wizard for the second write
  *   (pack credentials) after the first write established the token.
  */
-async function postHandler(request: Request) {
+async function postHandler(ctx: PipelineContext) {
+  const request = ctx.request;
   const isFirstRun = !process.env.MCP_AUTH_TOKEN;
 
   if (process.env.VERCEL === "1") {
@@ -97,4 +98,4 @@ async function postHandler(request: Request) {
   }
 }
 
-export const POST = withBootstrapRehydrate(postHandler);
+export const POST = composeRequestPipeline([rehydrateStep], postHandler);

@@ -7,16 +7,22 @@ import {
   isUpstashConfigured,
   isVercelApiConfigured,
 } from "@/core/credential-store";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
 
 /**
  * GET /api/config/storage-status
  * Returns current credential storage backend info.
  *
  * Auth: admin auth when MCP_AUTH_TOKEN is set; otherwise accept
- * first-run claimer or loopback (same pattern as /api/setup/test).
+ * first-run claimer or loopback (same pattern as /api/storage/status).
+ *
+ * v0.11 Phase 41: pipeline provides rehydrate; the conditional auth
+ * ladder (admin if token configured, else claimer/loopback) stays
+ * inline — too bespoke for a generic authStep variant.
  */
-async function getHandler(request: Request) {
+async function getHandler(ctx: PipelineContext): Promise<Response> {
+  const request = ctx.request;
+
   if (process.env.MCP_AUTH_TOKEN) {
     const authError = await checkAdminAuth(request);
     if (authError) return authError;
@@ -37,4 +43,4 @@ async function getHandler(request: Request) {
   });
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
+export const GET = composeRequestPipeline([rehydrateStep], getHandler);

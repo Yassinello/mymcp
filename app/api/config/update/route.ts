@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { execSync } from "node:child_process";
-import { checkAdminAuth } from "@/core/auth";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
 import { errorResponse } from "@/core/error-response";
 
 /**
@@ -48,10 +47,7 @@ function resolveRemote(): { ok: true; remote: string } | { ok: false; error: str
   return { ok: false, error: "No upstream or origin remote configured." };
 }
 
-async function getHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
+async function getHandler() {
   const disabled = disabledReason();
   if (disabled) {
     return NextResponse.json({ available: false, behind: 0, remote: "", disabled });
@@ -94,10 +90,7 @@ async function getHandler(request: Request) {
   });
 }
 
-async function postHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
+async function postHandler() {
   const disabled = disabledReason();
   if (disabled) return NextResponse.json({ ok: false, reason: disabled }, { status: 403 });
 
@@ -161,5 +154,5 @@ async function postHandler(request: Request) {
   });
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
-export const POST = withBootstrapRehydrate(postHandler);
+export const GET = withAdminAuth(getHandler);
+export const POST = withAdminAuth(postHandler);

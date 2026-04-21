@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server";
-import { checkAdminAuth } from "@/core/auth";
 import { getEnvStore } from "@/core/env-store";
 import { readAllCredentialsFromKV } from "@/core/credential-store";
 import { getInstanceConfigAsync, SETTINGS_ENV_KEYS } from "@/core/config";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
 
 /**
  * GET /api/config/env-export
  * Returns all credentials as plain text .env format (unmasked).
  * Auth-gated. KV credentials take precedence over env vars.
  */
-async function getHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
+async function getHandler() {
   try {
     // Read from EnvStore (filesystem or Vercel API)
     let envVars: Record<string, string> = {};
@@ -106,4 +102,4 @@ async function getHandler(request: Request) {
   }
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
+export const GET = withAdminAuth(getHandler);

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { checkAdminAuth } from "@/core/auth";
 import { parseFrontmatter } from "@/core/frontmatter";
 import { fetchRemote } from "@/connectors/skills/lib/remote-fetcher";
 import { createSkill } from "@/connectors/skills/store";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 
 /**
  * POST /api/config/skills/import
@@ -84,9 +84,8 @@ function buildSkillFromContent(
   };
 }
 
-async function postHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
+async function postHandler(ctx: PipelineContext) {
+  const request = ctx.request;
 
   let body: { url?: string; action?: "preview" | "save" };
   try {
@@ -144,4 +143,4 @@ async function postHandler(request: Request) {
   }
 }
 
-export const POST = withBootstrapRehydrate(postHandler);
+export const POST = withAdminAuth(postHandler);

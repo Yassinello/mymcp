@@ -3,7 +3,7 @@ import { checkAdminAuth } from "@/core/auth";
 import { isClaimer } from "@/core/first-run";
 import { STARTER_SKILLS } from "@/core/starter-skills";
 import { createSkill } from "@/connectors/skills/store";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
 
 /**
  * GET  /api/welcome/starter-skills              → list curated starter skills
@@ -31,13 +31,14 @@ async function checkWelcomeAuth(request: Request): Promise<Response | null> {
   return adminError;
 }
 
-async function getHandler(request: Request) {
-  const authError = await checkWelcomeAuth(request);
+async function getHandler(ctx: PipelineContext) {
+  const authError = await checkWelcomeAuth(ctx.request);
   if (authError) return authError;
   return NextResponse.json({ skills: STARTER_SKILLS });
 }
 
-async function postHandler(request: Request) {
+async function postHandler(ctx: PipelineContext) {
+  const request = ctx.request;
   const authError = await checkWelcomeAuth(request);
   if (authError) return authError;
 
@@ -70,5 +71,5 @@ async function postHandler(request: Request) {
   }
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
-export const POST = withBootstrapRehydrate(postHandler);
+export const GET = composeRequestPipeline([rehydrateStep], getHandler);
+export const POST = composeRequestPipeline([rehydrateStep], postHandler);

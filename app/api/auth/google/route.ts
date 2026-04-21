@@ -1,16 +1,13 @@
 import { Google } from "arctic";
-import { checkAdminAuth } from "@/core/auth";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 
 /**
  * Initiates Google OAuth consent flow.
  * Redirects user to Google's consent page.
  * Admin auth required.
  */
-async function getHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
+async function getHandler(_ctx: PipelineContext) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -54,4 +51,4 @@ async function getHandler(request: Request) {
   return response;
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
+export const GET = withAdminAuth(getHandler);

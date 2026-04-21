@@ -5,7 +5,7 @@ import { isLoopbackRequest, getClientIP } from "@/core/request-utils";
 import { checkRateLimit } from "@/core/rate-limit";
 import { resolveRegistry } from "@/core/registry";
 import { withTimeout } from "@/core/timeout";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
 
 /**
  * POST /api/setup/test
@@ -21,7 +21,8 @@ import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 
 const TEST_TIMEOUT_MS = 8_000;
 
-async function postHandler(request: Request) {
+async function postHandler(ctx: PipelineContext) {
+  const request = ctx.request;
   // Post-setup: accept admin auth (cookie or token) so the Connectors
   // tab can test credentials from the dashboard.
   if (process.env.MCP_AUTH_TOKEN) {
@@ -105,4 +106,4 @@ function sanitizeSetupTestError(err: unknown): string {
   return "Error";
 }
 
-export const POST = withBootstrapRehydrate(postHandler);
+export const POST = composeRequestPipeline([rehydrateStep], postHandler);

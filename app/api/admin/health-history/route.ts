@@ -1,7 +1,7 @@
-import { checkAdminAuth } from "@/core/auth";
 import { kvScanAll } from "@/core/kv-store";
 import { getContextKVStore } from "@/core/request-context";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 
 /**
  * GET /api/admin/health-history — admin-gated.
@@ -19,11 +19,8 @@ import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
  * Query params:
  * - `days` — retention window (default: MYMCP_HEALTH_SAMPLE_RETENTION_DAYS or 7)
  */
-async function getHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
-  const url = new URL(request.url);
+async function getHandler(ctx: PipelineContext) {
+  const url = new URL(ctx.request.url);
   const defaultDays = parseInt(process.env.MYMCP_HEALTH_SAMPLE_RETENTION_DAYS || "7", 10);
   const days = Math.max(
     1,
@@ -79,4 +76,4 @@ async function getHandler(request: Request) {
   return Response.json(samples);
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
+export const GET = withAdminAuth(getHandler);

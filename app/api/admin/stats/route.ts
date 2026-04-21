@@ -1,15 +1,11 @@
-import { checkAdminAuth } from "@/core/auth";
 import { getToolStats } from "@/core/logging";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
 
 /**
  * Tool usage analytics (in-memory, ephemeral).
  * Returns aggregated stats: total calls, error rate, per-tool breakdown.
  */
-async function getHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
+async function getHandler() {
   const stats = getToolStats();
 
   return Response.json({
@@ -18,4 +14,4 @@ async function getHandler(request: Request) {
   });
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
+export const GET = withAdminAuth(getHandler);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { checkAdminAuth } from "@/core/auth";
 import { rollbackSkill } from "@/connectors/skills/store";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 
 /**
  * POST /api/config/skill-rollback
@@ -10,9 +10,8 @@ import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
  * Rolls back a skill to a previous version. Creates a new version (N+1)
  * with the old content — history is append-only.
  */
-async function postHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
+async function postHandler(ctx: PipelineContext) {
+  const request = ctx.request;
 
   let body: { id?: string; version?: number };
   try {
@@ -43,4 +42,4 @@ async function postHandler(request: Request) {
   }
 }
 
-export const POST = withBootstrapRehydrate(postHandler);
+export const POST = withAdminAuth(postHandler);

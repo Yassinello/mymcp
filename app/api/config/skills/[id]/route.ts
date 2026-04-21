@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { checkAdminAuth } from "@/core/auth";
 import {
   getSkill,
   deleteSkill,
@@ -7,16 +6,16 @@ import {
   updateSkillVersioned,
 } from "@/connectors/skills/store";
 import { refreshNow } from "@/connectors/skills/lib/remote-fetcher";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-async function getHandler(request: Request, ctx: RouteContext) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-  const { id } = await ctx.params;
+async function getHandler(ctx: PipelineContext) {
+  const routeCtx = ctx.routeParams as RouteContext;
+  const { id } = await routeCtx.params;
   const skill = await getSkill(id);
   if (!skill) {
     return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
@@ -24,10 +23,10 @@ async function getHandler(request: Request, ctx: RouteContext) {
   return NextResponse.json({ ok: true, skill });
 }
 
-async function patchHandler(request: Request, ctx: RouteContext) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-  const { id } = await ctx.params;
+async function patchHandler(ctx: PipelineContext) {
+  const request = ctx.request;
+  const routeCtx = ctx.routeParams as RouteContext;
+  const { id } = await routeCtx.params;
 
   let body: unknown;
   try {
@@ -62,10 +61,9 @@ async function patchHandler(request: Request, ctx: RouteContext) {
   }
 }
 
-async function deleteHandler(request: Request, ctx: RouteContext) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-  const { id } = await ctx.params;
+async function deleteHandler(ctx: PipelineContext) {
+  const routeCtx = ctx.routeParams as RouteContext;
+  const { id } = await routeCtx.params;
   const ok = await deleteSkill(id);
   if (!ok) {
     return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
@@ -73,6 +71,6 @@ async function deleteHandler(request: Request, ctx: RouteContext) {
   return NextResponse.json({ ok: true });
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
-export const PATCH = withBootstrapRehydrate(patchHandler);
-export const DELETE = withBootstrapRehydrate(deleteHandler);
+export const GET = withAdminAuth(getHandler);
+export const PATCH = withAdminAuth(patchHandler);
+export const DELETE = withAdminAuth(deleteHandler);

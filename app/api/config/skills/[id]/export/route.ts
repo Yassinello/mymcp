@@ -1,6 +1,6 @@
-import { checkAdminAuth } from "@/core/auth";
 import { getSkill } from "@/connectors/skills/store";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -18,10 +18,9 @@ interface RouteContext {
  *
  *   {content}
  */
-async function getHandler(request: Request, ctx: RouteContext) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-  const { id } = await ctx.params;
+async function getHandler(ctx: PipelineContext) {
+  const routeCtx = ctx.routeParams as RouteContext;
+  const { id } = await routeCtx.params;
 
   const skill = await getSkill(id);
   if (!skill) {
@@ -51,4 +50,4 @@ async function getHandler(request: Request, ctx: RouteContext) {
   });
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
+export const GET = withAdminAuth(getHandler);

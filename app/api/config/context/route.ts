@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { checkAdminAuth } from "@/core/auth";
 import { getKVStore } from "@/core/kv-store";
 import { getInstanceConfigAsync, saveInstanceConfig } from "@/core/config";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 
 /**
  * GET /api/config/context
@@ -26,10 +26,7 @@ interface ContextState {
   vaultPath: string;
 }
 
-async function getHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
+async function getHandler() {
   const kv = getKVStore();
   const [storedMode, storedInline, cfg] = await Promise.all([
     kv.get(KV_MODE),
@@ -52,9 +49,8 @@ async function getHandler(request: Request) {
   } satisfies ContextState);
 }
 
-async function putHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
+async function putHandler(ctx: PipelineContext) {
+  const request = ctx.request;
 
   let body: Partial<ContextState>;
   try {
@@ -95,5 +91,5 @@ async function putHandler(request: Request) {
   return NextResponse.json({ ok: true, mode });
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
-export const PUT = withBootstrapRehydrate(putHandler);
+export const GET = withAdminAuth(getHandler);
+export const PUT = withAdminAuth(putHandler);

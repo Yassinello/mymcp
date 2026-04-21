@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { checkAdminAuth } from "@/core/auth";
 import { getSkill } from "@/connectors/skills/store";
 import { refreshNow } from "@/connectors/skills/lib/remote-fetcher";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
+import type { PipelineContext } from "@/core/pipeline";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -12,10 +12,9 @@ interface RouteContext {
  * POST /api/config/skills/[id]/refresh
  * Forces an immediate re-fetch of a remote skill. No-op for inline skills.
  */
-async function postHandler(request: Request, ctx: RouteContext) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-  const { id } = await ctx.params;
+async function postHandler(ctx: PipelineContext) {
+  const routeCtx = ctx.routeParams as RouteContext;
+  const { id } = await routeCtx.params;
 
   const skill = await getSkill(id);
   if (!skill) {
@@ -43,4 +42,4 @@ async function postHandler(request: Request, ctx: RouteContext) {
   }
 }
 
-export const POST = withBootstrapRehydrate(postHandler);
+export const POST = withAdminAuth(postHandler);

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { checkAdminAuth } from "@/core/auth";
 import { getToolStats, getRecentLogs } from "@/core/logging";
 import { getLogStore } from "@/core/log-store";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import { withAdminAuth } from "@/core/with-admin-auth";
 
 /**
  * GET /api/admin/metrics
@@ -23,10 +22,7 @@ import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
  * which tools are hot (some tool names hint at the deployment's
  * intended use).
  */
-async function getHandler(request: Request) {
-  const authError = await checkAdminAuth(request);
-  if (authError) return authError;
-
+async function getHandler() {
   const stats = getToolStats();
   // NIT-07: surface whether the underlying log store is ephemeral so a
   // monitoring poller can detect cold-start zeroing. `isEphemeral` is true
@@ -44,4 +40,4 @@ async function getHandler(request: Request) {
   });
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
+export const GET = withAdminAuth(getHandler);
