@@ -3,6 +3,7 @@ import { getEnvStore } from "@/core/env-store";
 import { checkAdminAuth } from "@/core/auth";
 import { isLoopbackRequest } from "@/core/request-utils";
 import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
+import { getConfig } from "@/core/config-facade";
 
 /**
  * POST /api/setup/save
@@ -17,9 +18,9 @@ import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/c
  */
 async function postHandler(ctx: PipelineContext) {
   const request = ctx.request;
-  const isFirstRun = !process.env.MCP_AUTH_TOKEN;
+  const isFirstRun = !getConfig("MCP_AUTH_TOKEN");
 
-  if (process.env.VERCEL === "1") {
+  if (getConfig("VERCEL") === "1") {
     // On Vercel, first-run via this endpoint is disabled entirely: operators
     // must set MCP_AUTH_TOKEN in the Vercel dashboard first, then use
     // /api/config/env with admin auth for subsequent writes.

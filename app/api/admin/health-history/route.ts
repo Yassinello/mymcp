@@ -3,6 +3,7 @@ import { getContextKVStore } from "@/core/request-context";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
 import { getLogger } from "@/core/logging";
+import { getConfigInt } from "@/core/config-facade";
 
 const logger = getLogger("admin.health-history");
 
@@ -24,7 +25,7 @@ const logger = getLogger("admin.health-history");
  */
 async function getHandler(ctx: PipelineContext) {
   const url = new URL(ctx.request.url);
-  const defaultDays = parseInt(process.env.MYMCP_HEALTH_SAMPLE_RETENTION_DAYS || "7", 10);
+  const defaultDays = getConfigInt("MYMCP_HEALTH_SAMPLE_RETENTION_DAYS", 7);
   const days = Math.max(
     1,
     Math.min(parseInt(url.searchParams.get("days") || String(defaultDays), 10) || defaultDays, 90)

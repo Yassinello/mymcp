@@ -7,6 +7,7 @@ import { getKVStore, kvScanAll } from "@/core/kv-store";
 import { CRED_PREFIX } from "@/core/credential-store";
 import { hasUpstashCreds } from "@/core/upstash-env";
 import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
+import { getConfig } from "@/core/config-facade";
 
 /**
  * GET /api/storage/status
@@ -85,7 +86,7 @@ async function storageStatusHandler(ctx: PipelineContext): Promise<Response> {
               ? "none"
               : "kv-degraded",
       upstashConfigured: hasUpstashCreds(),
-      isVercel: process.env.VERCEL === "1",
+      isVercel: getConfig("VERCEL") === "1",
     },
   });
 }

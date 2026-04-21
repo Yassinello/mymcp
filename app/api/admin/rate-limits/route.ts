@@ -3,6 +3,7 @@ import { getKVStore, kvScanAll } from "@/core/kv-store";
 import { getContextKVStore, getCurrentTenantId } from "@/core/request-context";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { getConfigInt } from "@/core/config-facade";
 
 interface RateLimitScope {
   scope: string;
@@ -46,7 +47,7 @@ async function getHandler(ctx: PipelineContext) {
   const url = new URL(request.url);
   const scopeAll = url.searchParams.get("scope") === "all";
 
-  const defaultLimit = Math.max(1, parseInt(process.env.MYMCP_RATE_LIMIT_RPM ?? "60", 10) || 60);
+  const defaultLimit = Math.max(1, getConfigInt("MYMCP_RATE_LIMIT_RPM", 60));
 
   try {
     // Current minute bucket — only count active buckets

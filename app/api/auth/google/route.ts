@@ -1,6 +1,7 @@
 import { Google } from "arctic";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { getConfig } from "@/core/config-facade";
 
 /**
  * Initiates Google OAuth consent flow.
@@ -8,8 +9,8 @@ import type { PipelineContext } from "@/core/pipeline";
  * Admin auth required.
  */
 async function getHandler(_ctx: PipelineContext) {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const clientId = getConfig("GOOGLE_CLIENT_ID");
+  const clientSecret = getConfig("GOOGLE_CLIENT_SECRET");
 
   if (!clientId || !clientSecret) {
     return Response.json(
@@ -20,9 +21,8 @@ async function getHandler(_ctx: PipelineContext) {
     );
   }
 
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000";
+  const vercelUrl = getConfig("VERCEL_URL");
+  const baseUrl = vercelUrl ? `https://${vercelUrl}` : "http://localhost:3000";
 
   const google = new Google(clientId, clientSecret, `${baseUrl}/api/auth/google/callback`);
 

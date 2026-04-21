@@ -3,6 +3,7 @@ import { isFirstRunMode, isBootstrapActive } from "@/core/first-run";
 import { isVercelAutoMagicAvailable } from "@/core/env-store";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { getConfig } from "@/core/config-facade";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ async function getHandler(ctx: PipelineContext) {
     tokenStatus = "permanent";
   }
 
-  const isVercel = process.env.VERCEL === "1";
+  const isVercel = getConfig("VERCEL") === "1";
   const vercelAutoMagicAvailable = isVercelAutoMagicAvailable();
 
   const proto = request.headers.get("x-forwarded-proto") || "https";

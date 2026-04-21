@@ -13,6 +13,7 @@ import {
   rateLimitStep,
   type PipelineContext,
 } from "@/core/pipeline";
+import { getConfig } from "@/core/config-facade";
 
 /**
  * POST /api/welcome/claim
@@ -63,7 +64,7 @@ async function welcomeClaimHandler(ctx: PipelineContext): Promise<Response> {
 
   if (result.cookieToSet) {
     // Secure cookie. Marked HttpOnly so the token claim can't be read from JS.
-    const secureFlag = process.env.VERCEL === "1" ? "; Secure" : "";
+    const secureFlag = getConfig("VERCEL") === "1" ? "; Secure" : "";
     res.headers.set(
       "set-cookie",
       `${FIRST_RUN_COOKIE_NAME}=${encodeURIComponent(result.cookieToSet)}; Path=/; HttpOnly; SameSite=Strict${secureFlag}; Max-Age=${Math.floor(CLAIM_TTL_MS / 1000)}`

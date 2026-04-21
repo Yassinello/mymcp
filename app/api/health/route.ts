@@ -8,6 +8,7 @@ import { getContextKVStore } from "@/core/request-context";
 import { pingKV } from "@/core/kv-store";
 import { getBootstrapState, getLastRehydrateAt } from "@/core/first-run";
 import { getActiveDestructiveVars } from "@/core/env-safety";
+import { getConfig } from "@/core/config-facade";
 
 /**
  * Public health endpoint.
@@ -76,7 +77,7 @@ export async function GET(request: Request) {
       body.warnings = activeDestructive.map((a) => ({
         code: "DESTRUCTIVE_ENV_VAR_ACTIVE",
         var: a.var.name,
-        message: `${a.var.name} is set in a ${process.env.NODE_ENV || "unknown"} deployment; ${a.var.effect}`,
+        message: `${a.var.name} is set in a ${getConfig("NODE_ENV") || "unknown"} deployment; ${a.var.effect}`,
       }));
     }
 

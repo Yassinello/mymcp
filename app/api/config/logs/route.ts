@@ -5,6 +5,7 @@ import { getTenantId, TenantError } from "@/core/tenant";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import { getLogger } from "@/core/logging";
 import type { PipelineContext } from "@/core/pipeline";
+import { getConfig } from "@/core/config-facade";
 
 const logsRouteLog = getLogger("API:config/logs");
 
@@ -68,7 +69,7 @@ async function getHandler(ctx: PipelineContext) {
   const scope: "all" | undefined = scopeQuery === "all" && isRootCaller ? "all" : undefined;
   const explicitTenant = isRootCaller && tenantQuery ? tenantQuery : null;
 
-  if (process.env.MYMCP_DURABLE_LOGS === "true") {
+  if (getConfig("MYMCP_DURABLE_LOGS") === "true") {
     try {
       const store = getLogStore();
       // Phase 42 / TEN-02: getDurableLogs() reads via getLogStore().recent(),

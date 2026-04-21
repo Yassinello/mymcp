@@ -8,6 +8,7 @@ import {
   isVercelApiConfigured,
 } from "@/core/credential-store";
 import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
+import { getConfig } from "@/core/config-facade";
 
 /**
  * GET /api/config/storage-status
@@ -23,7 +24,7 @@ import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/c
 async function getHandler(ctx: PipelineContext): Promise<Response> {
   const request = ctx.request;
 
-  if (process.env.MCP_AUTH_TOKEN) {
+  if (getConfig("MCP_AUTH_TOKEN")) {
     const authError = await checkAdminAuth(request);
     if (authError) return authError;
   } else {
@@ -39,7 +40,7 @@ async function getHandler(ctx: PipelineContext): Promise<Response> {
     backend: detectStorageBackend(),
     upstashConfigured: isUpstashConfigured(),
     vercelApiConfigured: isVercelApiConfigured(),
-    isVercel: process.env.VERCEL === "1",
+    isVercel: getConfig("VERCEL") === "1",
   });
 }
 

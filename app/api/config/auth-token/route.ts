@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withAdminAuth } from "@/core/with-admin-auth";
+import { getConfig } from "@/core/config-facade";
 
 /**
  * GET /api/config/auth-token
@@ -17,7 +18,7 @@ import { withAdminAuth } from "@/core/with-admin-auth";
  * an unauthorized caller cannot tell them apart.
  */
 async function getHandler() {
-  const token = (process.env.MCP_AUTH_TOKEN || "").split(",")[0]?.trim();
+  const token = (getConfig("MCP_AUTH_TOKEN") || "").split(",")[0]?.trim();
   if (!token) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }

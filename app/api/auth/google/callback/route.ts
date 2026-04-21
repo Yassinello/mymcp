@@ -1,6 +1,7 @@
 // BOOTSTRAP_EXEMPT: public OAuth redirect target; reads only deploy-time GOOGLE_CLIENT_ID/SECRET + VERCEL_URL, never bootstrap state or MCP_AUTH_TOKEN.
 // PIPELINE_EXEMPT: public OAuth redirect receiver; no auth/rate-limit/tenant state to wire through the pipeline, and reply is a redirect not a JSON contract.
 import { Google } from "arctic";
+import { getConfig } from "@/core/config-facade";
 
 /**
  * Google OAuth callback — exchanges code for tokens.
@@ -41,11 +42,10 @@ export async function GET(request: Request) {
     });
   }
 
-  const clientId = process.env.GOOGLE_CLIENT_ID!;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000";
+  const clientId = getConfig("GOOGLE_CLIENT_ID")!;
+  const clientSecret = getConfig("GOOGLE_CLIENT_SECRET")!;
+  const vercelUrl = getConfig("VERCEL_URL");
+  const baseUrl = vercelUrl ? `https://${vercelUrl}` : "http://localhost:3000";
 
   const google = new Google(clientId, clientSecret, `${baseUrl}/api/auth/google/callback`);
 

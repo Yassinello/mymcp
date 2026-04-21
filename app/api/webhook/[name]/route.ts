@@ -7,6 +7,7 @@ import {
   bodyParseStep,
   type PipelineContext,
 } from "@/core/pipeline";
+import { getConfig, getConfigInt } from "@/core/config-facade";
 
 /** Maximum webhook payload size: 1 MB. */
 const MAX_PAYLOAD_BYTES = 1_048_576;
@@ -30,7 +31,7 @@ const MAX_PAYLOAD_BYTES = 1_048_576;
  */
 
 function getAllowedWebhooks(): Set<string> {
-  const raw = process.env.MYMCP_WEBHOOKS?.trim();
+  const raw = getConfig("MYMCP_WEBHOOKS")?.trim();
   if (!raw) return new Set();
   return new Set(
     raw
@@ -113,10 +114,7 @@ async function webhookHandler(ctx: PipelineContext): Promise<Response> {
   await kv.set(`webhook:last:${normalizedName}`, entryJson);
 
   // History: store timestamped entry + prune beyond limit
-  const historyLimit = Math.max(
-    1,
-    parseInt(process.env.MYMCP_WEBHOOK_HISTORY_SIZE ?? "10", 10) || 10
-  );
+  const historyLimit = Math.max(1, getConfigInt("MYMCP_WEBHOOK_HISTORY_SIZE", 10));
   const ts = Date.now();
   await kv.set(`webhook:history:${normalizedName}:${ts}`, entryJson);
 

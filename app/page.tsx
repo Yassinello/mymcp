@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import LandingPage from "./landing/landing-page";
+import { getConfig } from "@/core/config-facade";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,8 @@ export default function HomePage() {
   // would be confusing. The landing is reserved for showcase deploys (e.g.
   // mymcp-home) which intentionally set INSTANCE_MODE=showcase OR leave
   // MCP_AUTH_TOKEN unset.
-  const hasToken = !!process.env.MCP_AUTH_TOKEN;
-  const mode = process.env.INSTANCE_MODE;
+  const hasToken = !!getConfig("MCP_AUTH_TOKEN");
+  const mode = getConfig("INSTANCE_MODE");
   const isShowcase = mode === "showcase";
 
   if (!isShowcase && (mode === "personal" || hasToken)) {

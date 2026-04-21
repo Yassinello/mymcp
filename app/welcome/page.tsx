@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { timingSafeEqual } from "node:crypto";
 import { isFirstRunMode, isBootstrapActive } from "@/core/first-run";
 import { WelcomeShell } from "./WelcomeShell";
+import { getConfig } from "@/core/config-facade";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ function safeEq(a: string, b: string) {
 }
 
 async function isAdminAuthed(): Promise<boolean> {
-  const expected = (process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN)?.trim();
+  const expected = (getConfig("ADMIN_AUTH_TOKEN") || getConfig("MCP_AUTH_TOKEN"))?.trim();
   if (!expected) return false;
   const cookieStore = await cookies();
   const cookieToken = cookieStore.get("mymcp_admin_token")?.value?.trim();
@@ -48,7 +49,7 @@ export default async function WelcomePage({
       // the normal redirect path. They can sign in at /config first.
       if (alreadyInitialized) redirect("/config");
     } else {
-      const token = (process.env.MCP_AUTH_TOKEN || "").split(",")[0]?.trim() || "";
+      const token = (getConfig("MCP_AUTH_TOKEN") || "").split(",")[0]?.trim() || "";
       const hdrs = await headers();
       const host = hdrs.get("x-forwarded-host") || hdrs.get("host") || "";
       const proto = hdrs.get("x-forwarded-proto") || "https";
@@ -72,7 +73,7 @@ export default async function WelcomePage({
   // the wizard, click Generate, and end up with a token that the very
   // next cold lambda wipes — mysterious 503s afterwards. Make the
   // foot-gun visible BEFORE they spend time on the flow.
-  const recoveryResetActive = process.env.MYMCP_RECOVERY_RESET === "1";
+  const recoveryResetActive = getConfig("MYMCP_RECOVERY_RESET") === "1";
 
   return (
     <WelcomeShell

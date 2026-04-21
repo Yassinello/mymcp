@@ -10,6 +10,7 @@ import { DryRunBanner } from "./dry-run-banner";
 import { DestructiveVarsBanner } from "./banner";
 import { cookies } from "next/headers";
 import packageJson from "../../package.json";
+import { getConfig } from "@/core/config-facade";
 
 export const dynamic = "force-dynamic";
 
@@ -54,9 +55,8 @@ export default async function ConfigPage({
   const enabled = registry.filter((p) => p.enabled);
   const totalTools = enabled.reduce((s, p) => s + p.manifest.tools.length, 0);
 
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000";
+  const vercelUrl = getConfig("VERCEL_URL");
+  const baseUrl = vercelUrl ? `https://${vercelUrl}` : "http://localhost:3000";
 
   const connectorSummaries = registry.map((p) => ({
     id: p.manifest.id,
@@ -88,9 +88,9 @@ export default async function ConfigPage({
   // Token presence is exposed (so the Reveal button knows what to show)
   // but the value itself is fetched on click via /api/config/auth-token,
   // never serialized into the page payload.
-  const hasAuthToken = !!(process.env.MCP_AUTH_TOKEN || "").split(",")[0]?.trim();
+  const hasAuthToken = !!(getConfig("MCP_AUTH_TOKEN") || "").split(",")[0]?.trim();
   const version = packageJson.version;
-  const commitSha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) || undefined;
+  const commitSha = getConfig("VERCEL_GIT_COMMIT_SHA")?.slice(0, 8) || undefined;
 
   // RSC-01: Fetch disabled tools server-side so the Tools tab renders
   // instantly without a loading spinner / client-side fetch.

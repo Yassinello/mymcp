@@ -6,6 +6,7 @@ import { checkRateLimit } from "@/core/rate-limit";
 import { loadConnectorManifest } from "@/core/registry";
 import { withTimeout } from "@/core/timeout";
 import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
+import { getConfig } from "@/core/config-facade";
 
 /**
  * POST /api/setup/test
@@ -25,7 +26,7 @@ async function postHandler(ctx: PipelineContext) {
   const request = ctx.request;
   // Post-setup: accept admin auth (cookie or token) so the Connectors
   // tab can test credentials from the dashboard.
-  if (process.env.MCP_AUTH_TOKEN) {
+  if (getConfig("MCP_AUTH_TOKEN")) {
     const authError = await checkAdminAuth(request);
     if (authError) return authError;
   } else {

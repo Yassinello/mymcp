@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { execSync } from "node:child_process";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import { errorResponse } from "@/core/error-response";
+import { getConfig } from "@/core/config-facade";
 
 /**
  * GET  /api/config/update → check if updates are available
@@ -29,8 +30,9 @@ function run(cmd: string): { ok: boolean; out: string; err: string } {
 }
 
 function disabledReason(): string | null {
-  if (process.env.VERCEL === "1") return "Disabled on Vercel — redeploy via git push instead.";
-  if (process.env.MYMCP_DISABLE_UPDATE_API === "1") return "Disabled via MYMCP_DISABLE_UPDATE_API.";
+  if (getConfig("VERCEL") === "1") return "Disabled on Vercel — redeploy via git push instead.";
+  if (getConfig("MYMCP_DISABLE_UPDATE_API") === "1")
+    return "Disabled via MYMCP_DISABLE_UPDATE_API.";
   return null;
 }
 

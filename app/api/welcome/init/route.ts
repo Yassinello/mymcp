@@ -14,6 +14,7 @@ import {
   csrfStep,
   type PipelineContext,
 } from "@/core/pipeline";
+import { getConfig } from "@/core/config-facade";
 
 /**
  * POST /api/welcome/init
@@ -41,7 +42,7 @@ async function welcomeInitHandler(ctx: PipelineContext): Promise<Response> {
   // a token in this state hands the user a doomed credential — the very
   // next cold lambda erases it. Refuse outright until the operator
   // removes the env var.
-  if (process.env.MYMCP_RECOVERY_RESET === "1") {
+  if (getConfig("MYMCP_RECOVERY_RESET") === "1") {
     return NextResponse.json(
       {
         error:

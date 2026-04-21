@@ -5,6 +5,7 @@ import { CRED_PREFIX, readAllCredentialsFromKV } from "@/core/credential-store";
 import { getEnvStore } from "@/core/env-store";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
+import { getConfig } from "@/core/config-facade";
 
 /**
  * POST /api/storage/migrate
@@ -157,9 +158,8 @@ async function postHandler(ctx: PipelineContext) {
   const { promises: fsp } = await import("node:fs");
   const { randomBytes } = await import("node:crypto");
   const path = await import("node:path");
-  const dataDir = process.env.MYMCP_KV_PATH
-    ? path.dirname(process.env.MYMCP_KV_PATH)
-    : path.resolve(process.cwd(), "data");
+  const kvPath = getConfig("MYMCP_KV_PATH");
+  const dataDir = kvPath ? path.dirname(kvPath) : path.resolve(process.cwd(), "data");
   const probePath = path.join(dataDir, `.mymcp-probe-${randomBytes(4).toString("hex")}`);
   try {
     await fsp.mkdir(dataDir, { recursive: true });

@@ -7,6 +7,7 @@ import {
   type PipelineContext,
 } from "@/core/pipeline";
 import { getLogger } from "@/core/logging";
+import { getConfig } from "@/core/config-facade";
 
 const logger = getLogger("cron.health");
 
@@ -55,7 +56,7 @@ async function cronHealthHandler(_ctx: PipelineContext): Promise<Response> {
   // `.catch(() => {})` silent swallow to a log-then-swallow so the
   // `no-silent-swallows` tripwire stays green on this file.
   if (degraded.length > 0) {
-    const webhookUrl = process.env.MYMCP_ERROR_WEBHOOK_URL;
+    const webhookUrl = getConfig("MYMCP_ERROR_WEBHOOK_URL");
     if (webhookUrl) {
       try {
         await fetch(webhookUrl, {
