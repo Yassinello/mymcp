@@ -1,18 +1,83 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import type { ToolLog } from "@/core/logging";
 import type { InstanceConfig } from "@/core/types";
 import { TabErrorBoundary } from "./error-boundary";
+
+// PERF-02 (v0.11 Phase 43):
+// Overview stays eager — it's the default landing. Any `next/dynamic`
+// wrapper on Overview would force a network round-trip on first paint
+// and defeats the zero-chunk-request promise for the default route.
 import { OverviewTab } from "./tabs/overview";
-import { ConnectorsTab } from "./tabs/connectors";
-import { ToolsTab } from "./tabs/tools";
-import { SkillsTab } from "./tabs/skills";
-import { LogsTab } from "./tabs/logs";
-import { SettingsTab } from "./tabs/settings";
-import { StorageTab } from "./tabs/storage";
-import { DocumentationTab, type DocEntry } from "./tabs/documentation";
-import { PlaygroundTab } from "./tabs/playground";
-import { HealthTab } from "./tabs/health";
+
+// Type-only re-export for `DocEntry` lives on the eager side so page.tsx
+// can still `import { type DocEntry } from "./tabs"` without pulling the
+// runtime module into the tabs.tsx chunk.
+import type { DocEntry } from "./tabs/documentation";
+
+/**
+ * Lightweight loading skeleton shown while a dynamic tab chunk fetches.
+ * Intentionally minimal — goal is layout-shift prevention, not a
+ * designed loading experience. Matches the Tailwind dashboard palette.
+ */
+function TabLoadingSkeleton({ label }: { label: string }) {
+  return <div className="p-8 text-sm text-gray-500 dark:text-gray-400">Loading {label}…</div>;
+}
+
+// 9 lazy-loaded tabs. Each `dynamic(() => import("./tabs/<name>"))` call
+// produces a dedicated chunk the Next runtime fetches on first
+// navigation and caches for the session.
+//
+// `ssr: true` for tabs whose content is deterministic server-side (SEO
+// + no-FOUC). `ssr: false` for tabs that poll / stream (Playground,
+// Logs, Storage, Health) — SSRing a stale snapshot would mislead the
+// user and defeat the point of those tabs.
+const ConnectorsTab = dynamic(
+  () => import("./tabs/connectors").then((m) => ({ default: m.ConnectorsTab })),
+  { ssr: true, loading: () => <TabLoadingSkeleton label="Connectors" /> }
+);
+const ToolsTab = dynamic(() => import("./tabs/tools").then((m) => ({ default: m.ToolsTab })), {
+  ssr: true,
+  loading: () => <TabLoadingSkeleton label="Tools" />,
+});
+const SkillsTab = dynamic(() => import("./tabs/skills").then((m) => ({ default: m.SkillsTab })), {
+  ssr: true,
+  loading: () => <TabLoadingSkeleton label="Skills" />,
+});
+const PlaygroundTab = dynamic(
+  () => import("./tabs/playground").then((m) => ({ default: m.PlaygroundTab })),
+  // ssr: false — playground uses browser-only APIs (fetch loops, client state).
+  { ssr: false, loading: () => <TabLoadingSkeleton label="Playground" /> }
+);
+const LogsTab = dynamic(
+  () => import("./tabs/logs").then((m) => ({ default: m.LogsTab })),
+  // ssr: false — logs are a live stream; SSRing a stale snapshot would confuse.
+  { ssr: false, loading: () => <TabLoadingSkeleton label="Logs" /> }
+);
+const DocumentationTab = dynamic(
+  () => import("./tabs/documentation").then((m) => ({ default: m.DocumentationTab })),
+  { ssr: true, loading: () => <TabLoadingSkeleton label="Documentation" /> }
+);
+const SettingsTab = dynamic(
+  () => import("./tabs/settings").then((m) => ({ default: m.SettingsTab })),
+  { ssr: true, loading: () => <TabLoadingSkeleton label="Settings" /> }
+);
+const StorageTab = dynamic(
+  () => import("./tabs/storage").then((m) => ({ default: m.StorageTab })),
+  // ssr: false — storage status polls /api/storage/status on an interval.
+  { ssr: false, loading: () => <TabLoadingSkeleton label="Storage" /> }
+);
+const HealthTab = dynamic(
+  () => import("./tabs/health").then((m) => ({ default: m.HealthTab })),
+  // ssr: false — health polls /api/health on an interval.
+  { ssr: false, loading: () => <TabLoadingSkeleton label="Health" /> }
+);
+
+// Re-export the DocEntry type for page.tsx. Keeping this under `export
+// type` ensures Turbopack does NOT pull the runtime documentation tab
+// module into the consumer's chunk.
+export type { DocEntry };
 
 export interface ConnectorSummary {
   id: string;
