@@ -1,4 +1,5 @@
 import { getInstanceConfig } from "@/core/config";
+import { isPublicUrlSync } from "@/core/url-safety";
 import { Stagehand } from "@browserbasehq/stagehand";
 import Browserbase from "@browserbasehq/sdk";
 
@@ -23,53 +24,16 @@ export function validateContextName(name: string): string {
   return normalized;
 }
 
+/**
+ * Phase 44 SCM-05: delegates to the shared SSRF guard in src/core/url-safety.
+ * Kept as a throwing sync wrapper because its 3 callers (web-browse,
+ * web-extract, web-act) are not async at the call site. See
+ * .planning/phases/44-supply-chain/MIGRATION-NOTES.md § SSRF guard divergence.
+ */
 export function validatePublicUrl(url: string): void {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error("Invalid URL format");
-  }
-
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("Only http/https URLs are allowed");
-  }
-
-  const host = parsed.hostname.toLowerCase();
-
-  // Block loopback / localhost
-  if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "[::1]") {
-    throw new Error("Access to localhost is not allowed");
-  }
-
-  // Block private IP ranges
-  const parts = host.split(".").map(Number);
-  if (parts.length === 4 && parts.every((n) => !isNaN(n))) {
-    const [a, b] = parts;
-    if (
-      a === 10 ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 169 && b === 254)
-    ) {
-      throw new Error("Access to private networks is not allowed");
-    }
-  }
-
-  // Block IPv6 private ranges
-  const bare = host.replace(/^\[|\]$/g, "");
-  if (
-    bare.startsWith("fd") || // fd00::/8 — unique local
-    bare.startsWith("fe80") || // fe80::/10 — link-local
-    bare.startsWith("fc") || // fc00::/7 — unique local
-    bare === "::1" // loopback (also caught above)
-  ) {
-    throw new Error("Access to private networks is not allowed");
-  }
-
-  // Block cloud metadata endpoints
-  if (host === "metadata.google.internal" || host === "169.254.169.254") {
-    throw new Error("Access to cloud metadata is not allowed");
+  const result = isPublicUrlSync(url);
+  if (!result.ok) {
+    throw new Error(result.error.message);
   }
 }
 

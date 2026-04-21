@@ -1,17 +1,22 @@
-import { lookup } from "node:dns/promises";
 import type { Skill } from "../store";
 import { replaceSkill } from "../store";
 import { fetchWithByteCap } from "@/core/fetch-utils";
+import { isPublicUrl } from "@/core/url-safety";
 
 /**
  * Remote fetcher for skills that point at a GitHub raw / Gist / https URL.
  *
  * Rules:
- *   - HTTPS only
+ *   - HTTPS only (enforced at the skills layer — browserbase accepts both
+ *     http and https, so https-only can't move into isPublicUrl itself)
  *   - 10s fetch timeout
  *   - 500KB max body
  *   - text/markdown or text/plain preferred (tolerant)
  *   - on error: keep last-good cachedContent, record lastError
+ *
+ * SSRF guard: delegates to src/core/url-safety.isPublicUrl with
+ * resolveDns=true. See .planning/phases/44-supply-chain/MIGRATION-NOTES.md
+ * § SSRF guard divergence for the union-of-coverage rationale.
  */
 
 const FETCH_TIMEOUT_MS = 10_000;
@@ -22,45 +27,6 @@ export interface FetchRemoteResult {
   ok: boolean;
   content?: string;
   error?: string;
-}
-
-/** Check if an IPv4 literal or resolved IP string is in a blocked range. */
-function isBlockedIPv4(ip: string): boolean {
-  const parts = ip.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return false;
-  const [a, b] = parts;
-  // loopback 127/8
-  if (a === 127) return true;
-  // any 0.0.0.0/8
-  if (a === 0) return true;
-  // RFC1918
-  if (a === 10) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  // link-local 169.254/16 (includes 169.254.169.254 cloud metadata)
-  if (a === 169 && b === 254) return true;
-  // carrier-grade NAT
-  if (a === 100 && b >= 64 && b <= 127) return true;
-  return false;
-}
-
-function isBlockedIPv6(ip: string): boolean {
-  const lower = ip.toLowerCase().replace(/^\[|\]$/g, "");
-  if (lower === "::1" || lower === "::") return true;
-  // link-local fe80::/10
-  if (
-    lower.startsWith("fe8") ||
-    lower.startsWith("fe9") ||
-    lower.startsWith("fea") ||
-    lower.startsWith("feb")
-  )
-    return true;
-  // ULA fc00::/7 (fc.. / fd..)
-  if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
-  // IPv4-mapped ::ffff:x.y.z.w — delegate
-  const mapped = lower.match(/^::ffff:([0-9.]+)$/);
-  if (mapped) return isBlockedIPv4(mapped[1]);
-  return false;
 }
 
 /**
@@ -76,38 +42,20 @@ async function validateRemoteUrl(url: string): Promise<{ ok: boolean; error?: st
     return { ok: false, error: "Invalid URL" };
   }
   if (parsed.protocol !== "https:") {
+    // https-only is a skills-layer rule; url-safety accepts both http and https.
     return { ok: false, error: "URL must use https://" };
   }
   const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  if (
-    host === "localhost" ||
-    host.endsWith(".localhost") ||
-    host.endsWith(".internal") ||
-    host === "metadata.google.internal"
-  ) {
+  // skills-specific hostname denylist (stricter than the shared guard)
+  if (host.endsWith(".internal")) {
     return { ok: false, error: "Blocked hostname" };
   }
-  // If host is an IP literal, check it directly.
-  if (/^[0-9.]+$/.test(host)) {
-    if (isBlockedIPv4(host)) return { ok: false, error: "Blocked IP literal" };
-  } else if (host.includes(":")) {
-    if (isBlockedIPv6(host)) return { ok: false, error: "Blocked IPv6 literal" };
-  } else {
-    // Hostname — resolve via DNS and check all addresses.
-    try {
-      const addrs = await lookup(host, { all: true });
-      for (const a of addrs) {
-        if (a.family === 4 && isBlockedIPv4(a.address)) {
-          return { ok: false, error: "Hostname resolves to blocked network" };
-        }
-        if (a.family === 6 && isBlockedIPv6(a.address)) {
-          return { ok: false, error: "Hostname resolves to blocked network" };
-        }
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { ok: false, error: `DNS lookup failed: ${msg}` };
-    }
+
+  const result = await isPublicUrl(url, { resolveDns: true });
+  if (!result.ok) {
+    // Collapse the specific code into a generic error so attackers can't
+    // map internal network topology from the response.
+    return { ok: false, error: "Blocked or unreachable URL" };
   }
   return { ok: true };
 }
