@@ -31,6 +31,12 @@ const IGNORE_DIRS = new Set(["node_modules", ".next", "dist", "coverage"]);
 // (or promote this to a glob like `app/**/*.tsx` if the list gets long).
 const FILE_ALLOWLIST = new Set<string>([
   "app/welcome/welcome-client.tsx",
+  // Phase 45 Task 5 (UX-01b): welcome render tree moved from
+  // welcome-client.tsx (now a 29-LOC shim) into WelcomeShell.tsx.
+  // The `void fn()` React event-handler idiom migrated with it —
+  // allowlist the new home. The old shim entry stays to guard
+  // against future inline expansion of the welcome-client.tsx shim.
+  "app/welcome/WelcomeShell.tsx",
   "app/config/tabs/storage.tsx",
   // OBS-05: Health tab uses `void refresh()` inside a setInterval
   // callback — standard React idiom for ignoring a useCallback

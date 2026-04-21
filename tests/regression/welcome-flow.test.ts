@@ -174,26 +174,31 @@ describe("TEST-03 batch A.1 — welcome-flow regressions", () => {
 
   // ── BUG-04 — step-3 Test MCP uses persistenceReady not permanent (f818e01) ─
   it("regression: BUG-04 step-3 Test-MCP gate uses persistenceReady not permanent", () => {
-    // The concrete behavior is in welcome-client.tsx state — the gate
+    // The concrete behavior is in the welcome render tree — the gate
     // variable was renamed from `permanent` to `persistenceReady`.
-    // We verify via a grep-on-file contract that the renamed variable
-    // is still wired, and the stale name has no stray references.
-    // This protects against a regression where someone reintroduces
-    // the `permanent`-gated check.
+    // Phase 45 Task 5 moved the render tree from `welcome-client.tsx`
+    // (now a 29-LOC shim) into `WelcomeShell.tsx`. The grep-contract
+    // follows the body — it reads both files and accepts the match
+    // from either (the shim re-exports the shell, so both
+    // compositions are wired).
     const welcomeClient = readFileSync(
       resolve(process.cwd(), "app/welcome/welcome-client.tsx"),
       "utf-8"
     );
+    const welcomeShell = readFileSync(
+      resolve(process.cwd(), "app/welcome/WelcomeShell.tsx"),
+      "utf-8"
+    );
+    const combined = welcomeClient + "\n" + welcomeShell;
 
     // Must have the post-fix variable present.
-    expect(welcomeClient).toMatch(/persistenceReady/);
+    expect(combined).toMatch(/persistenceReady/);
 
     // And the commit's copy change: "Token persisted (durable across
     // cold starts)" replaces "Permanent token active in Vercel".
     // Either string is acceptable; the regression would be BOTH absent.
     const hasPostFixCopy =
-      /persisted.*(durable|cold[- ]start)/i.test(welcomeClient) ||
-      /persistenceReady/.test(welcomeClient);
+      /persisted.*(durable|cold[- ]start)/i.test(combined) || /persistenceReady/.test(combined);
     expect(hasPostFixCopy).toBe(true);
   });
 

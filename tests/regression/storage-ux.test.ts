@@ -23,7 +23,14 @@ import { resolve } from "node:path";
 // ─── Helpers ──────────────────────────────────────────────────────────
 
 function readClient(): string {
-  return readFileSync(resolve(process.cwd(), "app/welcome/welcome-client.tsx"), "utf-8");
+  // Phase 45 Task 5 moved the welcome render tree from `welcome-client.tsx`
+  // (now a 29-LOC shim) into `WelcomeShell.tsx`. The grep-contract
+  // concatenates both so the assertions fire against whichever file owns
+  // the JSX subtree they're guarding. Callers treat the result as a
+  // single logical "client source".
+  const shim = readFileSync(resolve(process.cwd(), "app/welcome/welcome-client.tsx"), "utf-8");
+  const shell = readFileSync(resolve(process.cwd(), "app/welcome/WelcomeShell.tsx"), "utf-8");
+  return shim + "\n" + shell;
 }
 
 function readStatusRoute(): string {

@@ -93,7 +93,7 @@ export function useStoragePolling(opts: UseStoragePollingOptions = {}): UseStora
     if (!active) return;
     const controller = new AbortController();
 
-    // Fire one fetch immediately so the first paint has data.
+    // fire-and-forget OK: initial storage probe; useState captures the result on resolve, abort-on-unmount via controller
     void fetchOnce(controller.signal);
 
     const id = setInterval(() => {
@@ -103,6 +103,7 @@ export function useStoragePolling(opts: UseStoragePollingOptions = {}): UseStora
         clearInterval(id);
         return;
       }
+      // fire-and-forget OK: periodic storage probe; useState captures the result, interval is cleared on unmount
       void fetchOnce(controller.signal);
     }, intervalMs);
 
