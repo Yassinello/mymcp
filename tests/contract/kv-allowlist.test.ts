@@ -32,6 +32,7 @@ const ALLOWLIST = new Set<string>([
   "src/core/config.ts",
   // Migration scanner — intentionally global to inventory legacy keys
   "src/core/migrations/v0.10-tenant-prefix.ts",
+  "src/core/migrations/v0.11-tenant-scope.ts",
   // Storage/diagnostic/admin-migration — operator surfaces
   "app/api/storage/status/route.ts",
   "app/api/storage/migrate/route.ts",
