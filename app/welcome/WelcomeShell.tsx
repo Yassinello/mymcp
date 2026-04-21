@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { KebabLogo } from "../components/kebab-logo";
 import { McpClientSnippets } from "../components/mcp-client-snippets";
 import { extractTokenFromInput } from "@/core/welcome-url-parser";
+import { WelcomeStateProvider, type WelcomeState } from "./WelcomeStateContext";
 
 type ClaimStatus = "loading" | "new" | "claimer" | "claimed-by-other" | "already-initialized";
 
@@ -152,7 +153,39 @@ function clearAck(): void {
 
 export type { WelcomeClientProps };
 
-export function WelcomeShell({
+/**
+ * Derive the `WelcomeStateProvider` initial state from incoming client
+ * props. Preview mode pre-seeds `claim = "claimer"` + the real
+ * `previewToken` so the mint step renders read-only against a live
+ * instance without firing `/init`. All other fields default via
+ * `initialWelcomeState`.
+ *
+ * Phase 47 Task 1 (WIRE-02): the provider is wired at the shell root
+ * but the orchestrator still owns the legacy `useState` chain (dual-
+ * path during migration). Per-step commits (Tasks 2–5) retire legacy
+ * state entry by entry; Task 6 collapses the inner body into a pure
+ * reducer reader.
+ */
+function deriveProviderInitial(props: WelcomeClientProps): Partial<WelcomeState> {
+  return {
+    claim: props.previewMode ? "claimer" : "loading",
+    step: "storage",
+    token: props.previewMode ? (props.previewToken ?? null) : null,
+    instanceUrl: props.previewMode ? (props.previewInstanceUrl ?? "") : "",
+    tokenSaved: Boolean(props.initialBootstrap),
+    permanent: Boolean(props.previewMode),
+  };
+}
+
+export function WelcomeShell(props: WelcomeClientProps) {
+  return (
+    <WelcomeStateProvider initial={deriveProviderInitial(props)}>
+      <WelcomeShellInner {...props} />
+    </WelcomeStateProvider>
+  );
+}
+
+function WelcomeShellInner({
   initialBootstrap,
   recoveryResetActive = false,
   previewMode = false,
