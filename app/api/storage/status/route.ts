@@ -5,8 +5,8 @@ import { isLoopbackRequest } from "@/core/request-utils";
 import { detectStorageMode, clearStorageModeCache } from "@/core/storage-mode";
 import { getKVStore, kvScanAll } from "@/core/kv-store";
 import { CRED_PREFIX } from "@/core/credential-store";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
 import { hasUpstashCreds } from "@/core/upstash-env";
+import { composeRequestPipeline, rehydrateStep, type PipelineContext } from "@/core/pipeline";
 
 /**
  * GET /api/storage/status
@@ -16,16 +16,18 @@ import { hasUpstashCreds } from "@/core/upstash-env";
  * claimer or loopback (matches /api/config/storage-status legacy behavior so
  * the welcome flow can call this before the user has minted a token).
  *
+ * v0.11 Phase 41: pipeline provides rehydrate only. The triple-way auth
+ * ladder (loopback || isClaimer || checkAdminAuth) is too bespoke for a
+ * generic `authStep` variant, so it stays inline. The pipeline wrap
+ * satisfies PIPE-06 contract (composeRequestPipeline present) while
+ * preserving the ladder.
+ *
  * Query params:
  *   ?force=1 — bust the 60s detection cache (used by "Recheck" button)
  *   ?counts=0 — skip the count scan when only the mode is needed (cheap path)
  */
-async function getHandler(request: Request) {
-  // Rehydrate is handled by withBootstrapRehydrate at the HOC boundary
-  // (DUR-01). Without it, a cold lambda that didn't serve the original
-  // /welcome/claim call has no in-memory record of the claim and rejects
-  // the welcome flow's status polling with 401, leaving the user stuck
-  // on "Detecting your storage…".
+async function storageStatusHandler(ctx: PipelineContext): Promise<Response> {
+  const request = ctx.request;
 
   // Accept EITHER a valid first-run claim cookie OR loopback OR admin auth.
   // During bootstrap, the welcome client only has the claim cookie — it
@@ -88,4 +90,4 @@ async function getHandler(request: Request) {
   });
 }
 
-export const GET = withBootstrapRehydrate(getHandler);
+export const GET = composeRequestPipeline([rehydrateStep], storageStatusHandler);

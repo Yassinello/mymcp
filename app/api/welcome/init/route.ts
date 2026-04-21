@@ -8,7 +8,12 @@ import {
 } from "@/core/first-run";
 import { SigningSecretUnavailableError } from "@/core/signing-secret";
 import { getEnvStore, isVercelAutoMagicAvailable, triggerVercelRedeploy } from "@/core/env-store";
-import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
+import {
+  composeRequestPipeline,
+  rehydrateStep,
+  csrfStep,
+  type PipelineContext,
+} from "@/core/pipeline";
 
 /**
  * POST /api/welcome/init
@@ -22,8 +27,15 @@ import { withBootstrapRehydrate } from "@/core/with-bootstrap-rehydrate";
  * production redeploy. Both steps are best-effort — failures are logged
  * but never bubble up: the user always has a working in-memory token they
  * can fall back to copy/paste.
+ *
+ * v0.11 Phase 41: pipeline provides rehydrate + CSRF. The route-specific
+ * gates (MYMCP_RECOVERY_RESET, !isFirstRunMode && !isBootstrapActive,
+ * isClaimer) stay in the handler body because they're too bespoke to
+ * fold into a generic `authStep` variant.
  */
-async function postHandler(request: Request) {
+async function welcomeInitHandler(ctx: PipelineContext): Promise<Response> {
+  const request = ctx.request;
+
   // Foot-shoot guard: MYMCP_RECOVERY_RESET=1 wipes the bootstrap on every
   // cold lambda startup (forceReset deletes /tmp + KV). Letting init mint
   // a token in this state hands the user a doomed credential — the very
@@ -145,4 +157,4 @@ async function postHandler(request: Request) {
   });
 }
 
-export const POST = withBootstrapRehydrate(postHandler);
+export const POST = composeRequestPipeline([rehydrateStep, csrfStep], welcomeInitHandler);

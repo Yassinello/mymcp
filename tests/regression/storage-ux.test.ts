@@ -101,17 +101,24 @@ describe("TEST-03 batch A.2 — storage-ux regressions", () => {
 
   // ── BUG-16 — storage-status rehydrates before auth (0b5c737) ────────
   it("regression: BUG-16 storage-status route rehydrates before auth", () => {
-    // The fix: /api/storage/status wraps its handler in
-    // withBootstrapRehydrate (via DUR-01 sweep). Without this, a cold
-    // lambda that didn't serve the welcome/claim call 401'd every
-    // welcome-client status poll and the user sat on "Detecting your
-    // storage…" indefinitely.
+    // The fix: /api/storage/status rehydrates on entry so a cold lambda
+    // that didn't serve the welcome/claim call won't 401 every
+    // welcome-client status poll (leaving the user stuck on "Detecting
+    // your storage…" indefinitely).
+    //
+    // Phase 37: rehydrate happened via the `withBootstrapRehydrate` HOC.
+    // Phase 41: rehydrate moved into the pipeline as `rehydrateStep`
+    // and the HOC was replaced with `composeRequestPipeline([rehydrateStep, …])`.
+    // Either shape closes the bug — we accept both.
     const route = readStatusRoute();
 
-    // Must export GET wrapped in withBootstrapRehydrate — the post-fix
-    // (post-Phase 37 cleanup) shape.
-    expect(route).toMatch(/withBootstrapRehydrate/);
-    expect(route).toMatch(/export const GET\s*=\s*withBootstrapRehydrate/);
+    const hasHoc = /withBootstrapRehydrate/.test(route);
+    const hasPipelineRehydrate =
+      /composeRequestPipeline\s*\(/.test(route) && /\brehydrateStep\b/.test(route);
+    expect(hasHoc || hasPipelineRehydrate).toBe(true);
+
+    // The export must wrap the handler through one of those shapes.
+    expect(route).toMatch(/export const GET\s*=\s*(withBootstrapRehydrate|composeRequestPipeline)/);
 
     // And the handler must accept claim cookie OR admin auth OR
     // loopback during bootstrap (BUG-14 sibling — storage-status was
