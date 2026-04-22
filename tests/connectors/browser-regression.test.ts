@@ -1,9 +1,16 @@
 /**
- * Phase 44 SCM-02: regression suite for the 4 Stagehand-driven browser tools
- * across both KEBAB_BROWSER_CONNECTOR_V2 flag states.
+ * Phase 44 SCM-02 (suite introduced) / Phase 51 LANG-02 (matrix expanded).
  *
- * Test matrix: 4 tools × 2 flag states × 2 scenarios (happy path + SSRF guard)
- *   = 16 cases.
+ * Regression suite for the 4 Stagehand-driven browser tools across all
+ * KEBAB_BROWSER_CONNECTOR_V2 flag states.
+ *
+ * Test matrix: 4 tools × 3 flag states × 2 scenarios (happy path + SSRF guard)
+ *   = 24 cases.
+ *
+ * Flag states (updated Phase 51):
+ *   - flag unset  → v3 (new default after Phase 51)
+ *   - flag = "0"  → v2 (explicit opt-out, rollback window)
+ *   - flag = "1"  → v3 (explicit set — equivalent to unset, kept for defense in depth)
  *
  * Stagehand + Browserbase SDK are mocked — no real API calls. The mocks
  * mirror the v3.2.x surface: Stagehand class with init/close, stagehand.act,
@@ -114,13 +121,14 @@ function unsetBrowserEnv() {
 }
 
 const FLAG_STATES = [
-  { label: "v2 (flag unset)", env: undefined },
-  { label: "v3 (flag = 1)", env: "1" },
+  { label: "v3 (flag unset — default after Phase 51)", env: undefined },
+  { label: "v2 (flag = 0 explicit opt-out)", env: "0" },
+  { label: "v3 (flag = 1 explicit)", env: "1" },
 ] as const;
 
 // --- Test suite -------------------------------------------------------------
 
-describe("browser connector regression — 4 tools × 2 flag states (Phase 44 SCM-02)", () => {
+describe("browser connector regression — 4 tools × 3 flag states (Phase 44 SCM-02 / Phase 51 LANG-02)", () => {
   beforeEach(() => {
     stagehandConstructorArgs = [];
     lastStagehand = null;
