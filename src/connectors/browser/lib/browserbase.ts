@@ -3,6 +3,7 @@ import { isPublicUrlSync } from "@/core/url-safety";
 import { Stagehand } from "@browserbasehq/stagehand";
 import Browserbase from "@browserbasehq/sdk";
 import { getConfig } from "@/core/config-facade";
+import { getRequiredEnv } from "@/core/env-utils";
 import { toMsg } from "@/core/error-utils";
 
 export function sanitizeError(err: unknown): string {
@@ -43,7 +44,7 @@ export function validatePublicUrl(url: string): void {
 let bb: Browserbase | null = null;
 function getBrowserbase(): Browserbase {
   if (!bb) {
-    bb = new Browserbase({ apiKey: getConfig("BROWSERBASE_API_KEY")! });
+    bb = new Browserbase({ apiKey: getRequiredEnv("BROWSERBASE_API_KEY", "browser") });
   }
   return bb;
 }
@@ -65,7 +66,7 @@ async function getOrCreateContext(name: string): Promise<string> {
 
   // Create a new context via Browserbase SDK
   const context = await getBrowserbase().contexts.create({
-    projectId: getConfig("BROWSERBASE_PROJECT_ID")!,
+    projectId: getRequiredEnv("BROWSERBASE_PROJECT_ID", "browser"),
   });
   contextCache[name] = context.id;
   return context.id;
@@ -86,8 +87,8 @@ interface RateLimitData {
 export async function checkAndIncrementDailyLimit(
   limit: number
 ): Promise<{ allowed: boolean; count: number }> {
-  const repo = getConfig("GITHUB_REPO")!;
-  const pat = getConfig("GITHUB_PAT")!;
+  const repo = getRequiredEnv("GITHUB_REPO", "browser");
+  const pat = getRequiredEnv("GITHUB_PAT", "browser");
   const today = new Date().toLocaleDateString("en-CA", {
     timeZone: getInstanceConfig().timezone,
   }); // YYYY-MM-DD
@@ -145,8 +146,8 @@ export async function createBrowserSession(contextName = "default"): Promise<Sta
 
   const stagehand = new Stagehand({
     env: "BROWSERBASE",
-    apiKey: getConfig("BROWSERBASE_API_KEY")!,
-    projectId: getConfig("BROWSERBASE_PROJECT_ID")!,
+    apiKey: getRequiredEnv("BROWSERBASE_API_KEY", "browser"),
+    projectId: getRequiredEnv("BROWSERBASE_PROJECT_ID", "browser"),
     browserbaseSessionCreateParams: {
       browserSettings: {
         context: {
@@ -158,7 +159,7 @@ export async function createBrowserSession(contextName = "default"): Promise<Sta
     // LLM via OpenRouter (OPENROUTER_API_KEY env var)
     model: {
       modelName: "openai/gpt-4o",
-      apiKey: getConfig("OPENROUTER_API_KEY")!,
+      apiKey: getRequiredEnv("OPENROUTER_API_KEY", "browser"),
       baseURL: "https://openrouter.ai/api/v1",
     },
     disableAPI: true,
