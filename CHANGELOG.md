@@ -4,6 +4,38 @@ All notable changes to Kebab MCP.
 
 ## [Unreleased] — v0.13 — Daily-user delight
 
+### Phase 52 — Devices tab (DEV-01..06)
+
+Closes operator pain point F7 (multi-client setup). The `MCP_AUTH_TOKEN` comma-list is now a first-class UX: one row per token in `/config → Devices`, with per-device rotate / revoke / rename + a 24h HMAC-signed invite URL so a second client (Claude Code, web, phone) can join without hand-editing env vars.
+
+**Added**
+
+- `/config → Devices` tab (root-scope gated) — per-token rows with label (inline-editable), 8-hex tokenId, relative `lastSeenAt` (derived from rate-limit bucket timestamps), `createdAt`, and rotate/revoke actions. Tenant-scoped admins see a "root admin only" notice instead of device rows.
+- `src/core/devices.ts` — KV helpers: `listDevices` / `setDeviceLabel` / `deleteDevice` / `rotateDeviceToken` / `getLastSeenAt` / `clearDeviceRateLimit`. Rate-limit-bucket cleanup on revoke via idHash scan. No raw tokens stored in KV — only `{ label, createdAt }` at `tenant:<id>:devices:<tokenId>`.
+- `/api/admin/devices` route (GET list / POST rotate|rename|invite / DELETE revoke) gated by `composeRequestPipeline([rehydrateStep, authStep('admin'), rateLimitStep({ scope: 'admin-devices', keyFrom: 'token', limit: 10 })])`. Tighter per-minute cap than the default 60 rpm because mutating admin actions should not be mass-triggerable from a compromised token.
+- HMAC-signed 24h device-invite URL flow — `src/core/device-invite.ts` (mint/verify/consume) + `/api/welcome/device-claim`. Reuses Phase 37b's `getSigningSecret()` (SEC-05 refusal already applies). Single-use via atomic `kv.setIfNotExists` nonce. Canonical JSON (alphabetical keys) before HMAC so signatures are deterministic across runtimes.
+- `KEBAB_DEVICE_INVITE_TTL_H` env override (default 24h).
+- Claude Desktop install-snippet modal: `claude_desktop_config.json` block + per-OS config paths (macOS / Windows / Linux).
+- 2-device integration test — mint → invite → claim → rotate → revoke → replay (409) → expiry (410) — in `tests/integration/devices-two-device.test.ts`.
+
+**Files**
+
+- `src/core/devices.ts` + `src/core/device-invite.ts`
+- `app/api/admin/devices/route.ts` + `app/api/welcome/device-claim/route.ts`
+- `app/config/tabs/devices.tsx` + `app/config/tabs/device-invite-modal.tsx` + `app/config/tabs/device-install-snippet.tsx` — 494 LOC total, ≤ 500 per DEV-06
+- Tests: `tests/core/devices.test.ts` (12) + `tests/core/admin-devices-route.test.ts` (12) + `tests/core/device-invite.test.ts` (7) + `tests/core/device-claim-route.test.ts` (6) + `tests/integration/devices-two-device.test.ts` (1 scenario, 7 steps)
+
+**Migration note**
+
+Existing comma-list `MCP_AUTH_TOKEN` setups auto-discover — each existing token becomes a row with label `"unnamed"` and `createdAt "unknown"` until the operator renames inline. No breaking change. On Vercel deployments, rotate/revoke persist via the Phase 46 env-store facade the same way welcome-init already does — a redeploy propagates the change to other lambdas (same constraint as existing auto-magic mint).
+
+**Follow-ups (deferred, not in this phase)**
+
+- Token scope / permission granularity (all devices currently equal — any can invoke any tool).
+- Device fingerprinting / IP tracking (only `lastSeenAt` + `label` today).
+- Email/webhook notifications on revoke / rotate.
+- QR-code rendering in the invite modal (dropped for DEV-06 LOC budget).
+
 ### Phase 51 — Langsmith CVEs default-on (LANG-01..03)
 
 The Stagehand v3 adapter shipped Phase 44 behind `KEBAB_BROWSER_CONNECTOR_V2=1` is now **default**. Unset or `=1`/`=true` → v3 (clean langsmith chain, moderate CVEs no longer on the default call path). Explicit `=0`/`=false` → v2 (rollback only). Unknown values fail safe to v3.
