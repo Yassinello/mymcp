@@ -363,6 +363,70 @@ npm test                # All tests
 
 ---
 
+## Coverage philosophy — risk-weighted, not global %
+
+### What we reject
+
+"80% global line coverage" as a quality target. Per [POST-V0.11-AUDIT §B](.planning/research/POST-V0.11-AUDIT.md) and the GPT review that shaped the v0.12 roadmap, a global-% target rewards testing trivial getters while leaving the high-risk surface (welcome flow, auth, KV, bootstrap) under-tested. A 46% → 80% ratchet would have pushed us to write tests against render helpers and Zod schemas that barely fail; it would NOT have caught the v0.11 mint-race foot-gun (Phase 46).
+
+### What we do instead
+
+Nine **priority paths** carry a hard `≥ 65%` line-coverage floor, measured via `npx vitest run --coverage`:
+
+| Path | Rationale |
+| --- | --- |
+| `app/api/welcome/*` | First-run mint race, 409 winner/loser split, auto-magic Vercel write |
+| `app/api/[transport]/route.ts` | MCP endpoint — auth + rate-limit + pipeline entry |
+| `src/core/auth.ts` | Token + cookie auth, Phase 50 dual-name transition |
+| `src/core/first-run.ts` | Bootstrap rehydrate, flushBootstrapToKvIfAbsent race arbitration |
+| `src/core/signing-secret.ts` | Admin-claim signature; SEC-05 degraded-mode contract |
+| `src/core/kv-store.ts` | Upstash/Filesystem/Memory backend swap, TTL edges |
+| `src/core/pipeline.ts` + `pipeline/*` | Every route composes through this |
+| `src/core/rate-limit.ts` | Per-tenant bucket isolation (Phase 42) |
+| `src/core/credential-store.ts` | Encrypt/decrypt roundtrip, corrupt ciphertext |
+
+Everything else carries the global `≥ 50` ratchet (`vitest.config.ts`). Phase 51+ may ratchet upward once post-refactor churn settles.
+
+### Behavioral tests, not grep-contracts
+
+Proxy / middleware / welcome-flow tests must exercise real branches, not regex-match imports. Phase 40 shipped several grep-contract tests (TEST-04 proxy coverage) as stopgaps. Phase 50 replaced them with behavioral coverage (`tests/core/proxy-behavioral.test.ts`). Grep contracts remain acceptable ONLY when production code cannot be imported without refactor (module-private helpers).
+
+### Ratchet discipline
+
+`vitest.config.ts` locks `lines: 50` (the current `floor(actual)` with safety margin). CI fails when a PR drops below. **No bumping down.** Adding net-new code that misses the floor means the PR adds tests before merging.
+
+### Connector lib policy
+
+High-churn libs carry a `≥ 60%` local floor per lib family:
+- `src/connectors/google/lib/*` (calendar, drive, gmail, contacts)
+- `src/connectors/vault/lib/github.ts`
+- `src/connectors/apify/lib/client.ts`
+- `src/connectors/slack/lib/slack-api.ts`
+
+Low-churn libs (paywall, webhook) are grandfathered until their manifest changes.
+
+### When to add tests
+
+**Always**:
+- New error paths (`throw` or `McpToolError(...)`)
+- New KV writes (any `kv.set` / `kv.setIfNotExists` / `kv.delete`)
+- New auth checks (`checkMcpAuth`, `checkAdminAuth`, `withAdminAuth`)
+- New tenant-scoped reads (`getTenantKVStore(...)`)
+- New pipeline steps (under `src/core/pipeline/*`)
+
+**Rarely**:
+- UI layout changes (render tests catch hydration bugs, not rendering perf)
+- Glue code (import/export wiring — contract tests catch drift)
+- Type-only refactors (TS compiler is the test)
+
+### Source references
+
+- [POST-V0.11-AUDIT](.planning/research/POST-V0.11-AUDIT.md) §B — "Reject 80% metric chase"
+- Phase 43 ratchet introduction → FOLLOW-UP
+- Phase 50 risk-weighted push → CHANGELOG v0.12
+
+---
+
 ## Code Conventions
 
 - All tool handlers export `{ schema, handler }` pattern
