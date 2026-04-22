@@ -2,7 +2,21 @@
 
 All notable changes to Kebab MCP.
 
-## [Unreleased] — v0.12 — Welcome hardening + v1.0 readiness
+## [Unreleased] — v0.13 — Daily-user delight
+
+### Phase 51 — Langsmith CVEs default-on (LANG-01..03)
+
+The Stagehand v3 adapter shipped Phase 44 behind `KEBAB_BROWSER_CONNECTOR_V2=1` is now **default**. Unset or `=1`/`=true` → v3 (clean langsmith chain, moderate CVEs no longer on the default call path). Explicit `=0`/`=false` → v2 (rollback only). Unknown values fail safe to v3.
+
+- `src/connectors/browser/flag.ts` — `getBrowserConnectorVersion()` semantics inverted
+- 16/16 Phase 44 browser-regression test suite still green under the new default
+- `docs/CONNECTORS.md` gains a "Browser connector — Stagehand adapter version" section
+- `.env.example` updated to reflect the new default
+- `scripts/audit-gate.mjs` allowlist reason rewritten + `reviewBy` bumped `2026-07-01` → `2026-10-22` (transitive moderates remain reported by `npm audit` until Stagehand upstream ships a clean langchain peer)
+
+**Operator action:** If your env currently sets `KEBAB_BROWSER_CONNECTOR_V2=1`, remove it — the new default is v3 anyway. Keep the override only if an edge case forces a return to v2.
+
+## [v0.1.12] — v0.12 — Welcome hardening + v1.0 readiness
 
 ### Phase 50 — Rebrand + risk-weighted coverage + docs + MCP resources (2026-04-22)
 

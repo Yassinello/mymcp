@@ -291,6 +291,19 @@ See `src/core/pipeline/*-step.ts` for step implementations and
 `app/api/admin/call/route.ts` for compositions covering different
 combinations of the 7 steps.
 
+## Browser connector — Stagehand adapter version
+
+The browser connector dispatches through one of two Stagehand adapter paths:
+
+- **v3 (default since v0.13 Phase 51)** — clean langsmith chain, no moderate CVEs reachable from tool execution. Selected when `KEBAB_BROWSER_CONNECTOR_V2` is unset, `"1"`, or `"true"`.
+- **v2 (explicit opt-out)** — legacy path retained for rollback. Selected when `KEBAB_BROWSER_CONNECTOR_V2=0` or `=false`.
+
+The `_V2` in the env var name tracks the Phase 44 milestone ID (the "v2-vs-v3 toggle"), not "=1 means v2". Any unknown value falls safe to v3.
+
+Operators who deployed with the Phase 44 default (v2) should remove the `KEBAB_BROWSER_CONNECTOR_V2=1` override from their env — the new default already gives them v3. Keep the override only if an edge case forces you back to v2.
+
+See `.planning/phases/44-supply-chain/MIGRATION-NOTES.md` for the v3 surface analysis and `.planning/phases/51-langsmith-default-on/` for the default flip.
+
 ## See also
 
 - `CLAUDE.md` — project architecture overview

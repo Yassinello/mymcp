@@ -16,8 +16,8 @@ const ALLOWLIST = [
   {
     pkg: "@browserbasehq/stagehand",
     reason:
-      "Transitive via @langchain/core → langsmith (SSRF + prototype pollution + output redaction bypass, 3 moderate advisories). Mitigation: KEBAB_BROWSER_CONNECTOR_V2 feature flag (SCM-01) lets operators opt into a vetted adapter path. Upstream fix tracked at browserbasehq/stagehand; will resolve when stagehand upgrades its langchain peer.",
-    reviewBy: "2026-07-01",
+      "Transitive via @langchain/core → langsmith (SSRF + prototype pollution + output redaction bypass, 3 moderate advisories). Mitigation: Stagehand v3 adapter is the default path since v0.13 Phase 51 (flag KEBAB_BROWSER_CONNECTOR_V2 unset → v3); the vulnerable call-path is no longer reachable from default tool dispatch. Allowlist remains because the direct-dep moderate is still reported by npm audit until Stagehand upstream ships a clean langchain peer.",
+    reviewBy: "2026-10-22",
   },
 ];
 
