@@ -14,6 +14,7 @@ import { vaultBacklinksSchema, handleVaultBacklinks } from "./tools/vault-backli
 import { vaultDueSchema, handleVaultDue } from "./tools/vault-due";
 import { handleMyContext } from "./tools/my-context";
 import { getConfig } from "@/core/config-facade";
+import { vaultResources } from "./resources";
 
 export const vaultConnector: ConnectorManifest = {
   id: "vault",
@@ -191,4 +192,7 @@ An Obsidian vault pushed to a **private GitHub repo** (public works too, but pri
       destructive: false,
     }),
   ],
+  // Phase 50 / MCP-01: expose every .md file as an MCP resource
+  // under the `vault://<path>` URI scheme. See src/core/resources.ts.
+  resources: vaultResources,
 };

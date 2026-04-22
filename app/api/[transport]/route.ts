@@ -14,6 +14,7 @@ import {
   type PipelineContext,
 } from "@/core/pipeline";
 import { toMsg } from "@/core/error-utils";
+import { registerResources, type ResourceProvider } from "@/core/resources";
 
 // NIT-03: Log the registry state once at module load, then re-log only
 // when env.changed fires. Previous behavior logged on every MCP request,
@@ -145,6 +146,22 @@ async function buildHandler(
           } catch (err) {
             console.info(`[Kebab MCP] ${pack.manifest.id}.registerPrompts threw: ${toMsg(err)}`);
           }
+        }
+      }
+
+      // Phase 50 / MCP-01: collect every enabled connector's optional
+      // resources provider and wire up the resources/list + resources/read
+      // handlers. Empty array → zero overhead (registerResources returns
+      // early). See src/core/resources.ts for the registry logic.
+      const resourceProviders: ResourceProvider[] = [];
+      for (const pack of enabledPacks) {
+        if (pack.manifest.resources) resourceProviders.push(pack.manifest.resources);
+      }
+      if (resourceProviders.length > 0) {
+        try {
+          registerResources(server, resourceProviders);
+        } catch (err) {
+          console.info(`[Kebab MCP] registerResources failed: ${toMsg(err)}`);
         }
       }
     },

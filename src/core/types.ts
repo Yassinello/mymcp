@@ -163,6 +163,15 @@ export interface ConnectorManifest {
    * implementation.
    */
   registerPrompts?: ((server: unknown) => void | Promise<void>) | undefined;
+  /**
+   * Phase 50 / MCP-01 — Optional MCP resources provider.
+   *
+   * When present, the transport calls `registerResources(server, providers)`
+   * from `@/core/resources` after tool registration to wire up the
+   * `resources/list` and `resources/read` handlers. See
+   * `src/connectors/vault/resources.ts` for the reference implementation.
+   */
+  resources?: import("./resources").ResourceProvider | undefined;
 }
 
 /** Resolved state of a pack at runtime */
