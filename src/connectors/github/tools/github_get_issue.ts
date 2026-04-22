@@ -3,8 +3,8 @@ import {
   githubFetch,
   resolveRepo,
   formatIssue,
-  GitHubIssue,
-  GitHubComment,
+  type GitHubIssue,
+  type GitHubComment,
 } from "../lib/github-api";
 
 export const githubGetIssueSchema = {

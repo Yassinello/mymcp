@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubFetch, resolveRepo, GitHubComment } from "../lib/github-api";
+import { githubFetch, resolveRepo, type GitHubComment } from "../lib/github-api";
 
 export const githubAddCommentSchema = {
   issue_number: z.number().describe("Issue number to comment on"),

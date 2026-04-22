@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubFetch, GitHubIssue } from "../lib/github-api";
+import { githubFetch, type GitHubIssue } from "../lib/github-api";
 
 export const githubSearchIssuesSchema = {
   query: z

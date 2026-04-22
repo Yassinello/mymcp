@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { githubFetch, resolveRepo, GitHubIssue } from "../lib/github-api";
+import { githubFetch, resolveRepo, type GitHubIssue } from "../lib/github-api";
 
 export const githubCreateIssueSchema = {
   title: z.string().describe("Issue title"),

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { linearQuery, LinearIssue } from "../lib/linear-api";
+import { linearQuery, type LinearIssue } from "../lib/linear-api";
 
 export const linearListIssuesSchema = {
   team: z.string().optional().describe("Team key to filter by (e.g. 'ENG')"),

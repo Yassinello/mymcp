@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { linearQuery, formatLinearIssue, LinearIssue } from "../lib/linear-api";
+import { linearQuery, formatLinearIssue, type LinearIssue } from "../lib/linear-api";
 import { McpToolError, ErrorCode } from "@/core/errors";
 
 export const linearGetIssueSchema = {
