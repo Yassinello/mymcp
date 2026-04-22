@@ -617,14 +617,16 @@ export async function getRehydrateCount(): Promise<{ total: number; last24h: num
  * internal helpers) must invoke the migration directly if needed.
  */
 export async function rehydrateBootstrapAsync(): Promise<void> {
-  // OBS-04: wrap in mymcp.bootstrap.rehydrate span when OTel is active.
-  // When tracing is disabled, withSpan is a pass-through (no allocation).
-  return withSpan("mymcp.bootstrap.rehydrate", () => _rehydrateBootstrapAsyncImpl(), {
+  // OBS-04 + Phase 50 / BRAND-03: wrap in kebab.bootstrap.rehydrate span
+  // when OTel is active. withSpan() normalizes via brandSpanName() and
+  // brand-namespaces attrs via brandSpanAttrs(). When tracing is
+  // disabled, withSpan is a pass-through (no allocation).
+  return withSpan("bootstrap.rehydrate", () => _rehydrateBootstrapAsyncImpl(), {
     // Source attribute intentionally left `cold` — the trace is
     // emitted once per lambda process on first call. If a future
     // caller wants to distinguish cold/warm/forced, it can pass the
     // attribute through a richer API (out of scope for Phase 38).
-    "mymcp.bootstrap.source": "cold",
+    "bootstrap.source": "cold",
   });
 }
 

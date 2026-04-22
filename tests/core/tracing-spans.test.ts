@@ -67,46 +67,72 @@ describe("OTel span emission (OBS-04)", () => {
     spans.length = 0;
   });
 
-  it("mymcp.bootstrap.rehydrate span wraps rehydrateBootstrapAsync", async () => {
+  // Phase 50 / BRAND-03: span names are `kebab.*` by default. With
+  // KEBAB_EMIT_LEGACY_OTEL_ATTRS=1 or MYMCP_EMIT_LEGACY_OTEL_ATTRS=1
+  // the attribute bag additionally carries `mymcp.*` aliases (span
+  // NAMES are single-valued — legacy flag only duplicates attributes).
+
+  it("kebab.bootstrap.rehydrate span wraps rehydrateBootstrapAsync", async () => {
     const { rehydrateBootstrapAsync } = await import("@/core/first-run");
     await rehydrateBootstrapAsync();
-    const rehydrate = spans.filter((s) => s.name === "mymcp.bootstrap.rehydrate");
+    const rehydrate = spans.filter((s) => s.name === "kebab.bootstrap.rehydrate");
     expect(rehydrate.length).toBeGreaterThanOrEqual(1);
-    expect(rehydrate[0]!.attributes["mymcp.bootstrap.source"]).toBe("cold");
-    expect(rehydrate[0]!.attributes["mymcp.status"]).toBe("ok");
+    expect(rehydrate[0]!.attributes["kebab.bootstrap.source"]).toBe("cold");
+    expect(rehydrate[0]!.attributes["kebab.status"]).toBe("ok");
   });
 
-  it("mymcp.kv.write span wraps KVStore.set with key_prefix (first 2 segments only)", async () => {
+  it("kebab.kv.write span wraps KVStore.set with key_prefix (first 2 segments only)", async () => {
     const { getKVStore, resetKVStoreCache } = await import("@/core/kv-store");
     resetKVStoreCache();
     const kv = getKVStore();
     await kv.set("tenant:alpha:skills:foo", '"bar"');
-    const kvWrites = spans.filter((s) => s.name === "mymcp.kv.write");
+    const kvWrites = spans.filter((s) => s.name === "kebab.kv.write");
     expect(kvWrites.length).toBeGreaterThanOrEqual(1);
-    const lastSet = [...kvWrites].reverse().find((s) => s.attributes["mymcp.kv.op"] === "set");
+    const lastSet = [...kvWrites].reverse().find((s) => s.attributes["kebab.kv.op"] === "set");
     expect(lastSet).toBeDefined();
-    expect(lastSet!.attributes["mymcp.kv.key_prefix"]).toBe("tenant:alpha");
+    expect(lastSet!.attributes["kebab.kv.key_prefix"]).toBe("tenant:alpha");
     // Full key MUST NOT appear anywhere in the attributes
     const serialized = JSON.stringify(lastSet!.attributes);
     expect(serialized).not.toContain("tenant:alpha:skills:foo");
   });
 
-  it("mymcp.auth.check span wraps checkAdminAuth", async () => {
+  it("kebab.auth.check span wraps checkAdminAuth", async () => {
     const { checkAdminAuth } = await import("@/core/auth");
     const req = new Request("http://localhost/api/admin/status");
     await checkAdminAuth(req);
-    const authChecks = spans.filter((s) => s.name === "mymcp.auth.check");
+    const authChecks = spans.filter((s) => s.name === "kebab.auth.check");
     expect(authChecks.length).toBeGreaterThanOrEqual(1);
-    expect(authChecks.some((s) => s.attributes["mymcp.auth.kind"] === "admin")).toBe(true);
+    expect(authChecks.some((s) => s.attributes["kebab.auth.kind"] === "admin")).toBe(true);
   });
 
-  it("mymcp.auth.check span wraps checkMcpAuth (sync)", async () => {
+  it("kebab.auth.check span wraps checkMcpAuth (sync)", async () => {
     const { checkMcpAuth } = await import("@/core/auth");
     const req = new Request("http://localhost/api/mcp");
     checkMcpAuth(req);
     const mcp = spans.filter(
-      (s) => s.name === "mymcp.auth.check" && s.attributes["mymcp.auth.kind"] === "mcp"
+      (s) => s.name === "kebab.auth.check" && s.attributes["kebab.auth.kind"] === "mcp"
     );
     expect(mcp.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("MYMCP_EMIT_LEGACY_OTEL_ATTRS=1 — emits BOTH kebab.* AND mymcp.* attrs", async () => {
+    process.env.MYMCP_EMIT_LEGACY_OTEL_ATTRS = "1";
+    try {
+      const { getKVStore, resetKVStoreCache } = await import("@/core/kv-store");
+      resetKVStoreCache();
+      const kv = getKVStore();
+      await kv.set("tenant:alpha:skills:bar", '"x"');
+      const write = spans
+        .filter((s) => s.name === "kebab.kv.write")
+        .find((s) => s.attributes["kebab.kv.op"] === "set");
+      expect(write).toBeDefined();
+      // Both namespaces present.
+      expect(write!.attributes["kebab.kv.op"]).toBe("set");
+      expect(write!.attributes["mymcp.kv.op"]).toBe("set");
+      expect(write!.attributes["kebab.kv.key_prefix"]).toBe("tenant:alpha");
+      expect(write!.attributes["mymcp.kv.key_prefix"]).toBe("tenant:alpha");
+    } finally {
+      delete process.env.MYMCP_EMIT_LEGACY_OTEL_ATTRS;
+    }
   });
 });

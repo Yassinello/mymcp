@@ -31,20 +31,26 @@ describe("config-facade — FACADE-01 synchronous resolution", () => {
   });
 
   it("Test 1 — getConfig tracks live process.env (SEC-02 carried by request-context, not snapshot)", () => {
-    // At module load the test harness set MYMCP_TRUST_URL_HOST=1 via
-    // vitest.config.ts. That's in bootEnv AND live process.env.
+    // Phase 50 / BRAND-01: vitest.config.ts now sets KEBAB_TRUST_URL_HOST=1
+    // (was MYMCP_TRUST_URL_HOST). getConfig("MYMCP_*") still returns "1"
+    // via alias resolution (KEBAB_* priority, MYMCP_* fallback).
+    expect(getConfig("KEBAB_TRUST_URL_HOST")).toBe("1");
     expect(getConfig("MYMCP_TRUST_URL_HOST")).toBe("1");
 
     // Mutate + observe — the facade tracks live process.env.
     // The SEC-02 guarantee is carried by runWithCredentials (step 1);
     // direct mutation of process.env is forbidden in production by the
     // SEC-02 ESLint rule, so in production `live === bootEnv` always.
-    const orig = process.env.MYMCP_TRUST_URL_HOST;
+    const origKebab = process.env.KEBAB_TRUST_URL_HOST;
+    const origLegacy = process.env.MYMCP_TRUST_URL_HOST;
+    delete process.env.KEBAB_TRUST_URL_HOST;
     delete process.env.MYMCP_TRUST_URL_HOST;
     try {
+      expect(getConfig("KEBAB_TRUST_URL_HOST")).toBeUndefined();
       expect(getConfig("MYMCP_TRUST_URL_HOST")).toBeUndefined();
     } finally {
-      if (orig !== undefined) process.env.MYMCP_TRUST_URL_HOST = orig;
+      if (origKebab !== undefined) process.env.KEBAB_TRUST_URL_HOST = origKebab;
+      if (origLegacy !== undefined) process.env.MYMCP_TRUST_URL_HOST = origLegacy;
     }
   });
 

@@ -21,6 +21,10 @@ describe("isLoopbackRequest — forwarded header trust", () => {
 
   beforeEach(() => {
     delete process.env.VERCEL;
+    // Phase 50 / BRAND-01: both KEBAB_* and MYMCP_* must be cleared.
+    // vitest.config.ts sets KEBAB_TRUST_URL_HOST=1 for the pool, which
+    // would leak into per-test "untrusted deploy" assertions otherwise.
+    delete process.env.KEBAB_TRUST_URL_HOST;
     delete process.env.MYMCP_TRUST_URL_HOST;
   });
   afterEach(() => {

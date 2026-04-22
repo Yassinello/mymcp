@@ -47,7 +47,9 @@ export default defineConfig({
     // so legacy tests keep their original semantics without rewriting
     // every fixture to add an x-forwarded-for header.
     env: {
-      MYMCP_TRUST_URL_HOST: "1",
+      // Phase 50 / BRAND-01: use KEBAB_* so the alias resolver doesn't
+      // fire a deprecation warning on every test process.
+      KEBAB_TRUST_URL_HOST: "1",
     },
     coverage: {
       provider: "v8",

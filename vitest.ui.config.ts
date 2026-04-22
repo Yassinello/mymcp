@@ -51,7 +51,9 @@ export default defineConfig({
     testTimeout: 10_000,
     fileParallelism: false,
     env: {
-      MYMCP_TRUST_URL_HOST: "1",
+      // Phase 50 / BRAND-01: use KEBAB_* so the alias resolver doesn't
+      // fire a deprecation warning on every test process.
+      KEBAB_TRUST_URL_HOST: "1",
     },
   },
   resolve: {

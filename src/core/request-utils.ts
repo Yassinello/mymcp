@@ -45,7 +45,7 @@ export function isLoopbackRequest(request: Request): boolean {
   // MYMCP_TRUST_URL_HOST=1 (reuses the v0.5 NIT-05 env var — when you
   // trust the URL host, you also trust your forwarding layer's headers).
   // Vercel already short-circuited above.
-  const trustForwarded = getConfig("MYMCP_TRUST_URL_HOST") === "1";
+  const trustForwarded = getConfig("KEBAB_TRUST_URL_HOST") === "1";
   const xff = request.headers.get("x-forwarded-for");
   const xri = request.headers.get("x-real-ip");
   if (trustForwarded) {
@@ -64,7 +64,7 @@ export function isLoopbackRequest(request: Request): boolean {
   // because a misconfigured reverse proxy can forward Host: localhost
   // from the public internet. Set MYMCP_TRUST_URL_HOST=1 only when you
   // know nothing in front of this server can spoof Host.
-  if (getConfig("MYMCP_TRUST_URL_HOST") === "1") {
+  if (getConfig("KEBAB_TRUST_URL_HOST") === "1") {
     try {
       const urlHost = new URL(request.url).hostname.toLowerCase();
       return isLoopbackCandidate(urlHost);

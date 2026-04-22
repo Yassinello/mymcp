@@ -565,10 +565,12 @@ class UpstashKV implements KVStore {
 
 let cached: KVStore | null = null;
 
-// OBS-04: wrap the underlying store so every set/setNx/delete emits a
-// `mymcp.kv.write` span with op + key_prefix (first 2 segments only —
-// no full-key leak) + kind. Reads stay untraced (high volume, low
-// diagnostic signal per span). Zero overhead when tracing is off.
+// OBS-04 + Phase 50 / BRAND-03: wrap the underlying store so every
+// set/setNx/delete emits a `kebab.kv.write` span with op + key_prefix
+// (first 2 segments only — no full-key leak) + kind. Reads stay
+// untraced (high volume, low diagnostic signal per span). Zero
+// overhead when tracing is off. withSpan() normalizes the name
+// via brandSpanName() and brand-namespaces attrs via brandSpanAttrs().
 function keyPrefix2(key: string): string {
   const parts = key.split(":");
   return parts.slice(0, 2).join(":");
@@ -579,43 +581,43 @@ function wrapWithTracing(kv: KVStore): KVStore {
     kind: kv.kind,
     get: kv.get.bind(kv),
     set: (key, value, ttlSeconds) =>
-      withSpan("mymcp.kv.write", () => kv.set(key, value, ttlSeconds), {
-        "mymcp.kv.kind": kv.kind,
-        "mymcp.kv.op": "set",
-        "mymcp.kv.key_prefix": keyPrefix2(key),
+      withSpan("kv.write", () => kv.set(key, value, ttlSeconds), {
+        "kv.kind": kv.kind,
+        "kv.op": "set",
+        "kv.key_prefix": keyPrefix2(key),
       }),
     delete: (key) =>
-      withSpan("mymcp.kv.write", () => kv.delete(key), {
-        "mymcp.kv.kind": kv.kind,
-        "mymcp.kv.op": "delete",
-        "mymcp.kv.key_prefix": keyPrefix2(key),
+      withSpan("kv.write", () => kv.delete(key), {
+        "kv.kind": kv.kind,
+        "kv.op": "delete",
+        "kv.key_prefix": keyPrefix2(key),
       }),
     list: kv.list.bind(kv),
   };
   if (typeof kv.incr === "function") {
     wrapped.incr = (key, opts) =>
-      withSpan("mymcp.kv.write", () => kv.incr!(key, opts), {
-        "mymcp.kv.kind": kv.kind,
-        "mymcp.kv.op": "incr",
-        "mymcp.kv.key_prefix": keyPrefix2(key),
+      withSpan("kv.write", () => kv.incr!(key, opts), {
+        "kv.kind": kv.kind,
+        "kv.op": "incr",
+        "kv.key_prefix": keyPrefix2(key),
       });
   }
   if (typeof kv.setIfNotExists === "function") {
     wrapped.setIfNotExists = (key, value, opts) =>
-      withSpan("mymcp.kv.write", () => kv.setIfNotExists!(key, value, opts), {
-        "mymcp.kv.kind": kv.kind,
-        "mymcp.kv.op": "setIfNotExists",
-        "mymcp.kv.key_prefix": keyPrefix2(key),
+      withSpan("kv.write", () => kv.setIfNotExists!(key, value, opts), {
+        "kv.kind": kv.kind,
+        "kv.op": "setIfNotExists",
+        "kv.key_prefix": keyPrefix2(key),
       });
   }
   if (typeof kv.scan === "function") wrapped.scan = kv.scan.bind(kv);
   if (typeof kv.mget === "function") wrapped.mget = kv.mget.bind(kv);
   if (typeof kv.lpushCapped === "function") {
     wrapped.lpushCapped = (key, value, maxLength, opts) =>
-      withSpan("mymcp.kv.write", () => kv.lpushCapped!(key, value, maxLength, opts), {
-        "mymcp.kv.kind": kv.kind,
-        "mymcp.kv.op": "lpushCapped",
-        "mymcp.kv.key_prefix": keyPrefix2(key),
+      withSpan("kv.write", () => kv.lpushCapped!(key, value, maxLength, opts), {
+        "kv.kind": kv.kind,
+        "kv.op": "lpushCapped",
+        "kv.key_prefix": keyPrefix2(key),
       });
   }
   if (typeof kv.lrange === "function") wrapped.lrange = kv.lrange.bind(kv);

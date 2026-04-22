@@ -189,8 +189,11 @@ export function checkMcpAuth(request: Request): {
   tokenId: string | null;
   tenantId: string | null;
 } {
-  return withSpanSync("mymcp.auth.check", () => _checkMcpAuthImpl(request), {
-    "mymcp.auth.kind": "mcp",
+  // Phase 50 / BRAND-03: withSpan/withSpanSync normalize names via
+  // brandSpanName() and brand-namespace attrs via brandSpanAttrs().
+  // Callers pass unprefixed logical names and attribute keys.
+  return withSpanSync("auth.check", () => _checkMcpAuthImpl(request), {
+    "auth.kind": "mcp",
   });
 }
 
@@ -303,8 +306,8 @@ export function checkCsrf(request: Request): Response | null {
  * caught that the prior single-string compare broke multi-token setups.
  */
 export async function checkAdminAuth(request: Request): Promise<Response | null> {
-  return withSpan("mymcp.auth.check", () => _checkAdminAuthImpl(request), {
-    "mymcp.auth.kind": "admin",
+  return withSpan("auth.check", () => _checkAdminAuthImpl(request), {
+    "auth.kind": "admin",
   });
 }
 

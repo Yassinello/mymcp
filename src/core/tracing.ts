@@ -18,8 +18,73 @@
 
 import type { Span } from "@opentelemetry/api";
 import { toMsg } from "./error-utils";
+import { BRAND, LEGACY_BRAND } from "./constants/brand";
 
-const TRACER_NAME = "mymcp";
+// Phase 50 / BRAND-03 — tracer name follows BRAND.otelAttrPrefix. The
+// tracer name is a vendor string, not a span attribute — operators
+// consume it via resource attributes, so a silent swap is safe. Keep
+// the legacy string available only for the tool-id dedupe below.
+const TRACER_NAME = BRAND.otelAttrPrefix;
+
+/**
+ * Phase 50 / BRAND-03 — build a brand-namespaced attribute bag.
+ *
+ * Input: unprefixed keys (e.g. `tool.name`, `kv.op`, `request.id`).
+ * Output: each key prefixed with `kebab.`. When the legacy emission
+ * flag (`KEBAB_EMIT_LEGACY_OTEL_ATTRS=1` or
+ * `MYMCP_EMIT_LEGACY_OTEL_ATTRS=1`) is set, each attribute is also
+ * duplicated under the `mymcp.` prefix with the same value. This
+ * preserves dashboards filtering on `mymcp.*` during the 2-release
+ * transition without mutating the default shape.
+ *
+ * Flag reading bypasses the facade on purpose: tracing.ts is on the
+ * ALLOWED_DIRECT_ENV_READS list (OTel SDK bootstraps at module load
+ * before the facade import graph is ready), and a tracing hot-path
+ * should not pay the cost of a full facade lookup per attribute.
+ */
+export function brandSpanAttrs(
+  attrs: Record<string, string | number | boolean>
+): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {};
+  const emitLegacy = shouldEmitLegacyOtelAttrs();
+  for (const [key, value] of Object.entries(attrs)) {
+    out[`${BRAND.otelAttrPrefix}.${key}`] = value;
+    if (emitLegacy) out[`${LEGACY_BRAND.otelAttrPrefix}.${key}`] = value;
+  }
+  return out;
+}
+
+/**
+ * Phase 50 / BRAND-03 — normalize span names to the modern prefix.
+ *
+ * Accepts:
+ *  - unprefixed names (e.g. `auth.check`) — returns `kebab.auth.check`
+ *  - legacy-prefixed names (`mymcp.auth.check`) — returns `kebab.auth.check`
+ *  - modern-prefixed names (`kebab.auth.check`) — returns as-is
+ */
+export function brandSpanName(name: string): string {
+  if (name.startsWith(BRAND.otelAttrPrefix + ".")) return name;
+  if (name.startsWith(LEGACY_BRAND.otelAttrPrefix + ".")) {
+    return BRAND.otelAttrPrefix + name.slice(LEGACY_BRAND.otelAttrPrefix.length);
+  }
+  return `${BRAND.otelAttrPrefix}.${name}`;
+}
+
+function shouldEmitLegacyOtelAttrs(): boolean {
+  const v = process.env.KEBAB_EMIT_LEGACY_OTEL_ATTRS || process.env.MYMCP_EMIT_LEGACY_OTEL_ATTRS;
+  if (!v) return false;
+  return v === "1" || v.toLowerCase() === "true";
+}
+
+/**
+ * Apply a set of unprefixed attributes to a live span, brand-namespacing
+ * each. Safe to call during span finalize (status + duration).
+ */
+function applyBrandSpanAttrs(span: Span, attrs: Record<string, string | number | boolean>): void {
+  for (const [k, v] of Object.entries(brandSpanAttrs(attrs))) {
+    span.setAttribute(k, v);
+  }
+}
 
 // ── Auto-bootstrap ─────────────────────────────────────────────────
 //
@@ -122,12 +187,12 @@ export function startToolSpan(
     const api = require("@opentelemetry/api") as typeof import("@opentelemetry/api");
     const tracer = api.trace.getTracer(TRACER_NAME);
     const span = tracer.startSpan(`tool.${toolName}`, {
-      attributes: {
-        "mymcp.tool.name": toolName,
-        "mymcp.connector.id": connectorId,
-        "mymcp.args.keys": JSON.stringify(argKeys),
-        ...(requestId ? { "mymcp.request.id": requestId } : {}),
-      },
+      attributes: brandSpanAttrs({
+        "tool.name": toolName,
+        "connector.id": connectorId,
+        "args.keys": JSON.stringify(argKeys),
+        ...(requestId ? { "request.id": requestId } : {}),
+      }),
     });
     return span;
   } catch {
@@ -151,11 +216,12 @@ export function endToolSpan(
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const api = require("@opentelemetry/api") as typeof import("@opentelemetry/api");
     const realSpan = span as Span;
-    realSpan.setAttribute("mymcp.duration_ms", durationMs);
-    realSpan.setAttribute("mymcp.status", status);
-    if (upstreamCallCount !== undefined) {
-      realSpan.setAttribute("mymcp.upstream_call_count", upstreamCallCount);
-    }
+    const attrs = brandSpanAttrs({
+      duration_ms: durationMs,
+      status,
+      ...(upstreamCallCount !== undefined ? { upstream_call_count: upstreamCallCount } : {}),
+    });
+    for (const [k, v] of Object.entries(attrs)) realSpan.setAttribute(k, v);
     if (status === "error") {
       realSpan.setStatus({ code: api.SpanStatusCode.ERROR });
     } else {
@@ -170,14 +236,16 @@ export function endToolSpan(
 // ── OBS-04: internal (non-tool) span helpers ──────────────────────
 //
 // Wraps the 3 hot paths called out in the Phase 38 plan:
-//   - mymcp.bootstrap.rehydrate (src/core/first-run.ts)
-//   - mymcp.kv.write            (src/core/kv-store.ts, via wrapWithTracing)
-//   - mymcp.auth.check          (src/core/auth.ts)
+//   - kebab.bootstrap.rehydrate (src/core/first-run.ts)
+//   - kebab.kv.write            (src/core/kv-store.ts, via wrapWithTracing)
+//   - kebab.auth.check          (src/core/auth.ts)
 // Returns a NOOP_SPAN when tracing is disabled so callers pay zero cost.
 
 /**
  * Start a span for an internal (non-tool) operation. Follows the
- * existing `mymcp.<component>.<op>` naming convention.
+ * `kebab.<component>.<op>` naming convention (was `mymcp.<...>`
+ * pre-Phase-50). Callers pass unprefixed logical names like
+ * `auth.check`; `brandSpanName()` normalizes.
  */
 export function startInternalSpan(
   name: string,
@@ -188,7 +256,9 @@ export function startInternalSpan(
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const api = require("@opentelemetry/api") as typeof import("@opentelemetry/api");
     const tracer = api.trace.getTracer(TRACER_NAME);
-    const span = tracer.startSpan(name, attrs ? { attributes: attrs } : undefined);
+    const branded = brandSpanName(name);
+    const brandedAttrs = attrs ? brandSpanAttrs(attrs) : undefined;
+    const span = tracer.startSpan(branded, brandedAttrs ? { attributes: brandedAttrs } : undefined);
     return span;
   } catch {
     return NOOP_SPAN;
@@ -214,8 +284,7 @@ export async function withSpan<T>(
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const api = require("@opentelemetry/api") as typeof import("@opentelemetry/api");
       const real = span as Span;
-      real.setAttribute("mymcp.duration_ms", Date.now() - started);
-      real.setAttribute("mymcp.status", "ok");
+      applyBrandSpanAttrs(real, { duration_ms: Date.now() - started, status: "ok" });
       real.setStatus({ code: api.SpanStatusCode.OK });
       real.end();
     } catch {
@@ -227,9 +296,11 @@ export async function withSpan<T>(
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const api = require("@opentelemetry/api") as typeof import("@opentelemetry/api");
       const real = span as Span;
-      real.setAttribute("mymcp.duration_ms", Date.now() - started);
-      real.setAttribute("mymcp.status", "error");
-      real.setAttribute("mymcp.error.message", String(err).slice(0, 200));
+      applyBrandSpanAttrs(real, {
+        duration_ms: Date.now() - started,
+        status: "error",
+        "error.message": String(err).slice(0, 200),
+      });
       real.setStatus({ code: api.SpanStatusCode.ERROR });
       real.end();
     } catch {
@@ -254,8 +325,7 @@ export function withSpanSync<T>(
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const api = require("@opentelemetry/api") as typeof import("@opentelemetry/api");
       const real = span as Span;
-      real.setAttribute("mymcp.duration_ms", Date.now() - started);
-      real.setAttribute("mymcp.status", "ok");
+      applyBrandSpanAttrs(real, { duration_ms: Date.now() - started, status: "ok" });
       real.setStatus({ code: api.SpanStatusCode.OK });
       real.end();
     } catch {
@@ -267,9 +337,11 @@ export function withSpanSync<T>(
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const api = require("@opentelemetry/api") as typeof import("@opentelemetry/api");
       const real = span as Span;
-      real.setAttribute("mymcp.duration_ms", Date.now() - started);
-      real.setAttribute("mymcp.status", "error");
-      real.setAttribute("mymcp.error.message", String(err).slice(0, 200));
+      applyBrandSpanAttrs(real, {
+        duration_ms: Date.now() - started,
+        status: "error",
+        "error.message": String(err).slice(0, 200),
+      });
       real.setStatus({ code: api.SpanStatusCode.ERROR });
       real.end();
     } catch {
