@@ -18,8 +18,12 @@ async function isAdminAuthed(): Promise<boolean> {
   const expected = (getConfig("ADMIN_AUTH_TOKEN") || getConfig("MCP_AUTH_TOKEN"))?.trim();
   if (!expected) return false;
   const cookieStore = await cookies();
-  const cookieToken = cookieStore.get("mymcp_admin_token")?.value?.trim();
-  if (cookieToken && safeEq(cookieToken, expected)) return true;
+  // Phase 50 / BRAND-02: prefer kebab_admin_token; fall back to legacy
+  // mymcp_admin_token during the 2-release transition.
+  const kebabCookie = cookieStore.get("kebab_admin_token")?.value?.trim();
+  if (kebabCookie && safeEq(kebabCookie, expected)) return true;
+  const legacyCookie = cookieStore.get("mymcp_admin_token")?.value?.trim();
+  if (legacyCookie && safeEq(legacyCookie, expected)) return true;
   const hdrs = await headers();
   const authHeader = hdrs.get("authorization");
   if (authHeader) {

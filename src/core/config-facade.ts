@@ -365,6 +365,17 @@ export const ALLOWED_DIRECT_ENV_READS: ReadonlyArray<AllowedDirectEnvRead> = Obj
     ],
     reason: "centralized Upstash credential reader (DUR-06) — owns the single reader contract",
   },
+  {
+    file: "proxy.ts",
+    vars: [
+      "UPSTASH_REDIS_REST_URL",
+      "NODE_ENV",
+      "ADMIN_AUTH_TOKEN",
+      "MCP_AUTH_TOKEN",
+      "INSTANCE_MODE",
+    ],
+    reason: "Next middleware runs in Edge runtime — facade module graph not available there",
+  },
 ]);
 
 /**

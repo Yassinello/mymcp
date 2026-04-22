@@ -154,6 +154,8 @@ export default tseslint.config(
       "src/core/signing-secret.ts",
       "src/core/storage-mode.ts",
       "src/core/tracing.ts",
+      // Edge runtime middleware — facade module graph not available on Edge.
+      "proxy.ts",
       // Infrastructure that needs direct access:
       "scripts/**",
       "tests/**",

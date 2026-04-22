@@ -4,6 +4,7 @@ import { isClaimer, getBootstrapAuthToken } from "./first-run";
 import { getTenantId } from "./tenant";
 import { withSpan, withSpanSync } from "./tracing";
 import { getConfig } from "./config-facade";
+import { BRAND, LEGACY_BRAND } from "./constants/brand";
 
 /**
  * Auth utilities for Kebab MCP.
@@ -63,6 +64,95 @@ export function tokenId(token: string): string {
   return createHash("sha256").update(token).digest("hex").slice(0, 8);
 }
 
+/**
+ * Phase 50 / BRAND-02 — once-per-process dedupe for legacy-cookie reads.
+ *
+ * Separate from the brand-env-var dedupe set in config-facade.ts
+ * (different concerns: env vs cookie, different keys). Reset via
+ * `__resetAuthCookieWarnings()` in tests.
+ */
+const authCookieWarned = new Set<string>();
+
+function warnLegacyCookieReadOnce(): void {
+  if (authCookieWarned.has(LEGACY_BRAND.cookieName)) return;
+  authCookieWarned.add(LEGACY_BRAND.cookieName);
+  console.warn(
+    `[deprecated] ${LEGACY_BRAND.cookieName} cookie is deprecated; new Set-Cookie writes use ${BRAND.cookieName}. Support removed in 2 releases.`
+  );
+}
+
+/** Test-only: reset the legacy-cookie warning dedupe set. */
+export function __resetAuthCookieWarnings(): void {
+  authCookieWarned.clear();
+}
+
+/**
+ * Read the admin cookie from a Cookie header, preferring the modern
+ * `kebab_admin_token` name over the legacy `mymcp_admin_token`. When the
+ * caller hits the legacy fallback, a single once-per-process deprecation
+ * warning is emitted.
+ *
+ * Returns the URI-decoded, trimmed raw value, or null when neither cookie
+ * is present / parseable.
+ */
+export function readAdminCookie(cookieHeader: string | null): string | null {
+  if (!cookieHeader) return null;
+
+  const kebabRe = new RegExp(`(?:^|;\\s*)${BRAND.cookieName.replace(/[-_]/g, "[-_]")}=([^;]+)`);
+  const legacyRe = new RegExp(
+    `(?:^|;\\s*)${LEGACY_BRAND.cookieName.replace(/[-_]/g, "[-_]")}=([^;]+)`
+  );
+
+  const kebabMatch = cookieHeader.match(kebabRe);
+  if (kebabMatch?.[1]) return decodeURIComponent(kebabMatch[1]).trim();
+
+  const legacyMatch = cookieHeader.match(legacyRe);
+  if (legacyMatch?.[1]) {
+    warnLegacyCookieReadOnce();
+    return decodeURIComponent(legacyMatch[1]).trim();
+  }
+  return null;
+}
+
+/**
+ * Emit Set-Cookie headers for BOTH `kebab_admin_token` and
+ * `mymcp_admin_token` with identical security attributes. Append via
+ * `Headers.append` so the caller doesn't clobber any other pre-existing
+ * Set-Cookie entries (e.g. session cookies set upstream).
+ *
+ * Default maxAge: 7 days. Caller may override.
+ */
+export function setAdminCookies(
+  headers: Headers,
+  token: string,
+  opts?: { maxAge?: number; secure?: boolean; sameSite?: "Strict" | "Lax" | "None" }
+): void {
+  const maxAge = opts?.maxAge ?? 60 * 60 * 24 * 7;
+  const secure = opts?.secure ?? true;
+  const sameSite = opts?.sameSite ?? "Strict";
+  const attrs = [
+    "HttpOnly",
+    `SameSite=${sameSite}`,
+    ...(secure ? ["Secure"] : []),
+    "Path=/",
+    `Max-Age=${maxAge}`,
+  ].join("; ");
+
+  headers.append("Set-Cookie", `${BRAND.cookieName}=${token}; ${attrs}`);
+  headers.append("Set-Cookie", `${LEGACY_BRAND.cookieName}=${token}; ${attrs}`);
+}
+
+/**
+ * Emit Set-Cookie headers with `Max-Age=0` for BOTH cookie names, so a
+ * logout / admin-rotation invalidates both the modern and the legacy
+ * cookie in one write.
+ */
+export function clearAdminCookies(headers: Headers): void {
+  const attrs = "HttpOnly; SameSite=Strict; Secure; Path=/; Max-Age=0";
+  headers.append("Set-Cookie", `${BRAND.cookieName}=; ${attrs}`);
+  headers.append("Set-Cookie", `${LEGACY_BRAND.cookieName}=; ${attrs}`);
+}
+
 export function extractToken(request: Request): string | null {
   // Check Authorization header
   const authHeader = request.headers.get("authorization");
@@ -76,15 +166,10 @@ export function extractToken(request: Request): string | null {
   if (queryToken) return queryToken;
 
   // Fallback: admin cookie (set by middleware after ?token= auth).
-  // Dashboard fetches from the browser rely on this.
-  const cookieHeader = request.headers.get("cookie");
-  if (cookieHeader) {
-    const match = cookieHeader.match(/(?:^|;\s*)mymcp_admin_token=([^;]+)/);
-    const raw = match?.[1];
-    if (raw) return decodeURIComponent(raw).trim();
-  }
-
-  return null;
+  // Dashboard fetches from the browser rely on this. Phase 50 / BRAND-02:
+  // prefer kebab_admin_token, fall back to mymcp_admin_token with one
+  // deprecation warning per process.
+  return readAdminCookie(request.headers.get("cookie"));
 }
 
 /**

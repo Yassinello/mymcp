@@ -90,11 +90,15 @@ function isAuthorized(request: NextRequest, adminToken: string): boolean {
   const queryToken = request.nextUrl.searchParams.get("token")?.trim() || "";
   const authHeader = request.headers.get("authorization");
   const bearer = authHeader?.replace(/^Bearer\s+/i, "").trim() || "";
-  const cookieToken = request.cookies.get("mymcp_admin_token")?.value || "";
+  // Phase 50 / BRAND-02: kebab_admin_token is the modern cookie name;
+  // mymcp_admin_token remains accepted during the 2-release transition.
+  const kebabCookie = request.cookies.get("kebab_admin_token")?.value || "";
+  const legacyCookie = request.cookies.get("mymcp_admin_token")?.value || "";
   return (
     safeEqual(bearer, adminToken) ||
     safeEqual(queryToken, adminToken) ||
-    safeEqual(cookieToken, adminToken)
+    safeEqual(kebabCookie, adminToken) ||
+    safeEqual(legacyCookie, adminToken)
   );
 }
 
@@ -206,16 +210,22 @@ export async function proxy(request: NextRequest) {
       const cleanUrl = new URL(request.url);
       cleanUrl.searchParams.delete("token");
       const res = finalize(NextResponse.redirect(cleanUrl));
-      res.cookies.set("mymcp_admin_token", adminToken, {
+      // Phase 50 / BRAND-02: dual-write the admin cookie under both the
+      // modern `kebab_admin_token` and legacy `mymcp_admin_token` names.
+      // Existing sessions with only the legacy cookie keep working during
+      // the 2-release transition; new sessions are recognized by either.
+      // Strict: the dashboard is never legitimately loaded by following a
+      // link from another site. Blocks the CSRF vector on PUT /api/config/env
+      // even without a CSRF token.
+      const cookieOpts = {
         httpOnly: true,
-        // Strict: the dashboard is never legitimately loaded by following a
-        // link from another site. Blocks the CSRF vector on PUT /api/config/env
-        // even without a CSRF token.
-        sameSite: "strict",
+        sameSite: "strict" as const,
         secure: true,
         path: "/",
         maxAge: 60 * 60 * 24 * 7,
-      });
+      };
+      res.cookies.set("kebab_admin_token", adminToken, cookieOpts);
+      res.cookies.set("mymcp_admin_token", adminToken, cookieOpts);
       return res;
     }
   }
