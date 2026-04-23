@@ -14,13 +14,15 @@ import { NextResponse } from "next/server";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
 import { aggregateErrorsByConnectorHour, getMetricsSource } from "@/core/metrics";
+import { getCurrentTenantId } from "@/core/request-context";
 
 async function handler(ctx: PipelineContext) {
   const url = new URL(ctx.request.url);
   const tenantParam = url.searchParams.get("tenant");
+  const callerTenantId = getCurrentTenantId();
   const tenantScope = tenantParam && tenantParam.length > 0 ? tenantParam : "__all__";
 
-  const { logs, source } = await getMetricsSource(tenantScope);
+  const { logs, source } = await getMetricsSource(tenantScope, callerTenantId);
   const connectors = aggregateErrorsByConnectorHour(logs, Date.now());
 
   return NextResponse.json({ connectors, source });

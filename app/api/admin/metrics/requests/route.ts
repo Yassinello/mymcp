@@ -17,17 +17,19 @@ import { NextResponse } from "next/server";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
 import { aggregateRequestsByHour, getMetricsSource } from "@/core/metrics";
+import { getCurrentTenantId } from "@/core/request-context";
 
 async function handler(ctx: PipelineContext) {
   const url = new URL(ctx.request.url);
   const tenantParam = url.searchParams.get("tenant");
   const toolParam = url.searchParams.get("tool");
 
-  // tenantParam: empty/null → "__all__" default; explicit value passed
-  // through to getMetricsSource which handles the sentinel.
+  // Scoped admins: getMetricsSource forces to their tenantId regardless
+  // of the param. Root: honours the param (default "__all__").
+  const callerTenantId = getCurrentTenantId();
   const tenantScope = tenantParam && tenantParam.length > 0 ? tenantParam : "__all__";
 
-  const { logs, source } = await getMetricsSource(tenantScope);
+  const { logs, source } = await getMetricsSource(tenantScope, callerTenantId);
   const hours = aggregateRequestsByHour(
     logs,
     Date.now(),

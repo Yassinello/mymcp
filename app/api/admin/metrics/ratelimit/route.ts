@@ -22,6 +22,7 @@ import { getKVStore, kvScanAll } from "@/core/kv-store";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import { getConfigInt } from "@/core/config-facade";
 import { parseRateLimitKey } from "@/core/rate-limit";
+import { getCurrentTenantId } from "@/core/request-context";
 
 function maskTenantId(tenantId: string): string {
   if (tenantId.length <= 4) return tenantId;
@@ -29,6 +30,11 @@ function maskTenantId(tenantId: string): string {
 }
 
 async function handler() {
+  // Root-scope only: scoped admins must not see cross-tenant bucket rows.
+  // The 4-char tenantId prefix is weak isolation on small deployments.
+  if (getCurrentTenantId() !== null) {
+    return NextResponse.json({ error: "root_only" }, { status: 403 });
+  }
   const defaultLimit = Math.max(1, getConfigInt("MYMCP_RATE_LIMIT_RPM", 60));
   const windowMs = 60_000;
   const now = Date.now();

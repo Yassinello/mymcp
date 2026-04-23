@@ -26,10 +26,15 @@ import { NextResponse } from "next/server";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import { getUpstashInfo } from "@/core/upstash-rest";
 import { getConfigInt } from "@/core/config-facade";
+import { getCurrentTenantId } from "@/core/request-context";
 
 const DEFAULT_FREE_TIER_BYTES = 250 * 1024 * 1024; // 250 MB
 
 async function handler() {
+  // Root-scope only: KV quota is instance-wide, not per-tenant.
+  if (getCurrentTenantId() !== null) {
+    return NextResponse.json({ error: "root_only" }, { status: 403 });
+  }
   const info = await getUpstashInfo();
   if (info === null) {
     return NextResponse.json(

@@ -15,6 +15,7 @@ import { NextResponse } from "next/server";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
 import { aggregateLatencyByTool, getMetricsSource } from "@/core/metrics";
+import { getCurrentTenantId } from "@/core/request-context";
 
 async function handler(ctx: PipelineContext) {
   const url = new URL(ctx.request.url);
@@ -22,9 +23,10 @@ async function handler(ctx: PipelineContext) {
   const limitParam = parseInt(url.searchParams.get("limit") ?? "10", 10);
   const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(50, limitParam)) : 10;
 
+  const callerTenantId = getCurrentTenantId();
   const tenantScope = tenantParam && tenantParam.length > 0 ? tenantParam : "__all__";
 
-  const { logs, source } = await getMetricsSource(tenantScope);
+  const { logs, source } = await getMetricsSource(tenantScope, callerTenantId);
   const tools = aggregateLatencyByTool(logs, limit);
 
   return NextResponse.json({ tools, source });

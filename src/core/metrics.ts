@@ -171,13 +171,20 @@ export function aggregateErrorsByConnectorHour(
  * operators know whether they're looking at live data or a replay.
  */
 export async function getMetricsSource(
-  tenantScope: string | null
+  tenantScope: string | null,
+  callerTenantId: string | null = null
 ): Promise<{ logs: ToolLog[]; source: "buffer" | "durable" }> {
+  // Tenant-isolation guard: scoped admins (callerTenantId !== null) can
+  // NEVER read cross-tenant metrics. The requested tenantScope is ignored
+  // and forced to the caller's tenant. Only root callers (null tenant)
+  // may request "__all__" or a specific tenantId.
+  const effectiveScope = callerTenantId !== null ? callerTenantId : tenantScope;
+
   const bufferOpts =
-    tenantScope === "__all__"
+    effectiveScope === "__all__"
       ? { scope: "all" as const }
-      : tenantScope && tenantScope !== "__all__"
-        ? { tenantId: tenantScope }
+      : effectiveScope && effectiveScope !== "__all__"
+        ? { tenantId: effectiveScope }
         : { tenantId: null };
 
   // Generous ceiling — route-level limits are enforced at the route
