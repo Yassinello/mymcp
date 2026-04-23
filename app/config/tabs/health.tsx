@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { MetricsSection } from "./health/MetricsSection";
 
 interface HealthBody {
   ok: boolean;
@@ -90,7 +91,7 @@ export interface HealthTabProps {
   tenantIds?: string[];
 }
 
-export function HealthTab(_props: HealthTabProps = {}) {
+export function HealthTab({ rootScope = true, tenantIds = [] }: HealthTabProps = {}) {
   const [health, setHealth] = useState<HealthBody | null>(null);
   const [status, setStatus] = useState<AdminStatusBody | null>(null);
   const [adminError, setAdminError] = useState<string | null>(null);
@@ -305,6 +306,9 @@ export function HealthTab(_props: HealthTabProps = {}) {
           <div style={{ color: "#6b7280", fontSize: "14px" }}>loading…</div>
         )}
       </Block>
+
+      {/* Phase 53 / OBS-06..11: Usage & health over time. */}
+      <MetricsSection rootScope={rootScope} tenantIds={tenantIds} />
     </div>
   );
 }

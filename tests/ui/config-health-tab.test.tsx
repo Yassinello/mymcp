@@ -54,6 +54,51 @@ function mockFetch(
         json: () => Promise.resolve(body),
       } as Response);
     }
+    // Phase 53: MetricsSection polls /api/admin/metrics/* endpoints.
+    // Return deterministic empty bodies so the OBS-05 assertions aren't
+    // derailed by unmocked fetch rejections.
+    if (url.includes("/api/admin/metrics/requests")) {
+      return Promise.resolve({
+        status: 200,
+        ok: true,
+        json: () => Promise.resolve({ hours: [], source: "buffer" }),
+      } as Response);
+    }
+    if (url.includes("/api/admin/metrics/latency")) {
+      return Promise.resolve({
+        status: 200,
+        ok: true,
+        json: () => Promise.resolve({ tools: [], source: "buffer" }),
+      } as Response);
+    }
+    if (url.includes("/api/admin/metrics/errors")) {
+      return Promise.resolve({
+        status: 200,
+        ok: true,
+        json: () => Promise.resolve({ connectors: [], source: "buffer" }),
+      } as Response);
+    }
+    if (url.includes("/api/admin/metrics/ratelimit")) {
+      return Promise.resolve({
+        status: 200,
+        ok: true,
+        json: () => Promise.resolve({ buckets: [] }),
+      } as Response);
+    }
+    if (url.includes("/api/admin/metrics/kv-quota")) {
+      return Promise.resolve({
+        status: 200,
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            usedBytes: null,
+            usedHuman: null,
+            limitBytes: null,
+            percentage: null,
+            source: "unknown",
+          }),
+      } as Response);
+    }
     return Promise.reject(new Error(`Unexpected fetch: ${url}`));
   }) as typeof fetch;
 }
@@ -69,7 +114,10 @@ describe("HealthTab (OBS-05)", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Bootstrap state/i)).toBeDefined();
-      expect(screen.getByText(/active/i)).toBeDefined();
+      // Bootstrap state badge renders "active" verbatim — use exact match
+      // so we don't collide with MetricsSection's "No connector activity"
+      // empty-state copy introduced in Phase 53.
+      expect(screen.getByText(/^active$/)).toBeDefined();
       // "reachable" appears both as the label and the status badge → allow either
       expect(screen.getAllByText(/reachable/i).length).toBeGreaterThan(0);
       // Total rehydrate count (5)
