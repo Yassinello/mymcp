@@ -4,6 +4,93 @@ All notable changes to Kebab MCP.
 
 ## [Unreleased] — v0.13 — Daily-user delight
 
+### Phase 53 — Observability UI expansion (OBS-06..11)
+
+Turns the /config Health tab from a "is the server alive?" answer into a
+daily monitoring dashboard. 5 new live sections, tenant selector (root
+only), configurable 60s auto-refresh. No new durable storage — data
+reads from the existing primitives (per-tenant ring buffer, durable
+log-store, rate-limit KV buckets, Upstash REST `/info`).
+
+**Added**
+
+- `/config → Health` gains a **Usage & health** section below the
+  existing OBS-01..05 blocks:
+  - Requests chart: 24 hourly buckets, per-tool dropdown filter
+    (populated from the live latency response, not a registry snapshot).
+  - p95 latency bar chart: top-10 slowest tools.
+  - Error heatmap: connector × 24h grid, cells painted via
+    `log10(errors+1) / log10(maxErrors+1)` so 1 error vs 100 stay
+    visually distinct. Zero-error cells surface as gray (active but
+    healthy); no-activity cells dark gray.
+  - Rate-limit panel: live bucket table (masked tenantId, scope,
+    current/max, reset-in).
+  - KV quota gauge: bytes used / limit with red warn banner above 80%,
+    "unknown" badge + "set UPSTASH_REDIS_REST_URL" hint when creds absent.
+- 5 `GET /api/admin/metrics/{requests,latency,errors,ratelimit,kv-quota}`
+  routes, all `withAdminAuth`-gated. Response shapes documented in
+  `docs/API.md` (TBD in this phase's OPERATIONS doc for now).
+- `src/core/metrics.ts` — pure aggregation helpers
+  (`aggregateRequestsByHour`, `aggregateLatencyByTool`,
+  `aggregateErrorsByConnectorHour`) + `getMetricsSource()` which picks
+  the in-process ring buffer first and falls back to
+  `getLogStore().since(Date.now() - 24h)` on cold-start. `source` tag
+  surfaces the active path to the UI ("cold-start (durable)" badge).
+- `src/core/upstash-rest.ts` — thin Upstash REST `/info` client with
+  3s `AbortSignal.timeout`, token-sanitized error messages, and a pure
+  `parseUpstashUsedBytes()` helper (unit-tested independently).
+- `src/core/rate-limit.ts::parseRateLimitKey()` extracted — shared by
+  `/api/admin/rate-limits` and the new `/api/admin/metrics/ratelimit`
+  (parse drift prevention). Handles all three shipped shapes: 6-part
+  tenant-wrapped, 5-part legacy, 4-part null-tenant.
+- `app/config/tabs/health/useMetricsPoll.ts` — custom SWR-style hook
+  (no SWR dep added). 60s default, `?refresh=<seconds>` URL param
+  override (clamp 10..600), manual `refresh()` method, AbortController
+  cancellation on unmount / URL change.
+- `TenantSelector`, `RefreshControls`, `MetricsSection` components +
+  `RequestCountChart` / `LatencyBarChart` (Recharts) + `ErrorHeatmap`
+  (hand-rolled SVG) + `RateLimitPanel` + `KvQuotaPanel`.
+- `recharts@^2.13` (resolved 2.15.4) added as a direct dependency.
+  Install requires `--legacy-peer-deps` due to pre-existing stagehand
+  peer-dep chain.
+- `UPSTASH_FREE_TIER_BYTES` new env var (default `250 * 1024 * 1024` =
+  250 MB, Upstash free tier). Override for paid tiers.
+
+**Changed**
+
+- Bundle-size ceiling for `/config` re-baselined **600 KB → 620 KB** to
+  absorb Recharts footprint + new chart components. Actual measured at
+  phase close: **544 KB** (holds under the new ceiling with headroom).
+- `.planning/` evidence file captures the API-surface map for future
+  metrics surfaces.
+
+**Files**
+
+- `src/core/metrics.ts` + `src/core/upstash-rest.ts` + shared helper in
+  `src/core/rate-limit.ts`.
+- `app/api/admin/metrics/{requests,latency,errors,ratelimit,kv-quota}/route.ts`.
+- `app/config/tabs/health/{MetricsSection,TenantSelector,RefreshControls,useMetricsPoll,RequestCountChart,LatencyBarChart,ErrorHeatmap,RateLimitPanel,KvQuotaPanel}.{ts,tsx}`.
+- `app/config/tabs/health.tsx` — mounts `<MetricsSection />` below
+  existing OBS-01..05; new `rootScope` + `tenantIds` props.
+- `app/config/page.tsx` — tenant-ID discovery from `MCP_AUTH_TOKEN_*`.
+- Tests: `tests/core/metrics.test.ts` (16) + `tests/core/upstash-rest.test.ts` (9) +
+  `tests/integration/metrics-routes.test.ts` (15) +
+  `tests/ui/{request-count-chart,error-heatmap,metrics-section}.test.tsx` (14).
+- `docs/OPERATIONS.md` — new — dashboard operator guide.
+
+**Data retention (no new storage)**
+
+- Ring buffer: 100 entries per tenant (configurable
+  `KEBAB_LOG_BUFFER_PER_TENANT`).
+- Durable log-store: `MYMCP_LOG_MAX_ENTRIES` (default 500).
+- KV quota: Upstash /info cached 30s (`Cache-Control: private, max-age=30`).
+
+**Follow-ups (deferred)**
+
+- Long-term metrics storage (keep 24h window for now).
+- Alerting webhooks on rate-limit / error-rate thresholds.
+- Prompts invocation count on the same Requests chart (v0.14).
+
 ### Phase 52 — Devices tab (DEV-01..06)
 
 Closes operator pain point F7 (multi-client setup). The `MCP_AUTH_TOKEN` comma-list is now a first-class UX: one row per token in `/config → Devices`, with per-device rotate / revoke / rename + a 24h HMAC-signed invite URL so a second client (Claude Code, web, phone) can join without hand-editing env vars.
