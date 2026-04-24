@@ -9,30 +9,7 @@ import { withAdminAuth } from "@/core/with-admin-auth";
 import type { PipelineContext } from "@/core/pipeline";
 import { toMsg } from "@/core/error-utils";
 import { getConfig } from "@/core/config-facade";
-
-/**
- * Redact sensitive fields from the auth blob so GET responses don't
- * echo the stored secret back to the UI. Admin-only routes still
- * refresh the token via PATCH with a new `auth` block.
- */
-function redactAuth(auth: unknown): unknown {
-  if (!auth || typeof auth !== "object") return auth;
-  const a = auth as { type?: string };
-  switch (a.type) {
-    case "bearer":
-      return { type: "bearer", token: "***" };
-    case "api_key_header": {
-      const o = a as { headerName?: string };
-      return { type: "api_key_header", headerName: o.headerName, value: "***" };
-    }
-    case "basic": {
-      const o = a as { username?: string };
-      return { type: "basic", username: o.username, password: "***" };
-    }
-    default:
-      return auth;
-  }
-}
+import { redactAuth } from "@/connectors/api/lib/redact-auth";
 
 function allowLocalUrls(): boolean {
   const flag = getConfig("KEBAB_API_CONN_ALLOW_LOCAL");
