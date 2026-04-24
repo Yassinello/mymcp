@@ -1,5 +1,8 @@
 import { resolveRegistryAsync } from "@/core/registry";
 import { withAdminAuth } from "@/core/with-admin-auth";
+import { getLogger } from "@/core/logging";
+
+const logger = getLogger("diagnose");
 
 /**
  * Run diagnose() on all enabled packs and return results.
@@ -17,10 +20,9 @@ async function getHandler() {
         try {
           diagnosis = await p.manifest.diagnose();
         } catch (err) {
-          diagnosis = {
-            ok: false,
-            message: err instanceof Error ? err.message : "Check failed",
-          };
+          const message = err instanceof Error ? err.message : "Check failed";
+          logger.warn("diagnose threw", { connector: p.manifest.id, error: message });
+          diagnosis = { ok: false, message };
         }
       }
 

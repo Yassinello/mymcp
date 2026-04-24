@@ -9,6 +9,9 @@ import {
 import { getLogger } from "@/core/logging";
 import { getConfig } from "@/core/config-facade";
 import { toMsg } from "@/core/error-utils";
+import { getContextKVStore } from "@/core/request-context";
+
+const DEBOUNCE_TTL_SECONDS = 1800; // 30 min
 
 const logger = getLogger("cron.health");
 
@@ -59,24 +62,46 @@ async function cronHealthHandler(_ctx: PipelineContext): Promise<Response> {
   if (degraded.length > 0) {
     const webhookUrl = getConfig("KEBAB_ERROR_WEBHOOK_URL");
     if (webhookUrl) {
-      try {
-        await fetch(webhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: `[Kebab MCP Health] ${degraded.length} pack(s) degraded: ${degraded.map((d) => `${d.pack}: ${d.message}`).join("; ")}`,
-            packs: degraded,
-          }),
-        });
-      } catch (err) {
-        // Phase 45 QA-02: swapped console.info for the structured logger
-        // so the breadcrumb obeys the same routing as the rest of the
-        // cron handler.
-        // silent-swallow-ok: error-webhook alert is best-effort observability; a failed alert must not break the cron health response
-        logger.warn("error-webhook alert failed", {
-          error: toMsg(err),
-          packs: degraded.length,
-        });
+      const kv = getContextKVStore();
+      // Debounce: only alert once per 30 min per degraded pack.
+      const toAlert: typeof degraded = [];
+      for (const pack of degraded) {
+        const debounceKey = `diagnose:last-alert:${pack.pack}`;
+        const lastAlert = await kv.get(debounceKey);
+        if (lastAlert) {
+          logger.info("diagnose alert debounced", { pack: pack.pack });
+        } else {
+          toAlert.push(pack);
+        }
+      }
+
+      if (toAlert.length > 0) {
+        try {
+          await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: `[Kebab MCP Health] ${toAlert.length} pack(s) degraded: ${toAlert.map((d) => `${d.pack}: ${d.message}`).join("; ")}`,
+              packs: toAlert,
+            }),
+          });
+          // Stamp debounce key for each alerted pack.
+          await Promise.all(
+            toAlert.map((pack) =>
+              kv.set(
+                `diagnose:last-alert:${pack.pack}`,
+                Date.now().toString(),
+                DEBOUNCE_TTL_SECONDS
+              )
+            )
+          );
+        } catch (err) {
+          // silent-swallow-ok: error-webhook alert is best-effort observability; a failed alert must not break the cron health response
+          logger.warn("error-webhook alert failed", {
+            error: toMsg(err),
+            packs: toAlert.length,
+          });
+        }
       }
     }
   }

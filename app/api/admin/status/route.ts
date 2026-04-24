@@ -1,11 +1,14 @@
 import { resolveRegistryAsync } from "@/core/registry";
 import { getInstanceConfigAsync } from "@/core/config";
-import { getRecentLogs } from "@/core/logging";
+import { getRecentLogs, getLogger } from "@/core/logging";
 import { VERSION } from "@/core/version";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import { getRehydrateCount } from "@/core/first-run";
 import { getKVLatencySamples } from "@/core/kv-store";
 import { getEnvPresence } from "@/core/env-safety";
+import { toMsg } from "@/core/error-utils";
+
+const logger = getLogger("diagnose");
 
 /**
  * Private admin status endpoint — requires ADMIN_AUTH_TOKEN.
@@ -25,8 +28,9 @@ async function getHandler() {
       if (p.enabled && p.manifest.diagnose) {
         try {
           diagnosis = await p.manifest.diagnose();
-        } catch {
-          diagnosis = { ok: false, message: "Diagnose check failed" };
+        } catch (err) {
+          logger.warn("diagnose threw", { connector: p.manifest.id, error: toMsg(err) });
+          diagnosis = { ok: false, message: toMsg(err) };
         }
       }
 
