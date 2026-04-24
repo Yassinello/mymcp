@@ -5,6 +5,7 @@ import type { ConnectorSummary } from "../tabs";
 import { PACKS, CredentialInput, normalizeGitHubRepo } from "../pack-defs";
 import { renderMarkdown } from "@/core/markdown-lite";
 import { EnvStubBlock } from "./env-stub-block";
+import { ApiConnectionsSection } from "./api-connections-section";
 
 type StorageMode = "kv" | "file" | "static" | "kv-degraded" | null;
 
@@ -579,6 +580,7 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
           </div>
         );
       })}
+      <ApiConnectionsSection />
     </div>
   );
 }

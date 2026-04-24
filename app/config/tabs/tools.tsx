@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import type { ConnectorSummary } from "../tabs";
 import { toMsg } from "@/core/error-utils";
+import { CustomToolBuilder } from "./custom-tool-builder";
 
 interface ToolRow {
   name: string;
@@ -35,6 +36,9 @@ export function ToolsTab({
     new Set(initialDisabledTools ?? [])
   );
   const [toggling, setToggling] = useState<string | null>(null);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // RSC-01: Only fetch client-side if no server data was provided (backward compat).
   useEffect(() => {
@@ -139,9 +143,20 @@ export function ToolsTab({
   };
 
   return (
-    <div>
+    <div key={reloadKey}>
+      {builderOpen && (
+        <CustomToolBuilder
+          onClose={() => setBuilderOpen(false)}
+          onCreated={() => {
+            setBuilderOpen(false);
+            setFlash("Custom tool created — reload page to see it in MCP");
+            setTimeout(() => setFlash(null), 4000);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
       {/* Controls */}
-      <div className="flex gap-3 mb-4 flex-wrap">
+      <div className="flex gap-3 mb-4 flex-wrap items-center">
         <input
           type="text"
           placeholder="Search tools by name or description..."
@@ -163,6 +178,17 @@ export function ToolsTab({
               </option>
             ))}
         </select>
+        <button
+          onClick={() => setBuilderOpen(true)}
+          className="text-xs font-medium text-accent hover:underline px-3 py-2 border border-accent/20 rounded-md shrink-0"
+        >
+          + New custom tool
+        </button>
+        {flash && (
+          <span className="text-[11px] font-medium text-green bg-green-bg px-2 py-0.5 rounded-full">
+            {flash}
+          </span>
+        )}
       </div>
 
       <p className="text-xs text-text-muted mb-3">
