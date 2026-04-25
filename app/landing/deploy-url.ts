@@ -23,10 +23,9 @@ const STORES = [
 ];
 
 export const VERCEL_DEPLOY_URL =
-  "https://vercel.com/new/clone?" +
+  "https://vercel.com/new/deploy?" +
   new URLSearchParams({
     "repository-url": REPO_URL,
-    "project-name": "kebab-mcp-me",
-    "repository-name": "kebab-mcp-me",
+    "project-name": "kebab-mcp",
     stores: JSON.stringify(STORES),
   }).toString();
