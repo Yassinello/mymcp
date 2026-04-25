@@ -26,9 +26,9 @@ describe("TEST-03 batch B.2 — bootstrap-rehydrate regressions", () => {
     // from @/core/first-run-edge and awaits it at function entry.
     const proxyFile = readFileSync(resolve(process.cwd(), "proxy.ts"), "utf-8");
 
-    // Import present.
+    // Import present (may be single-line or multi-line with other named exports).
     expect(proxyFile).toMatch(
-      /import\s+{\s*ensureBootstrapRehydratedFromUpstash\s*}\s+from\s+["']@\/core\/first-run-edge["']/
+      /import\s+\{[^}]*ensureBootstrapRehydratedFromUpstash[^}]*\}\s+from\s+["']@\/core\/first-run-edge["']/s
     );
 
     // Awaited call present in the proxy() body.

@@ -28,6 +28,48 @@ import {
  * `./chrome.tsx`; state in `./WelcomeStateContext.tsx`.
  */
 
+function ClaimErrorPanel({ error, onRetry }: { error: string; onRetry: () => Promise<void> }) {
+  const isUpstashMissing = error.includes("signing_secret_unavailable");
+  return (
+    <div className="rounded-xl border border-amber-800/60 bg-amber-950/30 px-6 py-5 text-sm space-y-3">
+      <p className="text-amber-300 font-semibold text-base">
+        {isUpstashMissing ? "Storage not connected" : "Could not reach this instance"}
+      </p>
+      {isUpstashMissing ? (
+        <div className="space-y-2 text-slate-300 leading-relaxed text-sm">
+          <p>
+            Kebab MCP needs an Upstash KV store to safely initialize your instance. The integration
+            was added, but its environment variables haven&apos;t been linked to this project yet.
+          </p>
+          <ol className="list-decimal list-inside space-y-1.5 text-slate-400">
+            <li>
+              Open{" "}
+              <strong className="text-slate-200">
+                Vercel → your project → Settings → Environment Variables
+              </strong>
+            </li>
+            <li>
+              Confirm that <code className="text-amber-300">KV_REST_API_URL</code> and{" "}
+              <code className="text-amber-300">KV_REST_API_TOKEN</code> are listed
+            </li>
+            <li>If missing, go to Storage → your KV store → Connect to project</li>
+            <li>Trigger a redeploy, then reload this page</li>
+          </ol>
+        </div>
+      ) : (
+        <p className="text-slate-400 leading-relaxed">{error}</p>
+      )}
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-2 inline-flex items-center gap-2 rounded-md bg-amber-500/20 border border-amber-500/40 text-amber-200 hover:bg-amber-500/30 transition-colors px-4 py-2 text-xs font-medium"
+      >
+        Retry connection
+      </button>
+    </div>
+  );
+}
+
 interface WelcomeClientProps {
   initialBootstrap: boolean;
   /** MYMCP_RECOVERY_RESET=1 banner: minting now hands the user a doomed credential. */
@@ -118,7 +160,11 @@ function WelcomeShellBody({
   if (claim === "loading") {
     return (
       <Shell>
-        <p className="text-slate-400">Connecting to this instance…</p>
+        {claimHook.error ? (
+          <ClaimErrorPanel error={claimHook.error} onRetry={claimHook.refetch} />
+        ) : (
+          <p className="text-slate-400">Connecting to this instance…</p>
+        )}
       </Shell>
     );
   }

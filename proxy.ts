@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { ensureBootstrapRehydratedFromUpstash } from "@/core/first-run-edge";
+import {
+  ensureBootstrapRehydratedFromUpstash,
+  getEdgeBootstrapAuthToken,
+} from "@/core/first-run-edge";
 
 /**
  * Build the per-request Content-Security-Policy header.
@@ -135,9 +138,21 @@ export async function proxy(request: NextRequest) {
   };
   const passthrough = () => finalize(NextResponse.next({ request: { headers: requestHeaders } }));
 
-  const adminToken = (process.env.ADMIN_AUTH_TOKEN || process.env.MCP_AUTH_TOKEN)?.trim();
+  // SEC-02: the Edge rehydrate helper populates a module-scope cache
+  // (edgeBootstrapAuthTokenCache) instead of mutating process.env. Derive
+  // the effective token by consulting the cache as a fallback for the
+  // KV-only persistence path (no auto-magic Vercel env write). Without
+  // this, isFirstTimeSetup is always true on cold lambdas whose
+  // process.env.MCP_AUTH_TOKEN wasn't injected as a real platform env var.
+  const edgeBootstrapToken = getEdgeBootstrapAuthToken();
+  const effectiveAuthToken =
+    process.env.ADMIN_AUTH_TOKEN?.trim() ||
+    process.env.MCP_AUTH_TOKEN?.trim() ||
+    edgeBootstrapToken ||
+    "";
+  const adminToken = effectiveAuthToken;
   const isShowcase = process.env.INSTANCE_MODE === "showcase";
-  const isFirstTimeSetup = !process.env.MCP_AUTH_TOKEN && !isShowcase;
+  const isFirstTimeSetup = !effectiveAuthToken && !isShowcase;
 
   // ── Showcase: public template deploy, no MCP endpoint, no admin. ─────
   // / serves the landing page; /welcome and /config are meaningless here

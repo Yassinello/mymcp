@@ -25,9 +25,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const ensureRehydrateMock = vi.fn(async (): Promise<void> => {});
 
+// Module-scope mutable so individual tests can set a bootstrap token
+// that getEdgeBootstrapAuthToken() will return — mirroring what the
+// real ensureBootstrapRehydratedFromUpstash() does in production (it
+// populates edgeBootstrapAuthTokenCache, not process.env — SEC-02).
+let edgeTokenCache: string | null = null;
+
 vi.mock("@/core/first-run-edge", () => ({
   ensureBootstrapRehydratedFromUpstash: () => ensureRehydrateMock(),
-  getEdgeBootstrapAuthToken: (): string | null => null,
+  getEdgeBootstrapAuthToken: (): string | null => edgeTokenCache,
 }));
 
 // Minimal Next shim. Real Next types are complex and the middleware
@@ -97,12 +103,14 @@ describe("TEST-04 proxy() async rehydrate (BUG-09, BUG-10)", () => {
   beforeEach(() => {
     saveEnv();
     clearAllTracked();
+    edgeTokenCache = null;
     ensureRehydrateMock.mockReset();
     ensureRehydrateMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     restoreEnv();
+    edgeTokenCache = null;
     ensureRehydrateMock.mockReset();
   });
 
@@ -121,19 +129,16 @@ describe("TEST-04 proxy() async rehydrate (BUG-09, BUG-10)", () => {
     expect(calls).toEqual(["rehydrate"]);
   });
 
-  it("does NOT redirect /config to /welcome when rehydrate backfills MCP_AUTH_TOKEN (BUG-10)", async () => {
-    // Simulate the Edge rehydrate populating process.env.MCP_AUTH_TOKEN
-    // via its side effect (in production this would be
-    // edgeBootstrapAuthTokenCache — here we model the effect directly
-    // on process.env, which proxy.ts reads to decide first-time-setup).
+  it("does NOT redirect /config to /welcome when rehydrate backfills the edge cache (BUG-10)", async () => {
+    // Simulate the Edge rehydrate populating the module-scope cache —
+    // the real production path (SEC-02: no process.env mutation).
     ensureRehydrateMock.mockImplementation(async () => {
-      process.env.MCP_AUTH_TOKEN = "backfilled-from-upstash-64chars-hex-placeholder-aa11";
-      process.env.ADMIN_AUTH_TOKEN = process.env.MCP_AUTH_TOKEN;
+      edgeTokenCache = "backfilled-from-upstash-64chars-hex-placeholder-aa11";
     });
 
-    // Authenticated request — cookie matches token. Without the
-    // rehydrate, isFirstTimeSetup would be true and the middleware
-    // would redirect to /welcome.
+    // Authenticated request — cookie matches token. Without the fix,
+    // proxy.ts ignores the edge cache and isFirstTimeSetup === true,
+    // redirecting to /welcome.
     const req = makeRequest("https://test.local/config", {
       cookie: "mymcp_admin_token=backfilled-from-upstash-64chars-hex-placeholder-aa11",
     });
@@ -197,5 +202,30 @@ describe("TEST-04 proxy() async rehydrate (BUG-09, BUG-10)", () => {
     const req = makeRequest("https://test.local/config");
     await proxy(req);
     expect(ensureRehydrateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses edge cache (not process.env) for isFirstTimeSetup — regression for SEC-02 wiring gap", async () => {
+    // This is the exact production scenario that caused the redirect loop:
+    // - KV-only deploy (no VERCEL_TOKEN auto-magic, no platform env var injection)
+    // - Token is in KV; ensureBootstrapRehydratedFromUpstash() populates the
+    //   edge cache but does NOT set process.env.MCP_AUTH_TOKEN (SEC-02).
+    // - process.env.MCP_AUTH_TOKEN stays undefined.
+    // Before the fix: isFirstTimeSetup === true → /config redirects to /welcome.
+    // After the fix: edgeBootstrapToken is consulted → isFirstTimeSetup === false.
+    const TOKEN = "kv-only-token-64chars-hex-regression-test-placeholder-bb22";
+
+    ensureRehydrateMock.mockImplementation(async () => {
+      edgeTokenCache = TOKEN;
+      // process.env is intentionally NOT set — that's the whole point.
+    });
+
+    const req = makeRequest("https://test.local/config", {
+      cookie: `kebab_admin_token=${TOKEN}`,
+    });
+    const res = await proxy(req);
+
+    const loc = res.headers.get("location") ?? "";
+    expect(loc).not.toContain("/welcome");
+    expect(process.env.MCP_AUTH_TOKEN).toBeUndefined();
   });
 });

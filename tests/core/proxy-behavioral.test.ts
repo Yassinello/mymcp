@@ -36,6 +36,7 @@ describe("Phase 50 / COV-03 — proxy.ts middleware behavioral coverage", () => 
     rehydrateMock = vi.fn(async () => undefined);
     vi.doMock("@/core/first-run-edge", () => ({
       ensureBootstrapRehydratedFromUpstash: rehydrateMock,
+      getEdgeBootstrapAuthToken: (): string | null => null,
     }));
 
     // Clean process.env for each test — each test sets its own shape.
