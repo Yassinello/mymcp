@@ -1,0 +1,538 @@
+/**
+ * Bootstrap lifecycle: mint token, flush to KV, reset, rehydrate.
+ * Also owns getOrCreateClaim / isClaimer (they need activeBootstrap,
+ * so keeping them here avoids a circular import with claim.ts).
+ *
+ * This is the single source of truth for first-run bootstrap state.
+ * Claim crypto helpers live in ./claim.ts; observability in ./obs.ts.
+ */
+
+import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { getKVStore } from "../kv-store";
+import {
+  rotateSigningSecret,
+  SigningSecretUnavailableError,
+} from "../signing-secret";
+import { hasUpstashCreds } from "../upstash-env";
+import { getLogger } from "../logging";
+import { withSpan } from "../tracing";
+import { toMsg } from "../error-utils";
+import { claims, encodeCookie, readClaimCookie, CLAIM_TTL_MS } from "./claim";
+import type { ClaimResult } from "./claim";
+import { recordRehydrateSuccess } from "./obs";
+
+// Re-export for downstream consumers (tests, barrel).
+export { SigningSecretUnavailableError };
+
+const firstRunLog = getLogger("FIRST-RUN");
+
+// Note: the v0.10 tenant-prefix migration trigger lives in
+// `src/core/with-bootstrap-rehydrate.ts` (DUR-02).
+
+const KV_BOOTSTRAP_KEY = "mymcp:firstrun:bootstrap";
+const BOOTSTRAP_TTL_MS = 15 * 60 * 1000; // 15 minutes (Vercel /tmp lifetime)
+const BOOTSTRAP_PATH = join(tmpdir(), ".mymcp-bootstrap.json");
+
+interface BootstrapPayload {
+  claimId: string;
+  token: string;
+  createdAt: number;
+}
+
+// Module-level state. Reset on cold start; hydrated from /tmp where possible.
+let activeBootstrap: BootstrapPayload | null = null;
+
+/**
+ * SEC-02: in-memory mirror of the minted MCP_AUTH_TOKEN. Replaces the
+ * pre-v0.10 practice of mutating `process.env.MCP_AUTH_TOKEN` at
+ * request time, which was racy on warm lambdas. `checkMcpAuth` consults
+ * this cache via `getBootstrapAuthToken()` before falling back to the
+ * boot-time env snapshot.
+ */
+let bootstrapAuthTokenCache: string | null = null;
+
+/**
+ * KV is OPTIONAL. The factory in kv-store.ts always returns *something*
+ * (filesystem fallback) but for cross-instance persistence we only want
+ * a backend that's actually shared across instances. On Vercel without
+ * Upstash, the kv-store fallback is /tmp — which gives no benefit over
+ * the bootstrap /tmp file we already write. So we skip mirroring there.
+ * Off-Vercel we mirror to ./data/kv.json (genuinely durable + shared).
+ */
+function isExternalKvAvailable(): boolean {
+  if (hasUpstashCreds()) return true;
+  if (process.env.VERCEL !== "1") return true;
+  return false;
+}
+
+// DUR-04: `persistBootstrapToKv(...)` (fire-and-forget KV writer) was
+// removed along with its sole caller in `bootstrapToken()`. The
+// authoritative cross-instance persistence is `flushBootstrapToKv()`
+// below, which route handlers await before responding so the lambda
+// reaper cannot kill the write mid-flight.
+
+async function loadBootstrapFromKv(): Promise<BootstrapPayload | null> {
+  if (!isExternalKvAvailable()) return null;
+  try {
+    const kv = getKVStore();
+    const raw = await kv.get(KV_BOOTSTRAP_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as BootstrapPayload;
+    if (!parsed?.claimId || !parsed?.token || !parsed?.createdAt) return null;
+    // No TTL check: KV is durable, unlike /tmp. The BOOTSTRAP_TTL_MS was
+    // sized to match Vercel's /tmp container lifetime (~15 min), which
+    // makes sense there but would punish any cold lambda that wakes up
+    // >15 min after the user minted their token — the KV bootstrap is
+    // the authoritative, permanent record of "this instance is set up"
+    // on no-auto-magic deploys, and we want it to restore
+    // `process.env.MCP_AUTH_TOKEN` regardless of age. forceReset() is
+    // the explicit path for invalidating a bootstrap (delete /tmp +
+    // delete KV key + clear in-memory state).
+    return parsed;
+  } catch (err) {
+    console.info(`[Kebab MCP first-run] KV load skipped: ${toMsg(err)}`);
+    return null;
+  }
+}
+
+async function deleteBootstrapFromKv(): Promise<void> {
+  if (!isExternalKvAvailable()) return;
+  try {
+    const kv = getKVStore();
+    await kv.delete(KV_BOOTSTRAP_KEY);
+  } catch (err) {
+    console.info(`[Kebab MCP first-run] KV delete skipped: ${toMsg(err)}`);
+  }
+}
+
+// ── Prune helper ─────────────────────────────────────────────────────────────
+
+function pruneExpired(): void {
+  const now = Date.now();
+  for (const [id, rec] of claims.entries()) {
+    if (now - rec.createdAt > CLAIM_TTL_MS) claims.delete(id);
+  }
+  if (activeBootstrap && Date.now() - activeBootstrap.createdAt > BOOTSTRAP_TTL_MS) {
+    activeBootstrap = null;
+  }
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Returns the in-memory bootstrap auth token, if any. Consumed by
+ * `checkMcpAuth` so a bootstrap-minted token is recognized on the
+ * current warm lambda without mutating global state.
+ */
+export function getBootstrapAuthToken(): string | null {
+  return bootstrapAuthTokenCache;
+}
+
+/** True when this instance is operating without a real MCP_AUTH_TOKEN. */
+export function isFirstRunMode(): boolean {
+  // Either the boot env has the token (permanent), or the in-memory
+  // bootstrap cache has it (transient, this warm lambda), or we really
+  // are in first-run mode.
+  return !process.env.MCP_AUTH_TOKEN && !bootstrapAuthTokenCache;
+}
+
+/** True when MCP_AUTH_TOKEN comes from our in-memory bootstrap, not Vercel env. */
+export function isBootstrapActive(): boolean {
+  pruneExpired();
+  return activeBootstrap !== null;
+}
+
+/**
+ * Bootstrap state as seen by observers (/api/health, /api/admin/status).
+ * - `active` — process has a real or bootstrap-minted MCP_AUTH_TOKEN
+ * - `pending` — first-run mode, no token yet
+ * - `error`  — reserved for future use when rehydrate fails persistently
+ */
+export function getBootstrapState(): "pending" | "active" | "error" {
+  if (isFirstRunMode()) return "pending";
+  return "active";
+}
+
+/**
+ * Get the existing claim (if the request carries a valid claim cookie) or
+ * create a new one. Only ONE active claim is allowed at a time — first writer
+ * wins, second visitor is told the instance is locked.
+ *
+ * Async as of v0.10 (SEC-04): the HMAC signing secret is now KV-persisted
+ * and read at verify/mint time.
+ */
+export async function getOrCreateClaim(request: Request): Promise<ClaimResult> {
+  pruneExpired();
+
+  const existingId = await readClaimCookie(request);
+  if (existingId && claims.has(existingId)) {
+    return { claimId: existingId, isNewClaim: false, isClaimer: true };
+  }
+
+  // Cookie present but no in-memory record (cold start). If the bootstrap
+  // /tmp file matches, treat them as the claimer.
+  if (existingId && activeBootstrap?.claimId === existingId) {
+    return { claimId: existingId, isNewClaim: false, isClaimer: true };
+  }
+
+  // If another claim is already active and unexpired, refuse to mint another.
+  if (claims.size > 0) {
+    const otherId = claims.keys().next().value as string;
+    return { claimId: otherId, isNewClaim: false, isClaimer: false };
+  }
+
+  const claimId = randomBytes(32).toString("hex");
+  claims.set(claimId, { createdAt: Date.now() });
+  console.info(`[Kebab MCP first-run] new claim minted (id=${claimId.slice(0, 8)}…)`);
+  return {
+    claimId,
+    isNewClaim: true,
+    isClaimer: true,
+    cookieToSet: await encodeCookie(claimId),
+  };
+}
+
+/**
+ * True if the request carries a valid first-run claim cookie.
+ *
+ * As of v0.10 (SEC-04) the cookie is HMAC-signed with a random 32-byte
+ * secret persisted in KV at `mymcp:firstrun:signing-secret`. A valid
+ * signature is proof the bearer received the cookie from
+ * `/api/welcome/claim` on this deployment. The in-memory `claims` Map and
+ * `activeBootstrap` are hot-path hints — on serverless platforms without
+ * Upstash, cold lambdas have neither, and the original "must match
+ * in-memory state" check would reject every cross-lambda welcome call
+ * with 403. "First writer wins" is still enforced at cookie issuance
+ * time by `getOrCreateClaim`.
+ *
+ * Rotation: `MYMCP_RECOVERY_RESET=1` now rotates the signing secret via
+ * `rotateSigningSecret()` (called from `rehydrateBootstrapFromTmp`), so
+ * any pre-reset cookies no longer verify. This closes SEC-05.
+ *
+ * Async as of v0.10 because the signing secret is KV-backed.
+ */
+export async function isClaimer(request: Request): Promise<boolean> {
+  pruneExpired();
+  return (await readClaimCookie(request)) !== null;
+}
+
+/**
+ * Generate the user's permanent token, mutate process.env, persist to /tmp.
+ * Idempotent: calling twice with the same claimId returns the existing token.
+ *
+ * KV persistence is fire-and-forget here so the function stays sync for
+ * test callers. Production code paths that need cross-lambda durability
+ * (the welcome init endpoint) MUST also call `flushBootstrapToKv()` and
+ * await it before returning the response — otherwise Vercel reaps the
+ * lambda after the response is sent and the in-flight Upstash SET is
+ * cancelled mid-write, leaving the KV bootstrap key empty and every
+ * cold lambda after that thinking the instance is uninitialized.
+ */
+export function bootstrapToken(claimId: string): { token: string } {
+  pruneExpired();
+
+  if (activeBootstrap?.claimId === claimId) {
+    return { token: activeBootstrap.token };
+  }
+
+  const token = randomBytes(32).toString("hex");
+  // SEC-02: store in module-scope cache instead of process.env so
+  // concurrent requests don't observe mid-write torn state. The
+  // transport's checkMcpAuth consults getBootstrapAuthToken() before
+  // the boot-env snapshot.
+  bootstrapAuthTokenCache = token;
+
+  activeBootstrap = { claimId, token, createdAt: Date.now() };
+
+  let persisted = false;
+  // silent-swallow-ok: /tmp may be read-only in some containers (Fly, Cloud Run sandbox); /tmp is a warm-path optimization — in-memory cache + KV are the authoritative state
+  try {
+    writeFileSync(BOOTSTRAP_PATH, JSON.stringify(activeBootstrap), { encoding: "utf-8" });
+    persisted = true;
+  } catch {
+    // Read-only filesystem — fall back to in-memory + KV.
+  }
+
+  // DUR-04: the previous `void persistBootstrapToKv(activeBootstrap)`
+  // here was the root cause of one of the 2026-04-20 session's bugs —
+  // Vercel's lambda reaper killed the fire-and-forget write before it
+  // landed in Upstash. The authoritative cross-instance persistence is
+  // `flushBootstrapToKv()`, awaited by welcome/init before responding
+  // (see app/api/welcome/init/route.ts). Keeping a parallel fire-and-
+  // forget call here added nothing and reliably lost the race.
+
+  console.info(
+    `[Kebab MCP first-run] bootstrap token minted (claim=${claimId.slice(0, 8)}…, persisted=${persisted})`
+  );
+  return { token };
+}
+
+/**
+ * Synchronously-callable counterpart that production endpoints await
+ * after `bootstrapToken()` so the KV write is durable before the lambda
+ * is reaped. No-op when there's nothing to persist (e.g. test paths
+ * without an active bootstrap).
+ *
+ * Unlike the fire-and-forget `persistBootstrapToKv` inside
+ * `bootstrapToken()`, this variant propagates failures — if the Upstash
+ * SET itself fails (rate limit, auth error, network), the caller gets a
+ * thrown error instead of silent "welcome looked fine, but /api/mcp
+ * returns 503 forever". Init surfaces this to the UI as a visible
+ * failure so the user can retry rather than save a doomed token.
+ */
+export async function flushBootstrapToKv(): Promise<void> {
+  if (!activeBootstrap) return;
+  if (!isExternalKvAvailable()) return;
+  const kv = getKVStore();
+  await kv.set(KV_BOOTSTRAP_KEY, JSON.stringify(activeBootstrap));
+}
+
+/**
+ * SETNX variant of `flushBootstrapToKv()` (Phase 45 Task 9 / UX-04).
+ *
+ * Atomic: if the KV bootstrap key already holds a value, this call
+ * returns `{ ok: false, reason: "already_minted", existing }` without
+ * overwriting. The welcome-init handler uses the result to surface a
+ * 409 to the losing minter when two browsers share a claim cookie.
+ *
+ * Backend behavior:
+ *   - Upstash: native `SET key value NX EX` (single atomic command).
+ *   - Filesystem: serialized read-then-write under the store's
+ *     write queue; single-process dev only. Production always uses
+ *     Upstash, so the filesystem path's cross-process race window
+ *     is a non-issue.
+ *   - Memory: Map.has guard (in-process only; each lambda has its
+ *     own memory store — Upstash still arbitrates cross-lambda).
+ *
+ * Returns ok=true when the caller is the winner and the winner's
+ * bootstrap is now in KV; returns ok=false with the existing value
+ * otherwise. The caller is responsible for translating ok=false into
+ * a visible error (the handler does not leak the winner's token
+ * into the 409 response body).
+ *
+ * Degraded-mode contract (authoritative table lives in
+ * docs/HOSTING.md#degraded-mode-contract):
+ *   - Upstash (production): atomic SET NX EX — cross-lambda safe.
+ *   - FilesystemKV (Docker, single-process dev): serialized via the
+ *     store's write queue. Covers in-process concurrent requests;
+ *     cross-process races require Upstash.
+ *   - MemoryKV (test / ephemeral Node): Map.has guard — in-process
+ *     only; each lambda has its own memory store, so production on
+ *     MemoryKV is NOT safe for cross-lambda races.
+ *   - No external KV configured (isExternalKvAvailable() === false):
+ *     unprotected race window. Acceptable for single-process local
+ *     dev; NOT acceptable for production.
+ *
+ * @see docs/HOSTING.md#degraded-mode-contract
+ */
+export async function flushBootstrapToKvIfAbsent(): Promise<
+  { ok: true } | { ok: false; reason: "already_minted"; existing: BootstrapPayload | null }
+> {
+  if (!activeBootstrap) return { ok: true };
+  if (!isExternalKvAvailable()) return { ok: true };
+  const kv = getKVStore();
+  if (typeof kv.setIfNotExists !== "function") {
+    // Backend doesn't advertise SETNX — fall back to the non-atomic
+    // `set()` path. This mirrors the pre-UX-04 contract so deploys
+    // on exotic backends don't hard-fail; they just lose the race
+    // detection. Log so the operator sees the gap.
+    await kv.set(KV_BOOTSTRAP_KEY, JSON.stringify(activeBootstrap));
+    return { ok: true };
+  }
+  const result = await kv.setIfNotExists(KV_BOOTSTRAP_KEY, JSON.stringify(activeBootstrap));
+  if (result.ok) return { ok: true };
+  let existing: BootstrapPayload | null;
+  // silent-swallow-ok: SETNX-loser branch; the raw KV value could not be parsed as BootstrapPayload, so we treat it as an opaque "someone else minted" and return the loser path with existing=null — caller surfaces 409 regardless
+  try {
+    existing = JSON.parse(result.existing) as BootstrapPayload;
+  } catch {
+    existing = null;
+  }
+  // Idempotent-retry: if the existing entry's claimId matches the
+  // current active bootstrap, this caller already minted successfully
+  // on a previous request (warm-lambda retry, double-click, proxy
+  // retry). Treat as success and re-adopt the winner's token into the
+  // in-memory cache (harmless when they match; corrective if the
+  // caller's process memory was wiped).
+  if (existing && existing.claimId === activeBootstrap.claimId) {
+    activeBootstrap = existing;
+    bootstrapAuthTokenCache = existing.token;
+    return { ok: true };
+  }
+  // Genuine race — restore the in-memory cache to the winner so the
+  // loser lambda doesn't serve its own (now-dead) token to any
+  // subsequent warm request. The loser's HTTP handler will surface a
+  // 409 to the user.
+  if (existing) {
+    activeBootstrap = existing;
+    bootstrapAuthTokenCache = existing.token;
+  }
+  return { ok: false, reason: "already_minted", existing };
+}
+
+/**
+ * Force-clear all bootstrap state (in-memory + on-disk). Distinct from
+ * clearBootstrap() in that it logs loudly — used by the recovery escape hatch.
+ */
+export function forceReset(): void {
+  activeBootstrap = null;
+  bootstrapAuthTokenCache = null;
+  claims.clear();
+  // silent-swallow-ok: recovery-reset cleanup; missing /tmp file is the success case, not a failure
+  try {
+    if (existsSync(BOOTSTRAP_PATH)) unlinkSync(BOOTSTRAP_PATH);
+  } catch {
+    // Best-effort unlink.
+  }
+  // fire-and-forget OK: recovery cleanup of KV bootstrap key; caller does not depend on KV ack
+  void deleteBootstrapFromKv();
+  console.info("[Kebab MCP first-run] forceReset() called — bootstrap state cleared");
+}
+
+/** Re-hydrate bootstrap state from /tmp on cold start. */
+export function rehydrateBootstrapFromTmp(): void {
+  if (process.env.MYMCP_RECOVERY_RESET === "1") {
+    forceReset();
+    // SEC-05: rotate the signing secret so pre-reset claim cookies no
+    // longer verify.
+    // fire-and-forget OK: recovery reset; signing-secret rotation is idempotent and safe to retry
+    void rotateSigningSecret().catch((err: unknown) => {
+      console.info(`[Kebab MCP first-run] rotateSigningSecret skipped: ${toMsg(err)}`);
+    });
+    console.warn(
+      "[Kebab MCP first-run] MYMCP_RECOVERY_RESET=1 detected — bootstrap reset and signing secret rotated. Remove the env var after recovery."
+    );
+    return;
+  }
+  // silent-swallow-ok: a malformed or missing /tmp bootstrap is a normal cold-start / first-run state; caller proceeds to KV rehydrate
+  try {
+    if (!existsSync(BOOTSTRAP_PATH)) return;
+    const raw = readFileSync(BOOTSTRAP_PATH, "utf-8");
+    const parsed = JSON.parse(raw) as BootstrapPayload;
+    if (!parsed?.claimId || !parsed?.token || !parsed?.createdAt) return;
+    if (Date.now() - parsed.createdAt > BOOTSTRAP_TTL_MS) return;
+    activeBootstrap = parsed;
+    claims.set(parsed.claimId, { createdAt: parsed.createdAt });
+    if (!process.env.MCP_AUTH_TOKEN) {
+      // SEC-02: populate the in-memory cache, NOT process.env.
+      bootstrapAuthTokenCache = parsed.token;
+    }
+    console.info(
+      `[Kebab MCP first-run] re-hydrated bootstrap from /tmp (claim=${parsed.claimId.slice(0, 8)}…, age=${Math.round((Date.now() - parsed.createdAt) / 1000)}s)`
+    );
+  } catch {
+    // Treat malformed /tmp as missing — caller falls through to KV.
+  }
+}
+
+/** Clear all in-memory + on-disk bootstrap state. */
+export function clearBootstrap(): void {
+  activeBootstrap = null;
+  bootstrapAuthTokenCache = null;
+  claims.clear();
+  // silent-swallow-ok: clearBootstrap is an idempotent teardown; missing /tmp is the success state
+  try {
+    if (existsSync(BOOTSTRAP_PATH)) unlinkSync(BOOTSTRAP_PATH);
+  } catch {
+    // Best-effort unlink.
+  }
+  // fire-and-forget OK: recovery cleanup path; caller does not wait on KV ack
+  void deleteBootstrapFromKv();
+}
+
+/**
+ * Async re-hydration: first try /tmp (sync, fast path), then KV if /tmp
+ * came up empty. If KV had a payload that /tmp didn't, mirror it back to
+ * /tmp so the next cold start on this same instance hits the fast path.
+ *
+ * Handlers should call this at entry to pick up bootstrap state minted on
+ * a different cold-start instance. Cheap when KV is unconfigured (no-op).
+ *
+ * v0.10 DUR-02 fold-in: the one-shot tenant-prefix migration trigger used
+ * to live here as `void runV010TenantPrefixMigration().catch(() => {})`,
+ * which fired on every rehydrate call and made test-order dependent on a
+ * module-load disk-I/O side effect (ARCH-AUDIT §3). The trigger now lives
+ * in `withBootstrapRehydrate` (src/core/with-bootstrap-rehydrate.ts) with
+ * a one-shot module flag. Callers who rehydrate outside the HOC (tests,
+ * internal helpers) must invoke the migration directly if needed.
+ */
+export async function rehydrateBootstrapAsync(): Promise<void> {
+  // OBS-04 + Phase 50 / BRAND-03: wrap in kebab.bootstrap.rehydrate span
+  // when OTel is active. withSpan() normalizes via brandSpanName() and
+  // brand-namespaces attrs via brandSpanAttrs(). When tracing is
+  // disabled, withSpan is a pass-through (no allocation).
+  return withSpan("bootstrap.rehydrate", () => _rehydrateBootstrapAsyncImpl(), {
+    // Source attribute intentionally left `cold` — the trace is
+    // emitted once per lambda process on first call. If a future
+    // caller wants to distinguish cold/warm/forced, it can pass the
+    // attribute through a richer API (out of scope for Phase 38).
+    "bootstrap.source": "cold",
+  });
+}
+
+export async function _rehydrateBootstrapAsyncImpl(): Promise<void> {
+  rehydrateBootstrapFromTmp();
+  // OBS-02 design note: we only record a rehydrate event when the KV
+  // path actually did work (KV-hit below). The /tmp fast path runs on
+  // every auth-gated request via withBootstrapRehydrate — counting it
+  // would spam the counter with "hot lambda serving a normal request"
+  // events and defeat the diagnostic purpose (distinguishing cold
+  // starts that needed a KV roundtrip). Tests in src/core/first-run.test.ts
+  // assert this: after a /tmp hit, `kv.get` is NOT called for
+  // rehydrate-count bookkeeping.
+  if (activeBootstrap) return;
+  if (!isExternalKvAvailable()) return;
+  const fromKv = await loadBootstrapFromKv();
+  if (!fromKv) return;
+  activeBootstrap = fromKv;
+  claims.set(fromKv.claimId, { createdAt: fromKv.createdAt });
+  if (!process.env.MCP_AUTH_TOKEN) {
+    // SEC-02: populate the in-memory cache, NOT process.env.
+    bootstrapAuthTokenCache = fromKv.token;
+  }
+  // Mirror back to /tmp for warm-instance fast path.
+  // silent-swallow-ok: /tmp mirror is an optimization; KV is the source of truth
+  try {
+    writeFileSync(BOOTSTRAP_PATH, JSON.stringify(fromKv), { encoding: "utf-8" });
+  } catch {
+    // Read-only filesystem — KV remains authoritative.
+  }
+  console.info(
+    `[Kebab MCP first-run] re-hydrated bootstrap from KV (claim=${fromKv.claimId.slice(0, 8)}…)`
+  );
+  // fire-and-forget OK: observability metadata write; losing a sample does not affect correctness of the rehydrate
+  void recordRehydrateSuccess();
+}
+
+// ── Test helpers ──────────────────────────────────────────────────────────────
+
+/** Test-only helper. Resets all module-level state. */
+export function __resetFirstRunForTests(): void {
+  claims.clear();
+  activeBootstrap = null;
+  bootstrapAuthTokenCache = null;
+  // silent-swallow-ok: test-helper cleanup; missing /tmp is the success state
+  try {
+    if (existsSync(BOOTSTRAP_PATH)) unlinkSync(BOOTSTRAP_PATH);
+  } catch {
+    // Ignore absent /tmp file.
+  }
+  // fire-and-forget OK: test-helper cleanup; test runner awaits via __resetFirstRunForTestsAsync() when the KV ack actually matters
+  void deleteBootstrapFromKv();
+}
+
+/** Test-only helper. Awaitable variant — guarantees KV is cleared too. */
+export async function __resetFirstRunForTestsAsync(): Promise<void> {
+  __resetFirstRunForTests();
+  await deleteBootstrapFromKv();
+}
+
+// Test-only internals (not part of the public API).
+export const __internals = {
+  BOOTSTRAP_TTL_MS,
+  BOOTSTRAP_PATH,
+  encodeCookie,
+};
