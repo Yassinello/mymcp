@@ -12,12 +12,8 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getKVStore } from "../kv-store";
-import {
-  rotateSigningSecret,
-  SigningSecretUnavailableError,
-} from "../signing-secret";
+import { rotateSigningSecret, SigningSecretUnavailableError } from "../signing-secret";
 import { hasUpstashCreds } from "../upstash-env";
-import { getLogger } from "../logging";
 import { withSpan } from "../tracing";
 import { toMsg } from "../error-utils";
 import { claims, encodeCookie, readClaimCookie, CLAIM_TTL_MS } from "./claim";
@@ -26,8 +22,6 @@ import { recordRehydrateSuccess } from "./obs";
 
 // Re-export for downstream consumers (tests, barrel).
 export { SigningSecretUnavailableError };
-
-const firstRunLog = getLogger("FIRST-RUN");
 
 // Note: the v0.10 tenant-prefix migration trigger lives in
 // `src/core/with-bootstrap-rehydrate.ts` (DUR-02).

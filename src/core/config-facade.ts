@@ -325,6 +325,17 @@ export const ALLOWED_DIRECT_ENV_READS: ReadonlyArray<AllowedDirectEnvRead> = Obj
     reason: "first-run bootstrap pathway predates facade in module-load order",
   },
   {
+    file: "src/core/first-run/bootstrap.ts",
+    vars: ["VERCEL", "MCP_AUTH_TOKEN", "MYMCP_RECOVERY_RESET"],
+    reason: "first-run sub-module extracted from first-run.ts; same boot-path constraints apply",
+  },
+  {
+    file: "src/core/first-run/obs.ts",
+    vars: ["VERCEL"],
+    reason:
+      "first-run sub-module extracted from first-run.ts; isExternalKvAvailable() needs VERCEL at boot",
+  },
+  {
     file: "src/core/kv-store.ts",
     vars: ["VERCEL", "MYMCP_KV_PATH"],
     reason: "boot-time KVStore selection; facade lazy-imports this module",
