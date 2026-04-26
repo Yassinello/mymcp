@@ -9,6 +9,7 @@ import {
 import { errorResponse } from "@/core/error-response";
 import { getConfig } from "@/core/config-facade";
 import { getCredential } from "@/core/request-context";
+import { computeUpdateStatus, ghFetch } from "@/core/update-check";
 import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG } from "../../../landing/deploy-url";
 
 /**
@@ -78,65 +79,16 @@ function resolveRemote(): { ok: true; remote: string } | { ok: false; error: str
   return { ok: false, error: "No upstream or origin remote configured." };
 }
 
-// ── GitHub API fetch helper ────────────────────────────────────────────
-
-const GH_API_VERSION = "2022-11-28";
-const GH_ACCEPT = "application/vnd.github+json";
-
-interface GitHubFetchResult {
-  ok: boolean;
-  status: number;
-  data: unknown;
-  scopesHeader: string | null;
-}
-
-async function ghFetch(
-  path: string,
-  token: string,
-  options: { method?: string; body?: unknown } = {}
-): Promise<GitHubFetchResult> {
-  const res = await fetch(`https://api.github.com${path}`, {
-    method: options.method ?? "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: GH_ACCEPT,
-      "X-GitHub-Api-Version": GH_API_VERSION,
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-    },
-    ...(options.body ? { body: JSON.stringify(options.body) } : {}),
-  });
-  let data: unknown = null;
-  try {
-    data = await res.json();
-  } catch {
-    /* ignore */
-  }
-  return { ok: res.ok, status: res.status, data, scopesHeader: res.headers.get("x-oauth-scopes") };
-}
-
-// ── Breaking-change detection ──────────────────────────────────────────
-
-function detectBreaking(commits: Array<{ commit: { message: string } }>): {
-  breaking: boolean;
-  breakingReasons: string[];
-} {
-  const reasons: string[] = [];
-  const CONV_BANG = /^(?:feat|fix|refactor|perf|chore|docs|style|test|build|ci)!:/m;
-  const BREAK_FOOTER = /BREAKING CHANGE:/m;
-  for (const c of commits) {
-    const msg = c.commit.message;
-    if (CONV_BANG.test(msg)) reasons.push(msg.split("\n")[0]!.slice(0, 80));
-    else if (BREAK_FOOTER.test(msg)) reasons.push(msg.split("\n")[0]!.slice(0, 80));
-  }
-  return { breaking: reasons.length > 0, breakingReasons: reasons };
-}
-
 // ── GitHub API GET handler ─────────────────────────────────────────────
+//
+// GitHub Compare + breaking detection + ghFetch helper now live in
+// src/core/update-check.ts so the daily cron route (Phase 63 Plan 02) can
+// share the exact same logic. This route imports `computeUpdateStatus`
+// for GET and `ghFetch` for the POST merge-upstream path.
 
 async function githubApiGetHandler(): Promise<Response> {
   const owner = getConfig("VERCEL_GIT_REPO_OWNER")!;
   const slug = getConfig("VERCEL_GIT_REPO_SLUG")!;
-  const upstream = `${UPSTREAM_OWNER}:${UPSTREAM_REPO_SLUG}:main`;
 
   // Token resolution: dedicated PAT first, fallback GITHUB_TOKEN
   const token =
@@ -154,10 +106,12 @@ async function githubApiGetHandler(): Promise<Response> {
     });
   }
 
-  // Fetch fork visibility
-  const repoRes = await ghFetch(`/repos/${owner}/${slug}`, token);
-  if (!repoRes.ok) {
-    if (repoRes.status === 401 || repoRes.status === 403) {
+  // Delegate to the shared compute helper. The helper does NOT touch KV,
+  // auth, or credential hydration — that's the caller's job above.
+  const result = await computeUpdateStatus(token, owner, slug);
+
+  if (!result.ok) {
+    if (result.kind === "auth") {
       return NextResponse.json({
         mode: "github-api",
         available: false,
@@ -165,58 +119,15 @@ async function githubApiGetHandler(): Promise<Response> {
         tokenConfigured: true,
       });
     }
-    return errorResponse(new Error(`GitHub /repos lookup failed: ${repoRes.status}`), {
-      status: 502,
-      route: "config/update",
-    });
-  }
-  const repoData = repoRes.data as { private: boolean };
-  const forkPrivate = repoData.private ?? false;
-
-  // Compare fork HEAD with upstream
-  // BASE=upstream, HEAD=fork → response describes fork's position relative to upstream
-  // (status: "behind" + behind_by:N means fork is N commits behind upstream → updates available)
-  const compareRes = await ghFetch(`/repos/${owner}/${slug}/compare/${upstream}...main`, token);
-  if (!compareRes.ok) {
-    return errorResponse(new Error(`GitHub compare failed: ${compareRes.status}`), {
+    return errorResponse(new Error(`GitHub API failed: ${result.status}`), {
       status: 502,
       route: "config/update",
     });
   }
 
-  const cmp = compareRes.data as {
-    status: "ahead" | "behind" | "diverged" | "identical";
-    ahead_by: number;
-    behind_by: number;
-    total_commits: number;
-    commits: Array<{ sha: string; html_url: string; commit: { message: string } }>;
-    html_url: string;
-  };
-
-  const { breaking, breakingReasons } = detectBreaking(cmp.commits);
-  const displayCommits = [...cmp.commits]
-    .reverse()
-    .slice(0, 5)
-    .map((c) => ({
-      sha: c.sha.slice(0, 7),
-      message: c.commit.message.split("\n")[0]!.slice(0, 80),
-      url: c.html_url,
-    }));
-
-  return NextResponse.json({
-    mode: "github-api",
-    available: cmp.status === "behind",
-    behind_by: cmp.behind_by,
-    ahead_by: cmp.ahead_by,
-    status: cmp.status,
-    breaking,
-    breakingReasons,
-    commits: displayCommits,
-    totalCommits: cmp.total_commits,
-    diffUrl: cmp.html_url,
-    tokenConfigured: true,
-    forkPrivate,
-  });
+  // payload already carries `mode: "github-api"` and `checkedAt` (additive,
+  // non-breaking — pre-Phase-63 callers ignore unknown fields).
+  return NextResponse.json(result.payload);
 }
 
 // ── GitHub API POST handler ────────────────────────────────────────────
