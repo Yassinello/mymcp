@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { execSync } from "node:child_process";
-import { withAdminAuth } from "@/core/with-admin-auth";
+import {
+  composeRequestPipeline,
+  rehydrateStep,
+  authStep,
+  hydrateCredentialsStep,
+} from "@/core/pipeline";
 import { errorResponse } from "@/core/error-response";
 import { getConfig } from "@/core/config-facade";
 import { getCredential } from "@/core/request-context";
@@ -14,6 +19,19 @@ import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG } from "../../../landing/deploy-url"
  *   "git"        — local dev / Docker: uses git CLI (existing path, unchanged)
  *   "github-api" — Vercel fork with VERCEL_GIT_REPO_OWNER + VERCEL_GIT_REPO_SLUG: uses GitHub REST API
  *   "disabled"   — Vercel without owner/slug, or KEBAB_DISABLE_UPDATE_API=1
+ */
+
+/**
+ * Pipeline composition note (Phase 62, STAB-02):
+ *   This route uses an EXPLICIT pipeline rather than the `withAdminAuth`
+ *   HOC because it reads `KEBAB_UPDATE_PAT` / `GITHUB_TOKEN` via
+ *   `getCredential()`. `withAdminAuth` does NOT include
+ *   `hydrateCredentialsStep`, so a PAT saved via /api/config/env
+ *   (which writes to `cred:*` KV) would be invisible here. We add
+ *   `hydrateCredentialsStep` per-route — extending `withAdminAuth`
+ *   itself was rejected (D-08): adds KV-read latency to 30+ admin
+ *   routes that don't need credentials. Per-route opt-in is cleaner.
+ *   See .planning/phases/062-stabilize-phase-61/062-CONTEXT.md.
  */
 
 // ── Mode resolution ────────────────────────────────────────────────────
@@ -416,5 +434,11 @@ async function postHandler() {
   });
 }
 
-export const GET = withAdminAuth(getHandler);
-export const POST = withAdminAuth(postHandler);
+export const GET = composeRequestPipeline(
+  [rehydrateStep, authStep("admin"), hydrateCredentialsStep],
+  getHandler
+);
+export const POST = composeRequestPipeline(
+  [rehydrateStep, authStep("admin"), hydrateCredentialsStep],
+  postHandler
+);
