@@ -11,10 +11,15 @@
  * W3 fix: uses `vi.useFakeTimers({ toFake: ["Date"] })` so the
  * 30s debounce assertion is deterministic — only the Date constructor
  * is faked, microtasks (used by RTL waitFor) stay real.
+ *
+ * URL-based fetch mock pattern: OverviewTab renders HealthWidget,
+ * ConnectorHealthWidget, RateLimitsWidget — each fires its own fetch.
+ * We route every URL to a stub response and only count/assert on
+ * /api/config/update calls.
  */
 /// <reference lib="dom" />
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { OverviewTab } from "@/../app/config/tabs/overview";
 
@@ -32,8 +37,84 @@ function defaultProps() {
   };
 }
 
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+/**
+ * Build a fetch mock that handles widget noise and routes
+ * /api/config/update calls to the supplied generator (one body per
+ * call, in order). Returns the mock + a counter of update calls.
+ */
+function mockFetchRouter(updateBodies: unknown[], options?: { hangSecondCall?: boolean }) {
+  let updateCallIndex = 0;
+  const updateCalls: Array<string | URL | Request> = [];
+  let hangResolver: ((v: Response) => void) | undefined;
+
+  const fn = vi.fn((input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : ((input as Request).url ?? String(input));
+
+    // /api/config/update routes — assert against these
+    if (url.includes("/api/config/update")) {
+      updateCalls.push(input);
+      const idx = updateCallIndex++;
+      if (options?.hangSecondCall && idx === 1) {
+        return new Promise<Response>((resolve) => {
+          hangResolver = resolve;
+        });
+      }
+      const body = updateBodies[idx] ?? { mode: "github-api", available: false };
+      return Promise.resolve(jsonResponse(body));
+    }
+
+    // Widget endpoints — return permissive empty bodies that match
+    // each widget's expected shape so the widgets settle without errors.
+    if (url.includes("/api/config/health")) {
+      // HealthWidget shape
+      return Promise.resolve(
+        jsonResponse({
+          ok: true,
+          tokenStatus: "permanent",
+          isVercel: false,
+          vercelAutoMagicAvailable: false,
+          instanceUrl: "http://localhost",
+        })
+      );
+    }
+    if (url.includes("/api/admin/health-history")) {
+      // ConnectorHealthWidget shape — empty array → "empty" state
+      return Promise.resolve(jsonResponse([]));
+    }
+    if (url.includes("/api/admin/rate-limits")) {
+      // RateLimitsWidget shape
+      return Promise.resolve(jsonResponse({ scopes: [] }));
+    }
+    if (url.includes("/api/health")) {
+      return Promise.resolve(
+        jsonResponse({
+          ok: true,
+          version: "0.15.0",
+          bootstrap: { state: "active" },
+          kv: { reachable: true, lastRehydrateAt: null },
+        })
+      );
+    }
+
+    // Default — empty success (catches any other unexpected fetches)
+    return Promise.resolve(jsonResponse({}));
+  });
+
+  return {
+    fn,
+    updateCalls,
+    resolveHang: (body: unknown) => hangResolver?.(jsonResponse(body)),
+  };
+}
+
 describe("OverviewTab Refresh icon (CRON-03)", () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
   const NOW = new Date("2026-04-26T12:00:00Z").getTime();
 
   beforeEach(() => {
@@ -42,10 +123,9 @@ describe("OverviewTab Refresh icon (CRON-03)", () => {
     // (React Testing Library's waitFor uses real microtasks).
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(NOW);
-    fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(() => {
+    cleanup(); // unmount React tree between tests so duplicate buttons don't leak
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -53,25 +133,23 @@ describe("OverviewTab Refresh icon (CRON-03)", () => {
 
   it("renders 'checked Xh ago' indicator and Refresh button when checkedAt is present", async () => {
     const oneHourAgo = new Date(NOW - 60 * 60_000).toISOString();
-    // Initial GET /api/config/update returns up-to-date with checkedAt
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          mode: "github-api",
-          available: false,
-          behind_by: 0,
-          ahead_by: 0,
-          status: "identical",
-          breaking: false,
-          breakingReasons: [],
-          commits: [],
-          totalCommits: 0,
-          tokenConfigured: true,
-          forkPrivate: false,
-          checkedAt: oneHourAgo,
-        })
-      )
-    );
+    const router = mockFetchRouter([
+      {
+        mode: "github-api",
+        available: false,
+        behind_by: 0,
+        ahead_by: 0,
+        status: "identical",
+        breaking: false,
+        breakingReasons: [],
+        commits: [],
+        totalCommits: 0,
+        tokenConfigured: true,
+        forkPrivate: false,
+        checkedAt: oneHourAgo,
+      },
+    ]);
+    vi.stubGlobal("fetch", router.fn);
 
     render(<OverviewTab {...defaultProps()} />);
 
@@ -84,43 +162,25 @@ describe("OverviewTab Refresh icon (CRON-03)", () => {
 
   it("clicking Refresh fetches /api/config/update?force=1", async () => {
     const oneHourAgo = new Date(NOW - 60 * 60_000).toISOString();
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          mode: "github-api",
-          available: false,
-          behind_by: 0,
-          ahead_by: 0,
-          status: "identical",
-          breaking: false,
-          breakingReasons: [],
-          commits: [],
-          totalCommits: 0,
-          tokenConfigured: true,
-          forkPrivate: false,
-          checkedAt: oneHourAgo,
-        })
-      )
-    );
-    // Second call (refresh) — fresh response
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          mode: "github-api",
-          available: false,
-          behind_by: 0,
-          ahead_by: 0,
-          status: "identical",
-          breaking: false,
-          breakingReasons: [],
-          commits: [],
-          totalCommits: 0,
-          tokenConfigured: true,
-          forkPrivate: false,
-          checkedAt: new Date(NOW).toISOString(),
-        })
-      )
-    );
+    const sharedBody = {
+      mode: "github-api",
+      available: false,
+      behind_by: 0,
+      ahead_by: 0,
+      status: "identical",
+      breaking: false,
+      breakingReasons: [],
+      commits: [],
+      totalCommits: 0,
+      tokenConfigured: true,
+      forkPrivate: false,
+      checkedAt: oneHourAgo,
+    };
+    const router = mockFetchRouter([
+      sharedBody,
+      { ...sharedBody, checkedAt: new Date(NOW).toISOString() },
+    ]);
+    vi.stubGlobal("fetch", router.fn);
 
     render(<OverviewTab {...defaultProps()} />);
 
@@ -128,40 +188,33 @@ describe("OverviewTab Refresh icon (CRON-03)", () => {
     fireEvent.click(btn);
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(router.updateCalls.length).toBe(2);
     });
-    const secondCallUrl = fetchMock.mock.calls[1]![0] as string;
+    const secondCallUrl =
+      typeof router.updateCalls[1] === "string"
+        ? router.updateCalls[1]
+        : String(router.updateCalls[1]);
     expect(secondCallUrl).toContain("/api/config/update?force=1");
   });
 
   it("disables the Refresh button while a refresh is in-flight", async () => {
     const oneHourAgo = new Date(NOW - 60 * 60_000).toISOString();
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          mode: "github-api",
-          available: false,
-          behind_by: 0,
-          ahead_by: 0,
-          status: "identical",
-          breaking: false,
-          breakingReasons: [],
-          commits: [],
-          totalCommits: 0,
-          tokenConfigured: true,
-          forkPrivate: false,
-          checkedAt: oneHourAgo,
-        })
-      )
-    );
-    // Second fetch hangs forever — button must remain disabled
-    let resolveSecond: ((v: Response) => void) | undefined;
-    fetchMock.mockImplementationOnce(
-      () =>
-        new Promise<Response>((resolve) => {
-          resolveSecond = resolve;
-        })
-    );
+    const sharedBody = {
+      mode: "github-api",
+      available: false,
+      behind_by: 0,
+      ahead_by: 0,
+      status: "identical",
+      breaking: false,
+      breakingReasons: [],
+      commits: [],
+      totalCommits: 0,
+      tokenConfigured: true,
+      forkPrivate: false,
+      checkedAt: oneHourAgo,
+    };
+    const router = mockFetchRouter([sharedBody, sharedBody], { hangSecondCall: true });
+    vi.stubGlobal("fetch", router.fn);
 
     render(<OverviewTab {...defaultProps()} />);
 
@@ -173,19 +226,15 @@ describe("OverviewTab Refresh icon (CRON-03)", () => {
     });
     // Second click should NOT trigger a third fetch (frozen clock keeps debounce active)
     fireEvent.click(btn);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(router.updateCalls.length).toBe(2);
 
     // Cleanup: resolve the hung promise so the test runner doesn't leak
-    resolveSecond?.(
-      new Response(
-        JSON.stringify({
-          mode: "github-api",
-          available: false,
-          status: "identical",
-          checkedAt: new Date(NOW).toISOString(),
-          tokenConfigured: true,
-        })
-      )
-    );
+    router.resolveHang({
+      mode: "github-api",
+      available: false,
+      status: "identical",
+      checkedAt: new Date(NOW).toISOString(),
+      tokenConfigured: true,
+    });
   });
 });

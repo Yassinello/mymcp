@@ -7,6 +7,7 @@ import { HealthWidget } from "./health-widget";
 import { ConnectorHealthWidget } from "./connector-health";
 import { RateLimitsWidget } from "./rate-limits-widget";
 import { toMsg } from "@/core/error-utils";
+import { formatRelativeTime } from "@/core/relative-time";
 
 type UpdateStatus =
   | { state: "loading" }
@@ -30,6 +31,7 @@ type UpdateStatus =
       diffUrl?: string;
       tokenConfigured?: boolean;
       forkPrivate?: boolean;
+      checkedAt?: string; // CRON-03: ISO timestamp from KV cache or fresh fetch
     }
   | { state: "no-token"; configureUrl: string }
   | { state: "disabled"; reason: string }
@@ -69,6 +71,9 @@ export function OverviewTab({
   const [result, setResult] = useState<UpdateResult>({ state: "idle" });
   const [cacheClearing, setCacheClearing] = useState(false);
   const [cacheResult, setCacheResult] = useState<string | null>(null);
+  // CRON-03: Refresh button state — debounce per D-13 (30s after click)
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshDisabledUntil, setRefreshDisabledUntil] = useState<number>(0);
 
   useEffect(() => {
     fetch("/api/config/update", { credentials: "include" })
@@ -103,6 +108,7 @@ export function OverviewTab({
             ...(diffUrl !== undefined ? { diffUrl } : {}),
             tokenConfigured: !!d.tokenConfigured,
             forkPrivate: !!d.forkPrivate,
+            ...(typeof d.checkedAt === "string" ? { checkedAt: d.checkedAt } : {}),
           });
           return;
         }
@@ -120,6 +126,51 @@ export function OverviewTab({
       })
       .catch((err) => setUpdate({ state: "error", error: toMsg(err) }));
   }, []);
+
+  // CRON-03: 30s debounce after click (D-13) — prevents GitHub API spam.
+  const REFRESH_DEBOUNCE_MS = 30_000;
+
+  const refreshUpdate = async () => {
+    if (refreshing) return;
+    if (Date.now() < refreshDisabledUntil) return;
+    setRefreshing(true);
+    setRefreshDisabledUntil(Date.now() + REFRESH_DEBOUNCE_MS);
+    try {
+      const res = await fetch("/api/config/update?force=1", { credentials: "include" });
+      const d = (await res.json()) as Record<string, unknown>;
+      if (d.disabled) {
+        setUpdate({ state: "disabled", reason: d.disabled as string });
+      } else if (d.mode === "github-api" && d.reason === "no-token") {
+        setUpdate({
+          state: "no-token",
+          configureUrl: (d.configureUrl as string) || "/config?tab=settings&sub=advanced",
+        });
+      } else if (d.mode === "github-api") {
+        const diffUrl = d.diffUrl as string | undefined;
+        const checkedAt = d.checkedAt as string | undefined;
+        setUpdate({
+          state: "ready",
+          mode: "github-api",
+          available: !!d.available,
+          behind_by: (d.behind_by as number) || 0,
+          ahead_by: (d.ahead_by as number) || 0,
+          status: (d.status as "identical" | "behind" | "ahead" | "diverged") || "identical",
+          breaking: !!d.breaking,
+          breakingReasons: (d.breakingReasons as string[]) || [],
+          commits: (d.commits as Array<{ sha: string; message: string; url: string }>) || [],
+          totalCommits: (d.totalCommits as number) || 0,
+          ...(diffUrl !== undefined ? { diffUrl } : {}),
+          tokenConfigured: !!d.tokenConfigured,
+          forkPrivate: !!d.forkPrivate,
+          ...(checkedAt !== undefined ? { checkedAt } : {}),
+        });
+      }
+    } catch (err) {
+      setUpdate({ state: "error", error: toMsg(err) });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const pullUpdates = async () => {
     setResult({ state: "pulling" });
@@ -270,6 +321,44 @@ export function OverviewTab({
           </div>
         )}
 
+      {/* Update banner — up to date (with freshness indicator + refresh) — CRON-03 */}
+      {update.state === "ready" &&
+        update.mode === "github-api" &&
+        update.status === "identical" &&
+        update.checkedAt && (
+          <div className="border border-border bg-bg-muted/30 rounded-lg p-3 flex items-center gap-3">
+            <span className="text-xs text-text-dim flex-1">
+              Up to date with upstream — checked {formatRelativeTime(update.checkedAt)}
+            </span>
+            <button
+              type="button"
+              onClick={refreshUpdate}
+              disabled={refreshing || Date.now() < refreshDisabledUntil}
+              aria-label="Refresh update check"
+              className="text-text-muted hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title={refreshing ? "Refreshing..." : "Refresh"}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={refreshing ? "animate-spin" : ""}
+              >
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+            </button>
+          </div>
+        )}
+
       {/* Update banner — updates available */}
       {update.state === "ready" &&
         update.available &&
@@ -295,6 +384,39 @@ export function OverviewTab({
                     ? `New commits on upstream/main`
                     : `New commits on ${update.remote}/main${update.latest ? ` (latest: ${update.latest})` : ""}`}
                 </p>
+                {update.checkedAt && (
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-[11px] text-text-muted">
+                      checked {formatRelativeTime(update.checkedAt)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={refreshUpdate}
+                      disabled={refreshing || Date.now() < refreshDisabledUntil}
+                      aria-label="Refresh update check"
+                      className="text-text-muted hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      title={refreshing ? "Refreshing..." : "Refresh"}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={refreshing ? "animate-spin" : ""}
+                      >
+                        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                        <path d="M21 3v5h-5" />
+                        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                        <path d="M3 21v-5h5" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
                 {result.state === "error" && (
                   <p className="text-xs text-red mt-1.5 font-mono">{result.reason}</p>
                 )}
