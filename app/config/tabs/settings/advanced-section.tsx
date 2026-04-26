@@ -440,7 +440,7 @@ export function AdvancedSection() {
               </button>
             </div>
             <p className="text-xs text-text-muted mt-1">
-              Stored encrypted in KV. Takes effect immediately — no redeploy required.
+              Stored in your Upstash KV. Takes effect immediately — no redeploy required.
             </p>
           </div>
 
