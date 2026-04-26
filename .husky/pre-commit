@@ -1,3 +1,4 @@
+#!/bin/sh
 # Block accidental .env commits — .env.example is the only allowed file
 # matching the .env* prefix. Override with --no-verify if you really mean
 # it (you almost never do).
