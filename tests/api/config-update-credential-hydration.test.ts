@@ -47,6 +47,18 @@ vi.mock("@/core/migrations/v0.10-tenant-prefix", () => ({
 vi.mock("@/core/config-facade");
 vi.mock("node:child_process", () => ({ execSync: vi.fn() }));
 
+// Phase 63 CRON-02: route now reads/writes `global:update-check` in KV.
+// Mock as cache-miss + accepting writes so the live-call path runs
+// — this test's contract is "Authorization header on the live compare
+// call", which only fires when the cache is cold.
+vi.mock("@/core/kv-store", () => ({
+  getKVStore: () => ({
+    kind: "filesystem" as const,
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 import { getConfig } from "@/core/config-facade";
 const mockGetConfig = vi.mocked(getConfig);
 

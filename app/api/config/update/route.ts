@@ -6,11 +6,24 @@ import {
   authStep,
   hydrateCredentialsStep,
 } from "@/core/pipeline";
+import type { PipelineContext } from "@/core/pipeline";
 import { errorResponse } from "@/core/error-response";
 import { getConfig } from "@/core/config-facade";
 import { getCredential } from "@/core/request-context";
-import { computeUpdateStatus, ghFetch } from "@/core/update-check";
+import { getKVStore } from "@/core/kv-store";
+import { getLogger } from "@/core/logging";
+import { toMsg } from "@/core/error-utils";
+import {
+  computeUpdateStatus,
+  ghFetch,
+  UPDATE_CHECK_KV_KEY,
+  UPDATE_CHECK_TTL_SECONDS,
+  UPDATE_CHECK_STALE_MS,
+  type UpdateStatusPayload,
+} from "@/core/update-check";
 import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG } from "../../../landing/deploy-url";
+
+const updateCheckLogger = getLogger("config.update.cache");
 
 /**
  * GET  /api/config/update → check if updates are available
@@ -86,7 +99,7 @@ function resolveRemote(): { ok: true; remote: string } | { ok: false; error: str
 // share the exact same logic. This route imports `computeUpdateStatus`
 // for GET and `ghFetch` for the POST merge-upstream path.
 
-async function githubApiGetHandler(): Promise<Response> {
+async function githubApiGetHandler(forceRefresh: boolean): Promise<Response> {
   const owner = getConfig("VERCEL_GIT_REPO_OWNER")!;
   const slug = getConfig("VERCEL_GIT_REPO_SLUG")!;
 
@@ -106,6 +119,32 @@ async function githubApiGetHandler(): Promise<Response> {
     });
   }
 
+  // Cache-first read (CRON-02): consult `global:update-check` before live
+  // call. ?force=1 bypasses cache entirely (used by Refresh button —
+  // Plan 063-03). Stale (>48h checkedAt) is treated as a cache miss and
+  // refetched. KV failures are non-fatal — log and fall through to live.
+  if (!forceRefresh) {
+    try {
+      const kv = getKVStore();
+      const cached = await kv.get(UPDATE_CHECK_KV_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as UpdateStatusPayload;
+        const checkedAtMs = Date.parse(parsed.checkedAt ?? "");
+        const ageMs = Date.now() - checkedAtMs;
+        if (Number.isFinite(checkedAtMs) && ageMs >= 0 && ageMs < UPDATE_CHECK_STALE_MS) {
+          // Fresh cache hit — return immediately, no GitHub call.
+          return NextResponse.json(parsed);
+        }
+        // Stale or malformed checkedAt — fall through to live call.
+      }
+    } catch (err) {
+      // KV failure is non-fatal — log and fall through to live call.
+      updateCheckLogger.warn("KV read failed, falling through to live call", {
+        error: toMsg(err),
+      });
+    }
+  }
+
   // Delegate to the shared compute helper. The helper does NOT touch KV,
   // auth, or credential hydration — that's the caller's job above.
   const result = await computeUpdateStatus(token, owner, slug);
@@ -122,6 +161,18 @@ async function githubApiGetHandler(): Promise<Response> {
     return errorResponse(new Error(`GitHub API failed: ${result.status}`), {
       status: 502,
       route: "config/update",
+    });
+  }
+
+  // Write-back to KV with 48h TTL. Awaited — fire-and-forget banned
+  // (CLAUDE.md, BUG-07). KV write failures are non-fatal — log and serve
+  // the live response anyway.
+  try {
+    const kv = getKVStore();
+    await kv.set(UPDATE_CHECK_KV_KEY, JSON.stringify(result.payload), UPDATE_CHECK_TTL_SECONDS);
+  } catch (err) {
+    updateCheckLogger.warn("KV write failed", {
+      error: toMsg(err),
     });
   }
 
@@ -222,7 +273,7 @@ async function githubApiPostHandler(): Promise<Response> {
 
 // ── GET handler ────────────────────────────────────────────────────────
 
-async function getHandler() {
+async function getHandler(ctx: PipelineContext) {
   const mode = resolveMode();
   if (mode === "disabled") {
     return NextResponse.json({
@@ -233,7 +284,11 @@ async function getHandler() {
     });
   }
   if (mode === "github-api") {
-    return githubApiGetHandler();
+    // CRON-02: ?force=1 bypasses the KV cache and always refreshes from
+    // GitHub, then writes back. Used by the dashboard's Refresh button.
+    const url = new URL(ctx.request.url);
+    const forceRefresh = url.searchParams.get("force") === "1";
+    return githubApiGetHandler(forceRefresh);
   }
 
   // ── git-CLI path (non-Vercel) — unchanged ─────────────────────────

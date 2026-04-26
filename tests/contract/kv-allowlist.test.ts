@@ -77,6 +77,11 @@ const ALLOWLIST = new Set<string>([
   // tenant's current bucket in one table. Parallels the escape hatch
   // on /api/admin/rate-limits.
   "app/api/admin/metrics/ratelimit/route.ts",
+  // Phase 63 / CRON-02 + CRON-03: /api/config/update reads/writes
+  // global:update-check (non-tenanted, root-scope by design — single-fork
+  // tool). The cache holds the upstream-version probe written by the daily
+  // cron at /api/cron/update-check. Mirrors the cron's allowlist entry.
+  "app/api/config/update/route.ts",
   // Scripts (not runtime server code)
   "scripts/kv-compact.ts",
 ]);

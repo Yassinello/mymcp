@@ -43,6 +43,17 @@ vi.mock("@/core/with-bootstrap-rehydrate", () => ({
   withBootstrapRehydrate: (fn: unknown) => fn,
 }));
 
+// Phase 63 CRON-02: route now reads/writes `global:update-check` in KV.
+// Mock as cache-miss + accepting writes so the live-call path runs as
+// before — the existing assertions don't care about KV interactions.
+vi.mock("@/core/kv-store", () => ({
+  getKVStore: () => ({
+    kind: "filesystem" as const,
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 import { getConfig } from "@/core/config-facade";
 import { getCredential } from "@/core/request-context";
 
@@ -107,7 +118,9 @@ describe("resolveMode()", () => {
     mockGetCredential.mockReturnValue(undefined);
     const mod = await import("../../app/api/config/update/route");
     // Use GET to indirectly test resolveMode — github-api path is triggered
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)({
+      request: new Request("http://localhost/api/config/update"),
+    });
     const body = await res.json();
     expect(body.mode).toBe("github-api");
   });
@@ -119,7 +132,9 @@ describe("resolveMode()", () => {
     });
     mockGetCredential.mockReturnValue(undefined);
     const mod = await import("../../app/api/config/update/route");
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)({
+      request: new Request("http://localhost/api/config/update"),
+    });
     const body = await res.json();
     // disabled mode returns available:false
     expect(body.available).toBe(false);
@@ -133,7 +148,9 @@ describe("resolveMode()", () => {
     });
     mockGetCredential.mockReturnValue(undefined);
     const mod = await import("../../app/api/config/update/route");
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)({
+      request: new Request("http://localhost/api/config/update"),
+    });
     const body = await res.json();
     expect(body.available).toBe(false);
   });
@@ -147,7 +164,9 @@ describe("GET github-api — no token", () => {
     mockGetCredential.mockReturnValue(undefined); // no KEBAB_UPDATE_PAT, no GITHUB_TOKEN
 
     const mod = await import("../../app/api/config/update/route");
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)({
+      request: new Request("http://localhost/api/config/update"),
+    });
     const body = await res.json();
 
     expect(body.mode).toBe("github-api");
@@ -188,7 +207,9 @@ describe("GET github-api — behind upstream (update available)", () => {
     );
 
     const mod = await import("../../app/api/config/update/route");
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)({
+      request: new Request("http://localhost/api/config/update"),
+    });
     const body = await res.json();
 
     expect(body.mode).toBe("github-api");
@@ -225,7 +246,9 @@ describe("GET github-api — ahead of upstream", () => {
     );
 
     const mod = await import("../../app/api/config/update/route");
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)({
+      request: new Request("http://localhost/api/config/update"),
+    });
     const body = await res.json();
 
     expect(body.available).toBe(false);
@@ -260,7 +283,9 @@ describe("GET github-api — breaking change detection", () => {
     );
 
     const mod = await import("../../app/api/config/update/route");
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)({
+      request: new Request("http://localhost/api/config/update"),
+    });
     const body = await res.json();
 
     expect(body.breaking).toBe(true);
@@ -293,7 +318,9 @@ describe("GET github-api — breaking change detection", () => {
     );
 
     const mod = await import("../../app/api/config/update/route");
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)({
+      request: new Request("http://localhost/api/config/update"),
+    });
     const body = await res.json();
 
     expect(body.breaking).toBe(true);
@@ -430,7 +457,9 @@ describe("git-CLI path — non-Vercel", () => {
 
     const mod = await import("../../app/api/config/update/route");
     // Non-Vercel: falls through to git path. Without a real git remote, it returns disabled-ish.
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)({
+      request: new Request("http://localhost/api/config/update"),
+    });
     const body = await res.json();
     // We just verify no crash and that mode is NOT github-api
     expect(body.mode).toBeUndefined();

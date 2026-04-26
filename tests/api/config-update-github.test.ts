@@ -35,6 +35,17 @@ vi.mock("@/core/config-facade");
 vi.mock("@/core/request-context");
 vi.mock("node:child_process", () => ({ execSync: vi.fn() }));
 
+// Phase 63 CRON-02: route now reads/writes `global:update-check` in KV.
+// Mock as cache-miss + accepting writes so the live-call path runs as
+// before — the existing assertions don't care about KV interactions.
+vi.mock("@/core/kv-store", () => ({
+  getKVStore: () => ({
+    kind: "filesystem" as const,
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 // ── Dynamic imports (after mocks) ──────────────────────────────────────
 
 import { getConfig } from "@/core/config-facade";
@@ -129,7 +140,12 @@ describe("github-api mode", () => {
     );
 
     const mod = await import("../../app/api/config/update/route");
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    // Phase 63 CRON-02: getHandler now accepts (ctx: PipelineContext) so it
+    // can read ?force=1 from ctx.request.url. composeRequestPipeline is
+    // mocked as a passthrough, so mod.GET === getHandler — we feed it a
+    // minimal ctx with a request URL it can parse.
+    const fakeCtx = { request: new Request("http://localhost/api/config/update") };
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)(fakeCtx);
     const body = await res.json();
 
     expect(body.mode).toBe("github-api");
@@ -169,7 +185,12 @@ describe("github-api mode", () => {
     );
 
     const mod = await import("../../app/api/config/update/route");
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    // Phase 63 CRON-02: getHandler now accepts (ctx: PipelineContext) so it
+    // can read ?force=1 from ctx.request.url. composeRequestPipeline is
+    // mocked as a passthrough, so mod.GET === getHandler — we feed it a
+    // minimal ctx with a request URL it can parse.
+    const fakeCtx = { request: new Request("http://localhost/api/config/update") };
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)(fakeCtx);
     const body = await res.json();
 
     expect(body.mode).toBe("github-api");
@@ -211,7 +232,12 @@ describe("github-api mode", () => {
     );
 
     const mod = await import("../../app/api/config/update/route");
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    // Phase 63 CRON-02: getHandler now accepts (ctx: PipelineContext) so it
+    // can read ?force=1 from ctx.request.url. composeRequestPipeline is
+    // mocked as a passthrough, so mod.GET === getHandler — we feed it a
+    // minimal ctx with a request URL it can parse.
+    const fakeCtx = { request: new Request("http://localhost/api/config/update") };
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)(fakeCtx);
     const body = await res.json();
 
     expect(body.breaking).toBe(true);
@@ -244,7 +270,12 @@ describe("github-api mode", () => {
     });
 
     const mod = await import("../../app/api/config/update/route");
-    const res = await (mod.GET as unknown as () => Promise<Response>)();
+    // Phase 63 CRON-02: getHandler now accepts (ctx: PipelineContext) so it
+    // can read ?force=1 from ctx.request.url. composeRequestPipeline is
+    // mocked as a passthrough, so mod.GET === getHandler — we feed it a
+    // minimal ctx with a request URL it can parse.
+    const fakeCtx = { request: new Request("http://localhost/api/config/update") };
+    const res = await (mod.GET as unknown as (c: unknown) => Promise<Response>)(fakeCtx);
     const body = await res.json();
 
     expect(body.available).toBe(false);
