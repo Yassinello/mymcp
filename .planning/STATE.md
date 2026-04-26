@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: — Infrastructure & performance
 status: Phase 53 closed 2026-04-23.
-stopped_at: Completed 063-01-PLAN.md (CRON-02 cache-first GET + shared computeUpdateStatus helper) — 2 commits on main
-last_updated: "2026-04-26T23:12:36.112Z"
+stopped_at: "Completed 063-02-PLAN.md (CRON-01 daily cron writing global:update-check KV) — 2 commits on main"
+last_updated: "2026-04-26T23:23:08.080Z"
 last_activity: 2026-04-23
 progress:
   total_phases: 36
   completed_phases: 3
   total_plans: 13
-  completed_plans: 24
+  completed_plans: 25
   percent: 100
 ---
 
@@ -709,6 +709,7 @@ Exit condition for operator attention:
 - [Phase 062]: STAB-02 closed: per-route composeRequestPipeline + hydrateCredentialsStep replaces withAdminAuth on /api/config/update; PAT saved via /api/config/env now visible to getCredential() through requestContext.credentials
 - [Phase 062]: STAB-03: env-gated live GitHub Compare integration test (describe.skipIf on GITHUB_TEST_TOKEN+OWNER+BEHIND+AHEAD; FORK_IDENTICAL further-gates the identical case). Sanity test always runs and asserts the gate. README.md at tests/integration/ as the env-var index.
 - [Phase 063-cron-update-check]: Plan 063-01 / CRON-02: Cache-first GET /api/config/update reads global:update-check (48h TTL) before live GitHub Compare; ?force=1 bypasses; KV failures non-fatal. computeUpdateStatus + ghFetch + cache constants extracted to src/core/update-check.ts so Plan 02 cron route can share without route-to-route imports.
+- [Phase 063-cron-update-check]: Plan 063-02 / CRON-01: Daily cron /api/cron/update-check (canonical Phase-41 pipeline: rehydrateStep + authStep('cron') + rateLimitStep + hydrateCredentialsStep — no BOOTSTRAP_EXEMPT marker) writes global:update-check KV @ 48h TTL. Auth/fetch failures from computeUpdateStatus do NOT poison the cache. KV write awaited; failures surface as 502. vercel.json second crons[] entry @ 0 8 * * *. 4 unit tests via passthrough composeRequestPipeline mock. Plan-instructed 4-segment relative landing path corrected to 3 (filesystem reality).
 
 ### Phase 38 (unchanged)
 
@@ -941,5 +942,5 @@ tag can ship. This is a Phase 37b carry-over, not a Phase 40 blocker.
 
 ## Last session
 
-Stopped at: Completed 063-01-PLAN.md (CRON-02 cache-first GET + shared computeUpdateStatus helper) — 2 commits on main
+Stopped at: Completed 063-02-PLAN.md (CRON-01 daily cron writing global:update-check KV) — 2 commits on main
 Ready for: 062-02-PLAN.md (wire hydrateCredentialsStep into /api/config/update via explicit composeRequestPipeline — STAB-02). Phase 62 plan progress: 1/4 complete. Pre-existing follow-ups unchanged: multi-host HOST-05, audit-gate.mjs lint, welcome-durability TS2540, useMintToken TS2488 (still pre-existing in tests/ui/useMintToken.test.tsx:28), T-LITFB audit.
