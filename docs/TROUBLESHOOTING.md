@@ -273,6 +273,71 @@ is the authoritative source.
 
 ---
 
+## Phase 61 Update Flow Smoke Test
+
+Manual end-to-end validation that the in-dashboard updates feature works
+on a live Vercel fork. Run after any change to `/api/config/update`,
+`app/config/tabs/settings/advanced-section.tsx`, or
+`app/config/tabs/overview.tsx`.
+
+**Why manual:** unit tests mock GitHub responses; this recipe exercises
+the real Compare API + merge-upstream + Vercel redeploy chain. Phase 62
+(STAB-03) added an env-gated automated equivalent —
+`tests/integration/config-update-github-live.test.ts` — but the manual
+recipe stays as the human-in-the-loop gate before tagging a release.
+
+### Prerequisites
+
+- A Vercel fork of `Yassinello/kebab-mcp` deployed to a known URL
+- Admin token for the fork's `/config` dashboard
+- A GitHub PAT with `public_repo` (or `repo` for private forks) scope
+
+### Recipe
+
+1. **Deploy a fork known-behind upstream.** Reset the fork's `main` to a
+   commit older than upstream's tip (e.g., a tag from a previous version),
+   force-push, and wait for Vercel to deploy.
+
+2. **Save PAT via Settings → Test connection passes.**
+   - Open `/config?tab=settings&sub=advanced`
+   - Paste the PAT into the Updates → "Update token" field
+   - Click "Save token" → the green "Token saved" indicator appears
+   - Click "Test connection" → confirm result is NOT "No token configured."
+   - Expected: result message reflects the live Compare state (e.g.,
+     "N updates available")
+
+3. **Open Overview → banner shows correct `behind_by` count.**
+   - Open `/config` (Overview tab)
+   - Confirm the update banner displays the correct number of commits
+     behind upstream — matches `behind_by` from the Compare call
+   - Confirm the "Update now" button is enabled (no diverged warning)
+
+4. **Click "Update now" → merge-upstream succeeds + Vercel redeploys.**
+   - Click "Update now" in the banner
+   - Confirm the response is `ok: true` (no 409 conflict, no auth error)
+   - Open the deploy URL surfaced in the response
+   - Confirm a new Vercel deployment starts — fork main now matches upstream
+
+5. **Repeat with a diverged fork → yellow banner blocks the button.**
+   - Add a no-op local commit to the fork (e.g., edit README.md and push)
+   - Now the fork is BOTH ahead AND behind upstream
+   - Reload `/config` Overview
+   - Confirm the banner is yellow / "diverged" state
+   - Confirm the "Update now" button is disabled OR a `resolveUrl` link
+     is offered to GitHub's compare view for manual resolution
+
+### Failure modes
+
+| Symptom | Likely cause |
+|---------|--------------|
+| "No token configured" after Save → Test | `hydrateCredentialsStep` not in pipeline (Phase 62 / STAB-02 regression) |
+| `behind_by: 0` when fork is clearly behind | Compare URL direction inverted (Phase 62 / STAB-01 regression) |
+| 401/403 on Test connection | PAT scope insufficient — needs `public_repo` (public) or `repo` (private) |
+| Banner shows "diverged" on a clean fork | Fork has at least 1 commit not in upstream — verify with `git log upstream/main..main` |
+| Update click → 422 "not-a-fork" | Vercel project not configured as a GitHub fork in the API sense; use GitHub UI to sync manually |
+
+---
+
 ## Frequently asked questions
 
 ### "My `/config` redirects me to `/welcome` after deploy"
