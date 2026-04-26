@@ -35,6 +35,67 @@ interface ImportDiff {
 export function AdvancedSection() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
 
+  // Updates section state
+  const [patValue, setPatValue] = useState("");
+  const [patRevealed, setPatRevealed] = useState(false);
+  const [patSaving, setPatSaving] = useState(false);
+  const [patSaved, setPatSaved] = useState(false);
+  const [patError, setPatError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [testRunning, setTestRunning] = useState(false);
+
+  const savePat = async () => {
+    if (!patValue.trim()) return;
+    setPatSaving(true);
+    setPatError(null);
+    try {
+      const res = await fetch("/api/config/env", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ vars: { KEBAB_UPDATE_PAT: patValue.trim() } }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (data.ok) {
+        setPatSaved(true);
+        setPatValue("");
+        setTimeout(() => setPatSaved(false), 2500);
+      } else {
+        setPatError(data.error || "Save failed");
+      }
+    } catch {
+      setPatError("Network error");
+    }
+    setPatSaving(false);
+  };
+
+  const testPat = async () => {
+    setTestRunning(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/config/update", { credentials: "include" });
+      const data = (await res.json()) as Record<string, unknown>;
+      if (data.reason === "no-token") {
+        setTestResult("No token configured.");
+      } else if (data.available) {
+        setTestResult(
+          `OK — ${(data.behind_by as number | undefined) ?? (data.behind as number | undefined) ?? 0} update(s) available.`
+        );
+      } else if (data.status === "identical") {
+        setTestResult("OK — fork is up to date.");
+      } else if (data.status === "diverged" || data.status === "ahead") {
+        setTestResult(`Fork has ${data.ahead_by as number} commit(s) ahead of upstream.`);
+      } else if (data.reason === "auth") {
+        setTestResult("Auth error — token may be invalid or missing scope.");
+      } else {
+        setTestResult(data.disabled ? `Disabled: ${data.disabled as string}` : "Check complete.");
+      }
+    } catch {
+      setTestResult("Network error");
+    }
+    setTestRunning(false);
+  };
+
   const handleExportClick = () => {
     setPhase({ kind: "confirming", action: "export" });
   };
@@ -342,6 +403,77 @@ export function AdvancedSection() {
           </div>
         </Modal>
       )}
+
+      {/* Updates section */}
+      <div className="border-t border-border pt-5 mt-5">
+        <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3">
+          Updates
+        </h3>
+        <p className="text-xs text-text-dim mb-4">
+          Configure a GitHub PAT to enable one-click upstream sync from the Overview tab. Requires{" "}
+          <code className="font-mono bg-bg-muted px-1 rounded">public_repo</code> scope for public
+          forks, <code className="font-mono bg-bg-muted px-1 rounded">repo</code> scope for private
+          forks. Fine-grained PATs: ensure <em>Contents: read/write</em> permission on your fork.
+        </p>
+
+        <div className="space-y-3">
+          {/* PAT input */}
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <label className="text-sm font-medium">Update token</label>
+              <code className="text-[11px] text-text-muted">KEBAB_UPDATE_PAT</code>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type={patRevealed ? "text" : "password"}
+                placeholder="ghp_… or github_pat_…"
+                value={patValue}
+                onChange={(e) => setPatValue(e.target.value)}
+                className="flex-1 bg-bg-muted border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setPatRevealed((r) => !r)}
+                className="text-xs px-2.5 py-2 rounded-md border border-border bg-bg-muted hover:bg-border-light text-text-dim transition-colors"
+              >
+                {patRevealed ? "Hide" : "Show"}
+              </button>
+            </div>
+            <p className="text-xs text-text-muted mt-1">
+              Stored encrypted in KV. Takes effect immediately — no redeploy required.
+            </p>
+          </div>
+
+          {/* Save + Test buttons */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={savePat}
+              disabled={patSaving || !patValue.trim()}
+              className="bg-accent text-white text-sm font-medium px-4 py-2 rounded-md hover:bg-accent/90 disabled:opacity-50 transition-colors"
+            >
+              {patSaving ? "Saving..." : "Save token"}
+            </button>
+            <button
+              type="button"
+              onClick={testPat}
+              disabled={testRunning}
+              className="text-sm font-medium px-4 py-2 rounded-md border border-border bg-bg-muted hover:bg-border-light text-text-dim hover:text-text disabled:opacity-50 transition-colors"
+            >
+              {testRunning ? "Testing..." : "Test connection"}
+            </button>
+            {patSaved && <span className="text-xs text-green">Token saved</span>}
+            {patError && <span className="text-xs text-red-500">{patError}</span>}
+          </div>
+
+          {/* Test result inline */}
+          {testResult && (
+            <p className="text-xs text-text-dim bg-bg-muted border border-border rounded px-3 py-2 font-mono">
+              {testResult}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
