@@ -3,16 +3,34 @@ import { execSync } from "node:child_process";
 import { withAdminAuth } from "@/core/with-admin-auth";
 import { errorResponse } from "@/core/error-response";
 import { getConfig } from "@/core/config-facade";
+import { getCredential } from "@/core/request-context";
+import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG } from "../../../landing/deploy-url";
 
 /**
  * GET  /api/config/update → check if updates are available
- *                           { available: boolean, behind: number, remote: string, latest?: string, disabled?: string }
- * POST /api/config/update → fast-forward merge from the update remote
- *                           { ok: boolean, pulled?: number, reason?: string }
+ * POST /api/config/update → apply updates
  *
- * The update remote is `upstream` if present, else `origin`. Disabled on Vercel
- * and when MYMCP_DISABLE_UPDATE_API=1 is set.
+ * Three modes:
+ *   "git"        — local dev / Docker: uses git CLI (existing path, unchanged)
+ *   "github-api" — Vercel fork with VERCEL_GIT_REPO_OWNER + VERCEL_GIT_REPO_SLUG: uses GitHub REST API
+ *   "disabled"   — Vercel without owner/slug, or KEBAB_DISABLE_UPDATE_API=1
  */
+
+// ── Mode resolution ────────────────────────────────────────────────────
+
+type UpdateMode = "git" | "github-api" | "disabled";
+
+function resolveMode(): UpdateMode {
+  if (getConfig("KEBAB_DISABLE_UPDATE_API") === "1") return "disabled";
+  if (getConfig("VERCEL") === "1") {
+    const owner = getConfig("VERCEL_GIT_REPO_OWNER");
+    const slug = getConfig("VERCEL_GIT_REPO_SLUG");
+    return owner && slug ? "github-api" : "disabled";
+  }
+  return "git";
+}
+
+// ── git-CLI helpers (existing path — zero changes) ─────────────────────
 
 function run(cmd: string): { ok: boolean; out: string; err: string } {
   try {
@@ -29,13 +47,6 @@ function run(cmd: string): { ok: boolean; out: string; err: string } {
   }
 }
 
-function disabledReason(): string | null {
-  if (getConfig("VERCEL") === "1") return "Disabled on Vercel — redeploy via git push instead.";
-  if (getConfig("KEBAB_DISABLE_UPDATE_API") === "1")
-    return "Disabled via MYMCP_DISABLE_UPDATE_API.";
-  return null;
-}
-
 function resolveRemote(): { ok: true; remote: string } | { ok: false; error: string } {
   const inside = run("git rev-parse --is-inside-work-tree");
   if (!inside.ok || inside.out !== "true") {
@@ -49,11 +60,251 @@ function resolveRemote(): { ok: true; remote: string } | { ok: false; error: str
   return { ok: false, error: "No upstream or origin remote configured." };
 }
 
-async function getHandler() {
-  const disabled = disabledReason();
-  if (disabled) {
-    return NextResponse.json({ available: false, behind: 0, remote: "", disabled });
+// ── GitHub API fetch helper ────────────────────────────────────────────
+
+const GH_API_VERSION = "2022-11-28";
+const GH_ACCEPT = "application/vnd.github+json";
+
+interface GitHubFetchResult {
+  ok: boolean;
+  status: number;
+  data: unknown;
+  scopesHeader: string | null;
+}
+
+async function ghFetch(
+  path: string,
+  token: string,
+  options: { method?: string; body?: unknown } = {}
+): Promise<GitHubFetchResult> {
+  const res = await fetch(`https://api.github.com${path}`, {
+    method: options.method ?? "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: GH_ACCEPT,
+      "X-GitHub-Api-Version": GH_API_VERSION,
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+  });
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    /* ignore */
   }
+  return { ok: res.ok, status: res.status, data, scopesHeader: res.headers.get("x-oauth-scopes") };
+}
+
+// ── Breaking-change detection ──────────────────────────────────────────
+
+function detectBreaking(commits: Array<{ commit: { message: string } }>): {
+  breaking: boolean;
+  breakingReasons: string[];
+} {
+  const reasons: string[] = [];
+  const CONV_BANG = /^(?:feat|fix|refactor|perf|chore|docs|style|test|build|ci)!:/m;
+  const BREAK_FOOTER = /BREAKING CHANGE:/m;
+  for (const c of commits) {
+    const msg = c.commit.message;
+    if (CONV_BANG.test(msg)) reasons.push(msg.split("\n")[0]!.slice(0, 80));
+    else if (BREAK_FOOTER.test(msg)) reasons.push(msg.split("\n")[0]!.slice(0, 80));
+  }
+  return { breaking: reasons.length > 0, breakingReasons: reasons };
+}
+
+// ── GitHub API GET handler ─────────────────────────────────────────────
+
+async function githubApiGetHandler(): Promise<Response> {
+  const owner = getConfig("VERCEL_GIT_REPO_OWNER")!;
+  const slug = getConfig("VERCEL_GIT_REPO_SLUG")!;
+  const upstream = `${UPSTREAM_OWNER}:${UPSTREAM_REPO_SLUG}:main`;
+
+  // Token resolution: dedicated PAT first, fallback GITHUB_TOKEN
+  const token =
+    (getCredential("KEBAB_UPDATE_PAT") ?? getConfig("KEBAB_UPDATE_PAT")) ||
+    (getCredential("GITHUB_TOKEN") ?? getConfig("GITHUB_TOKEN")) ||
+    null;
+
+  if (!token) {
+    return NextResponse.json({
+      mode: "github-api",
+      available: false,
+      reason: "no-token",
+      configureUrl: "/config?tab=settings&sub=advanced",
+      tokenConfigured: false,
+    });
+  }
+
+  // Fetch fork visibility
+  const repoRes = await ghFetch(`/repos/${owner}/${slug}`, token);
+  if (!repoRes.ok) {
+    if (repoRes.status === 401 || repoRes.status === 403) {
+      return NextResponse.json({
+        mode: "github-api",
+        available: false,
+        reason: "auth",
+        tokenConfigured: true,
+      });
+    }
+    return errorResponse(new Error(`GitHub /repos lookup failed: ${repoRes.status}`), {
+      status: 502,
+      route: "config/update",
+    });
+  }
+  const repoData = repoRes.data as { private: boolean };
+  const forkPrivate = repoData.private ?? false;
+
+  // Compare fork HEAD with upstream
+  const compareRes = await ghFetch(`/repos/${owner}/${slug}/compare/main...${upstream}`, token);
+  if (!compareRes.ok) {
+    return errorResponse(new Error(`GitHub compare failed: ${compareRes.status}`), {
+      status: 502,
+      route: "config/update",
+    });
+  }
+
+  const cmp = compareRes.data as {
+    status: "ahead" | "behind" | "diverged" | "identical";
+    ahead_by: number;
+    behind_by: number;
+    total_commits: number;
+    commits: Array<{ sha: string; html_url: string; commit: { message: string } }>;
+    html_url: string;
+  };
+
+  const { breaking, breakingReasons } = detectBreaking(cmp.commits);
+  const displayCommits = [...cmp.commits]
+    .reverse()
+    .slice(0, 5)
+    .map((c) => ({
+      sha: c.sha.slice(0, 7),
+      message: c.commit.message.split("\n")[0]!.slice(0, 80),
+      url: c.html_url,
+    }));
+
+  return NextResponse.json({
+    mode: "github-api",
+    available: cmp.status === "behind",
+    behind_by: cmp.behind_by,
+    ahead_by: cmp.ahead_by,
+    status: cmp.status,
+    breaking,
+    breakingReasons,
+    commits: displayCommits,
+    totalCommits: cmp.total_commits,
+    diffUrl: cmp.html_url,
+    tokenConfigured: true,
+    forkPrivate,
+  });
+}
+
+// ── GitHub API POST handler ────────────────────────────────────────────
+
+async function githubApiPostHandler(): Promise<Response> {
+  const owner = getConfig("VERCEL_GIT_REPO_OWNER")!;
+  const slug = getConfig("VERCEL_GIT_REPO_SLUG")!;
+
+  const token =
+    (getCredential("KEBAB_UPDATE_PAT") ?? getConfig("KEBAB_UPDATE_PAT")) ||
+    (getCredential("GITHUB_TOKEN") ?? getConfig("GITHUB_TOKEN")) ||
+    null;
+
+  if (!token) {
+    return NextResponse.json({ ok: false, reason: "no-token" }, { status: 400 });
+  }
+
+  // Server-side guard: re-check ahead_by before merge (D-04)
+  const upstream = `${UPSTREAM_OWNER}:${UPSTREAM_REPO_SLUG}:main`;
+  const compareRes = await ghFetch(`/repos/${owner}/${slug}/compare/main...${upstream}`, token);
+  if (!compareRes.ok) {
+    return errorResponse(new Error(`Pre-merge compare failed: ${compareRes.status}`), {
+      status: 502,
+      route: "config/update",
+    });
+  }
+  const cmp = compareRes.data as { ahead_by: number; behind_by: number; html_url: string };
+  if (cmp.ahead_by > 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        reason: "diverged",
+        resolveUrl: `https://github.com/${owner}/${slug}/compare/main...${UPSTREAM_OWNER}:${UPSTREAM_REPO_SLUG}:main`,
+      },
+      { status: 409 }
+    );
+  }
+  if (cmp.behind_by === 0) {
+    return NextResponse.json({ ok: true, pulled: 0, reason: "Already up to date." });
+  }
+
+  // Perform merge-upstream
+  const mergeRes = await ghFetch(`/repos/${owner}/${slug}/merge-upstream`, token, {
+    method: "POST",
+    body: { branch: "main" },
+  });
+
+  if (mergeRes.status === 409) {
+    const ghMsg = (mergeRes.data as { message?: string })?.message ?? "Conflict";
+    return NextResponse.json(
+      {
+        ok: false,
+        reason: "conflict",
+        message: ghMsg,
+        resolveUrl: `https://github.com/${owner}/${slug}/compare/main...${UPSTREAM_OWNER}:${UPSTREAM_REPO_SLUG}:main`,
+      },
+      { status: 409 }
+    );
+  }
+  if (mergeRes.status === 401 || mergeRes.status === 403) {
+    const ghMsg = (mergeRes.data as { message?: string })?.message ?? "Auth error";
+    return NextResponse.json({ ok: false, reason: "auth", message: ghMsg }, { status: 403 });
+  }
+  if (mergeRes.status === 422) {
+    return NextResponse.json(
+      {
+        ok: false,
+        reason: "not-a-fork",
+        message: "Repository may not be a GitHub fork. Use the GitHub UI to sync manually.",
+      },
+      { status: 422 }
+    );
+  }
+  if (!mergeRes.ok) {
+    return errorResponse(new Error(`merge-upstream failed: ${mergeRes.status}`), {
+      status: 502,
+      route: "config/update",
+    });
+  }
+
+  const mergeData = mergeRes.data as { merge_type?: string };
+  const deployUrl = `https://vercel.com/${owner}/${slug}/deployments`;
+
+  return NextResponse.json({
+    ok: true,
+    pulled: cmp.behind_by,
+    merge_type: mergeData.merge_type ?? "fast-forward",
+    deployUrl,
+  });
+}
+
+// ── GET handler ────────────────────────────────────────────────────────
+
+async function getHandler() {
+  const mode = resolveMode();
+  if (mode === "disabled") {
+    return NextResponse.json({
+      available: false,
+      behind: 0,
+      remote: "",
+      disabled: "Updates disabled.",
+    });
+  }
+  if (mode === "github-api") {
+    return githubApiGetHandler();
+  }
+
+  // ── git-CLI path (non-Vercel) — unchanged ─────────────────────────
 
   const remoteRes = resolveRemote();
   if (!remoteRes.ok) {
@@ -92,9 +343,15 @@ async function getHandler() {
   });
 }
 
+// ── POST handler ───────────────────────────────────────────────────────
+
 async function postHandler() {
-  const disabled = disabledReason();
-  if (disabled) return NextResponse.json({ ok: false, reason: disabled }, { status: 403 });
+  const mode = resolveMode();
+  if (mode === "disabled")
+    return NextResponse.json({ ok: false, reason: "Updates disabled." }, { status: 403 });
+  if (mode === "github-api") return githubApiPostHandler();
+
+  // ── git-CLI path (non-Vercel) — unchanged ─────────────────────────
 
   const remoteRes = resolveRemote();
   if (!remoteRes.ok) {
