@@ -14,6 +14,9 @@
  */
 export const REPO_URL = "https://github.com/Yassinello/kebab-mcp";
 
+export const UPSTREAM_OWNER = REPO_URL.split("/").at(-2)!; // "Yassinello"
+export const UPSTREAM_REPO_SLUG = REPO_URL.split("/").at(-1)!; // "kebab-mcp"
+
 const STORES = [
   {
     type: "integration",
