@@ -77,7 +77,7 @@ function mockFetchRouter(updateBodies: unknown[], options?: { hangSecondCall?: b
       return Promise.resolve(
         jsonResponse({
           ok: true,
-          tokenStatus: "permanent",
+          tokenStatus: "pinned",
           isVercel: false,
           vercelAutoMagicAvailable: false,
           instanceUrl: "http://localhost",

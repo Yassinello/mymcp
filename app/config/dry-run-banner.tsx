@@ -106,8 +106,9 @@ export function DryRunBanner() {
       <div className="sticky top-0 z-30 border-b-2 border-orange/60 bg-orange/10 px-5 py-3">
         <div className="flex items-center gap-4">
           <div className="flex-1 text-sm text-orange-dark">
-            <span className="font-semibold">Dry-run mode</span> — exploring without an auth token.
-            Generate a token to expose this instance to Claude Desktop.
+            <span className="font-semibold">No auth token yet</span> — this instance has no{" "}
+            <code className="text-[11px] font-mono">MCP_AUTH_TOKEN</code> set. Mint one to start
+            connecting AI clients (Claude, Cursor, Windsurf, ChatGPT, …).
           </div>
           <button
             type="button"

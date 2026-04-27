@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type TokenStatus = "permanent" | "bootstrap" | "unconfigured";
+type TokenStatus = "pinned" | "persisted-kv" | "in-memory" | "unconfigured";
 
 interface HealthData {
   ok: true;
@@ -66,24 +66,67 @@ export function HealthWidget() {
         <div className="text-[11px] font-mono text-text-muted truncate flex-1 min-w-0">
           {data.instanceUrl}
         </div>
-        {data.tokenStatus === "bootstrap" && (
-          <a href="/welcome" className="text-xs text-accent hover:underline shrink-0">
-            Make permanent →
-          </a>
-        )}
+        <TokenAction status={data.tokenStatus} />
       </div>
+      <TokenStatusFootnote status={data.tokenStatus} />
     </section>
   );
 }
 
 function TokenPill({ status }: { status: TokenStatus }) {
-  if (status === "permanent") {
-    return <Pill color="green" label="Token" value="Permanent" />;
+  if (status === "pinned") {
+    return <Pill color="green" label="Token" value="Pinned (env)" />;
   }
-  if (status === "bootstrap") {
-    return <Pill color="amber" label="Token" value="Bootstrap (in-memory)" />;
+  if (status === "persisted-kv") {
+    return <Pill color="green" label="Token" value="Persistent (KV)" />;
+  }
+  if (status === "in-memory") {
+    return <Pill color="amber" label="Token" value="In-memory only" />;
   }
   return <Pill color="red" label="Token" value="Unconfigured" />;
+}
+
+function TokenAction({ status }: { status: TokenStatus }) {
+  if (status === "in-memory") {
+    return (
+      <a
+        href="https://vercel.com/integrations/upstash"
+        target="_blank"
+        rel="noreferrer"
+        className="text-xs text-accent hover:underline shrink-0"
+      >
+        Connect Upstash KV →
+      </a>
+    );
+  }
+  if (status === "persisted-kv") {
+    return (
+      <a href="/welcome" className="text-xs text-text-muted hover:text-text shrink-0">
+        Pin to Vercel env →
+      </a>
+    );
+  }
+  return null;
+}
+
+function TokenStatusFootnote({ status }: { status: TokenStatus }) {
+  if (status === "in-memory") {
+    return (
+      <p className="text-[11px] text-text-dim mt-2 px-1">
+        Your token lives only in this lambda&apos;s memory and will be lost on the next cold start.
+        Connect an Upstash KV store (Vercel free tier) to make it persistent.
+      </p>
+    );
+  }
+  if (status === "persisted-kv") {
+    return (
+      <p className="text-[11px] text-text-muted mt-2 px-1">
+        Token is durably stored in Upstash KV and rehydrated on every cold start. Pinning to Vercel
+        env vars is optional — saves one KV round-trip (~30ms) on cold-start latency.
+      </p>
+    );
+  }
+  return null;
 }
 
 function Pill({

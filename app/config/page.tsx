@@ -2,7 +2,7 @@ import { AppShell } from "../sidebar";
 import { getInstanceConfigAsync } from "@/core/config";
 import { resolveRegistryAsync } from "@/core/registry";
 import { getRecentLogs } from "@/core/logging";
-import { isFirstRunMode } from "@/core/first-run";
+import { isFirstRunMode, rehydrateBootstrapAsync } from "@/core/first-run";
 import { loadDocs } from "@/core/docs";
 import { getDisabledTools } from "@/core/tool-toggles";
 import { ConfigTabs } from "./tabs";
@@ -94,6 +94,15 @@ export default async function ConfigPage({
   // Dry-run mode: instance has no MCP_AUTH_TOKEN. The user reached this page
   // via the /welcome claim cookie (checkAdminAuth's isClaimer bypass) and is
   // exploring before minting a token.
+  //
+  // Edge middleware (proxy.ts) rehydrates the Edge-side cache, but Server
+  // Components run in Node, where bootstrapAuthTokenCache is separate. On a
+  // cold Node lambda whose Edge sibling already warmed up, isFirstRunMode()
+  // would falsely return true even though the token lives in Upstash KV.
+  // Calling rehydrateBootstrapAsync() before the check pulls KV → Node-side
+  // cache. The function is idempotent and short-circuits if KV is already
+  // mirrored to module state, so warm lambdas pay zero cost.
+  await rehydrateBootstrapAsync();
   const dryRunMode = isFirstRunMode();
 
   const vaultEnabled = registry.some((p) => p.manifest.id === "vault" && p.enabled);
