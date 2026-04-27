@@ -197,6 +197,19 @@ async function putHandler(ctx: PipelineContext) {
     // (badge, storage tab) should reflect the new mode immediately rather
     // than waiting for the 60s TTL.
     clearStorageModeCache();
+    // Invalidate the update-check KV cache when the user saves a PAT —
+    // otherwise the stale "no-token" payload from up to 48h ago is served
+    // until the next cron run. Single-line escape hatch into Phase 63
+    // territory; safe to fire even when neither key is in vars (no-op).
+    if ("KEBAB_UPDATE_PAT" in vars || "GITHUB_TOKEN" in vars) {
+      try {
+        const { getKVStore } = await import("@/core/kv-store");
+        const { UPDATE_CHECK_KV_KEY } = await import("@/core/update-check");
+        await getKVStore().delete(UPDATE_CHECK_KV_KEY);
+      } catch {
+        /* non-fatal */
+      }
+    }
     return NextResponse.json({
       ok: true,
       storageBackend: backend,

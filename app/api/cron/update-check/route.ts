@@ -8,30 +8,25 @@ import {
   type PipelineContext,
 } from "@/core/pipeline";
 import { getConfig } from "@/core/config-facade";
-import { getCredential } from "@/core/request-context";
 import { getKVStore } from "@/core/kv-store";
 import { getLogger } from "@/core/logging";
 import { toMsg } from "@/core/error-utils";
 import {
   computeUpdateStatus,
+  resolveUpdateToken,
   UPDATE_CHECK_KV_KEY,
+  UPDATE_CHECK_LOCK_KEY,
+  UPDATE_CHECK_LOCK_TTL_SECONDS,
   UPDATE_CHECK_TTL_SECONDS,
 } from "@/core/update-check";
-// app/landing/deploy-url is OUTSIDE the @/* alias scope (which maps to ./src/* only).
-// From app/api/cron/update-check/route.ts the relative path to
-// app/landing/deploy-url.ts is `../../../landing/deploy-url` — three `..`
-// segments take us from the `update-check/` directory up through `cron/`
-// and `api/` to `app/`. Mirrors the same pattern in
-// app/api/config/update/route.ts (directory at the same depth).
-import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG } from "../../../landing/deploy-url";
 
 /**
  * Daily cron at 8h UTC (vercel.json).
  *
- * Calls computeUpdateStatus() against UPSTREAM_OWNER/UPSTREAM_REPO_SLUG and
- * writes the result to KV `global:update-check` with a 48h TTL. The Overview
- * banner reads this cache first (Plan 063-01) so warm pageviews don't pay
- * the 200-500ms GitHub round-trip.
+ * Calls computeUpdateStatus() against the upstream repo and writes the
+ * result to KV `global:update-check` with a 48h TTL. The Overview banner
+ * reads this cache first (Plan 063-01) so warm pageviews don't pay the
+ * 200-500ms GitHub round-trip.
  *
  * Pipeline (canonical Phase-41 cron, mirrors /api/cron/health):
  *   rehydrateStep        — populates bootstrap auth cache from KV (also
@@ -39,18 +34,18 @@ import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG } from "../../../landing/deploy-url"
  *                          so no BOOTSTRAP_EXEMPT marker is needed).
  *   authStep("cron")     — enforces Authorization: Bearer ${CRON_SECRET}.
  *                          Mismatch → 401. Unset → 503 (unless loopback).
- *                          The handler stays clean — no inline auth check.
  *   rateLimitStep        — 120 req/min keyed by sha256(CRON_SECRET).
  *   hydrateCredentialsStep — D-15: PAT-via-Settings reaches the cron.
+ *
+ * Anti-stampede: a 60s SETNX lock guards against overlapping cron triggers
+ * (rare, but possible if a previous run is slow). If the lock is held,
+ * the run skips silently — the in-flight call will refresh the cache.
  */
 const logger = getLogger("cron.update-check");
 
 async function cronUpdateCheckHandler(_ctx: PipelineContext): Promise<Response> {
   // ── Resolve PAT (D-06: KEBAB_UPDATE_PAT first, then GITHUB_TOKEN) ──────
-  const token =
-    (getCredential("KEBAB_UPDATE_PAT") ?? getConfig("KEBAB_UPDATE_PAT")) ||
-    (getCredential("GITHUB_TOKEN") ?? getConfig("GITHUB_TOKEN")) ||
-    null;
+  const token = resolveUpdateToken();
 
   if (!token) {
     logger.info("no token configured — skipping update check");
@@ -65,17 +60,29 @@ async function cronUpdateCheckHandler(_ctx: PipelineContext): Promise<Response> 
     return NextResponse.json({ ok: false, reason: "not-a-fork" });
   }
 
+  // ── Anti-stampede lock (60s) ───────────────────────────────────────────
+  const kv = getKVStore();
+  if (typeof kv.setIfNotExists === "function") {
+    const lockResult = await kv.setIfNotExists(UPDATE_CHECK_LOCK_KEY, "1", {
+      ttlSeconds: UPDATE_CHECK_LOCK_TTL_SECONDS,
+    });
+    if (!lockResult.ok) {
+      logger.info("another update-check run holds the lock — skipping");
+      return NextResponse.json({ ok: false, reason: "locked" });
+    }
+  }
+
   // ── Run the shared computeUpdateStatus helper ──────────────────────────
   const result = await computeUpdateStatus(token, owner, slug);
   if (!result.ok) {
     logger.warn("computeUpdateStatus failed", { kind: result.kind });
-    // Don't poison the cache with auth/fetch errors — return diagnostic.
+    // Invalidate stale cache so the next dashboard hit retries live.
+    await kv.delete(UPDATE_CHECK_KV_KEY).catch(() => {});
     return NextResponse.json({ ok: false, reason: result.kind });
   }
 
   // ── Awaited KV write (CLAUDE.md fire-and-forget rule + BUG-07) ─────────
   try {
-    const kv = getKVStore();
     await kv.set(UPDATE_CHECK_KV_KEY, JSON.stringify(result.payload), UPDATE_CHECK_TTL_SECONDS);
     logger.info("update-check cache refreshed", {
       status: result.payload.status,
@@ -86,14 +93,7 @@ async function cronUpdateCheckHandler(_ctx: PipelineContext): Promise<Response> 
     return NextResponse.json({ ok: false, reason: "kv-write-failed" }, { status: 502 });
   }
 
-  // Reference UPSTREAM_OWNER/UPSTREAM_REPO_SLUG so the import isn't
-  // tree-shaken to nothing — they're documented in the response for
-  // operators eyeballing logs.
-  return NextResponse.json({
-    ok: true,
-    upstream: `${UPSTREAM_OWNER}/${UPSTREAM_REPO_SLUG}`,
-    payload: result.payload,
-  });
+  return NextResponse.json({ ok: true, payload: result.payload });
 }
 
 export const GET = composeRequestPipeline(

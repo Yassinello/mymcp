@@ -15,11 +15,29 @@
 // `@/*` maps to `./src/*` only — `app/landing/deploy-url` lives outside
 // the alias and must be imported relatively from src/core.
 import { UPSTREAM_OWNER, UPSTREAM_REPO_SLUG } from "../../app/landing/deploy-url";
+import { getConfig } from "./config-facade";
+import { getCredential } from "./request-context";
 
 // ── Cache constants (re-used by the cron + route cache-first read) ──────
 export const UPDATE_CHECK_KV_KEY = "global:update-check";
 export const UPDATE_CHECK_TTL_SECONDS = 48 * 60 * 60; // 48h — D-04
 export const UPDATE_CHECK_STALE_MS = UPDATE_CHECK_TTL_SECONDS * 1000;
+export const UPDATE_CHECK_LOCK_KEY = "global:update-check:lock";
+export const UPDATE_CHECK_LOCK_TTL_SECONDS = 60; // 60s anti-stampede
+
+// ── Token resolution (shared by GET, POST, cron) ───────────────────────
+//
+// Resolution order: dedicated PAT first, fallback GITHUB_TOKEN. Each key
+// is resolved through getCredential() (which walks: request-scoped
+// override → live process.env runtime keys → frozen boot env) before
+// falling back to getConfig() for full env-facade coverage.
+export function resolveUpdateToken(): string | null {
+  return (
+    (getCredential("KEBAB_UPDATE_PAT") ?? getConfig("KEBAB_UPDATE_PAT")) ||
+    (getCredential("GITHUB_TOKEN") ?? getConfig("GITHUB_TOKEN")) ||
+    null
+  );
+}
 
 // ── GitHub API constants (moved from route.ts) ─────────────────────────
 const GH_API_VERSION = "2022-11-28";

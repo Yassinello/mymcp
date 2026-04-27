@@ -56,8 +56,16 @@ vi.mock("@/core/config-facade");
 // KV mock — under test
 const kvSet = vi.fn();
 const kvGet = vi.fn();
+const kvDelete = vi.fn();
+const kvSetIfNotExists = vi.fn();
 vi.mock("@/core/kv-store", () => ({
-  getKVStore: () => ({ kind: "filesystem" as const, get: kvGet, set: kvSet }),
+  getKVStore: () => ({
+    kind: "filesystem" as const,
+    get: kvGet,
+    set: kvSet,
+    delete: kvDelete,
+    setIfNotExists: kvSetIfNotExists,
+  }),
 }));
 
 import { getConfig } from "@/core/config-facade";
@@ -69,6 +77,10 @@ beforeEach(() => {
   vi.resetModules();
   kvSet.mockReset();
   kvGet.mockReset();
+  kvDelete.mockReset();
+  kvDelete.mockResolvedValue(undefined);
+  kvSetIfNotExists.mockReset();
+  kvSetIfNotExists.mockResolvedValue({ ok: true });
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
 });

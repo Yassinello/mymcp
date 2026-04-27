@@ -86,6 +86,13 @@ const ALLOWLIST = new Set<string>([
   // for global:update-check (non-tenanted, root-scope by design — single-fork
   // tool). Mirrors the GET-handler's allowlist entry above.
   "app/api/cron/update-check/route.ts",
+  // Phase 63 follow-up: /api/config/env invalidates global:update-check
+  // when the operator saves KEBAB_UPDATE_PAT or GITHUB_TOKEN, so the next
+  // dashboard hit sees the new auth state immediately rather than waiting
+  // for the daily cron. The kv.delete() call is unconditional global by
+  // design (the key is non-tenanted; same allowlist rationale as
+  // app/api/config/update/route.ts above).
+  "app/api/config/env/route.ts",
   // Scripts (not runtime server code)
   "scripts/kv-compact.ts",
 ]);

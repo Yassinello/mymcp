@@ -9,13 +9,13 @@ import {
 import type { PipelineContext } from "@/core/pipeline";
 import { errorResponse } from "@/core/error-response";
 import { getConfig } from "@/core/config-facade";
-import { getCredential } from "@/core/request-context";
 import { getKVStore } from "@/core/kv-store";
 import { getLogger } from "@/core/logging";
 import { toMsg } from "@/core/error-utils";
 import {
   computeUpdateStatus,
   ghFetch,
+  resolveUpdateToken,
   UPDATE_CHECK_KV_KEY,
   UPDATE_CHECK_TTL_SECONDS,
   UPDATE_CHECK_STALE_MS,
@@ -99,15 +99,27 @@ function resolveRemote(): { ok: true; remote: string } | { ok: false; error: str
 // share the exact same logic. This route imports `computeUpdateStatus`
 // for GET and `ghFetch` for the POST merge-upstream path.
 
+/**
+ * Validate that a parsed cache value has the minimum shape we expect.
+ * Anything missing checkedAt or mode is treated as corrupt → cache-miss.
+ */
+function isValidCachedPayload(p: unknown): p is UpdateStatusPayload {
+  if (!p || typeof p !== "object") return false;
+  const obj = p as Record<string, unknown>;
+  return (
+    typeof obj.checkedAt === "string" &&
+    obj.mode === "github-api" &&
+    typeof obj.status === "string" &&
+    typeof obj.behind_by === "number" &&
+    typeof obj.ahead_by === "number"
+  );
+}
+
 async function githubApiGetHandler(forceRefresh: boolean): Promise<Response> {
   const owner = getConfig("VERCEL_GIT_REPO_OWNER")!;
   const slug = getConfig("VERCEL_GIT_REPO_SLUG")!;
 
-  // Token resolution: dedicated PAT first, fallback GITHUB_TOKEN
-  const token =
-    (getCredential("KEBAB_UPDATE_PAT") ?? getConfig("KEBAB_UPDATE_PAT")) ||
-    (getCredential("GITHUB_TOKEN") ?? getConfig("GITHUB_TOKEN")) ||
-    null;
+  const token = resolveUpdateToken();
 
   if (!token) {
     return NextResponse.json({
@@ -128,14 +140,25 @@ async function githubApiGetHandler(forceRefresh: boolean): Promise<Response> {
       const kv = getKVStore();
       const cached = await kv.get(UPDATE_CHECK_KV_KEY);
       if (cached) {
-        const parsed = JSON.parse(cached) as UpdateStatusPayload;
-        const checkedAtMs = Date.parse(parsed.checkedAt ?? "");
-        const ageMs = Date.now() - checkedAtMs;
-        if (Number.isFinite(checkedAtMs) && ageMs >= 0 && ageMs < UPDATE_CHECK_STALE_MS) {
-          // Fresh cache hit — return immediately, no GitHub call.
-          return NextResponse.json(parsed);
+        let parsed: unknown = null;
+        try {
+          parsed = JSON.parse(cached);
+        } catch {
+          // Corrupt JSON — purge so the next caller doesn't keep falling through.
+          await kv.delete(UPDATE_CHECK_KV_KEY).catch(() => {});
         }
-        // Stale or malformed checkedAt — fall through to live call.
+        if (isValidCachedPayload(parsed)) {
+          const checkedAtMs = Date.parse(parsed.checkedAt);
+          const ageMs = Date.now() - checkedAtMs;
+          if (Number.isFinite(checkedAtMs) && ageMs >= 0 && ageMs < UPDATE_CHECK_STALE_MS) {
+            // Fresh cache hit — return immediately, no GitHub call.
+            return NextResponse.json(parsed);
+          }
+          // Stale — fall through to live call.
+        } else if (parsed !== null) {
+          // Schema-mismatched (old version, missing fields) — purge.
+          await kv.delete(UPDATE_CHECK_KV_KEY).catch(() => {});
+        }
       }
     } catch (err) {
       // KV failure is non-fatal — log and fall through to live call.
@@ -150,6 +173,14 @@ async function githubApiGetHandler(forceRefresh: boolean): Promise<Response> {
   const result = await computeUpdateStatus(token, owner, slug);
 
   if (!result.ok) {
+    // Invalidate the cache on auth/fetch error so the user isn't served
+    // a stale "everything's fine" payload while their PAT is broken.
+    try {
+      const kv = getKVStore();
+      await kv.delete(UPDATE_CHECK_KV_KEY);
+    } catch {
+      /* non-fatal */
+    }
     if (result.kind === "auth") {
       return NextResponse.json({
         mode: "github-api",
@@ -187,10 +218,7 @@ async function githubApiPostHandler(): Promise<Response> {
   const owner = getConfig("VERCEL_GIT_REPO_OWNER")!;
   const slug = getConfig("VERCEL_GIT_REPO_SLUG")!;
 
-  const token =
-    (getCredential("KEBAB_UPDATE_PAT") ?? getConfig("KEBAB_UPDATE_PAT")) ||
-    (getCredential("GITHUB_TOKEN") ?? getConfig("GITHUB_TOKEN")) ||
-    null;
+  const token = resolveUpdateToken();
 
   if (!token) {
     return NextResponse.json({ ok: false, reason: "no-token" }, { status: 400 });
