@@ -15,6 +15,10 @@ test-results/
 playwright-report/
 coverage/
 
+# Local-only worktree scratch dirs (git worktrees + Claude Code agent worktrees)
+.worktrees/
+.claude/worktrees/
+
 # Ephemeral probe scripts produced by scripts/measure-cold-start.ts.
 # Cleaned up automatically on run; ignored in case a run is interrupted.
 .cold-start-probe-*.ts
