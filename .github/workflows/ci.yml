@@ -40,7 +40,7 @@ jobs:
         run: npm run lint:unused
       - run: npm run build
       # PERF-05 (v0.11 Phase 43): bundle-size gate. Reads
-      # `.next/diagnostics/route-bundle-stats.json` + `.size-limit.json`
+      # `.next/diagnostics/route-bundle-stats.json` + `config/size-limit.json`
       # and fails if any watched route exceeds its committed budget.
       # Runs immediately after build so regressions surface early.
       - name: Bundle size check (size-limit)

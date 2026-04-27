@@ -15,8 +15,8 @@
  *     first paint
  *   - `firstLoadChunkPaths` — the exact chunk URLs the route depends on
  *
- * We read the `.size-limit.json` file for budget entries (so the budget
- * values live in one obvious place) but apply the limit to the
+ * We read the `config/size-limit.json` file for budget entries (so the
+ * budget values live in one obvious place) but apply the limit to the
  * stats-reported `firstLoadUncompressedJsBytes` instead of globbed files.
  *
  * Usage:
@@ -68,7 +68,7 @@ function formatBytes(b: number): string {
 
 function main(): number {
   const root = path.resolve(__dirname, "..");
-  const budgetsPath = path.join(root, ".size-limit.json");
+  const budgetsPath = path.join(root, "config", "size-limit.json");
   const statsPath = path.join(root, ".next", "diagnostics", "route-bundle-stats.json");
 
   if (!fs.existsSync(statsPath)) {
@@ -113,7 +113,7 @@ function main(): number {
   if (failures > 0) {
     console.log(
       `\n[size-check] \x1b[31mFAILED\x1b[0m: ${failures} route(s) over budget. ` +
-        `Either the change legitimately added weight (update .size-limit.json with a 1-line rationale) ` +
+        `Either the change legitimately added weight (update config/size-limit.json with a 1-line rationale) ` +
         `or the regression needs investigation.`
     );
     return 1;

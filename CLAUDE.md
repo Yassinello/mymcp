@@ -148,7 +148,7 @@ integration test lives at
 
 PERF-05 (Phase 43) adds a CI gate that fails on first-load JS regressions.
 
-- Budgets live in `.size-limit.json` (route + byte limit)
+- Budgets live in `config/size-limit.json` (route + byte limit)
 - Enforced by `scripts/check-bundle-size.ts` reading
   `.next/diagnostics/route-bundle-stats.json`
 - CI runs `npm run size:check` after `npm run build`
@@ -157,7 +157,7 @@ PERF-05 (Phase 43) adds a CI gate that fails on first-load JS regressions.
 **When CI fails on `size:check`:**
 
 - If your change legitimately added weight (new connector, new major
-  dep): bump the budget in `.size-limit.json` by the minimum needed and
+  dep): bump the budget in `config/size-limit.json` by the minimum needed and
   include a 1-line rationale in the commit body. Don't add more
   headroom than required — the budget is a ratchet, not a target.
 - If the regression is unexpected: run `npm run build` locally, inspect
