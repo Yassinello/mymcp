@@ -536,178 +536,179 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
                 isOpen ? "max-h-[4000px] opacity-100" : "max-h-0 opacity-0"
               }`}
             >
-              {packDef ? (
-                <div className="border-t border-border bg-bg px-3 sm:px-5 py-4 space-y-4">
-                  {pack.guide ? (
-                    <details className="group">
-                      <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-text-muted hover:text-text select-none list-none flex items-center gap-1.5">
-                        <span className="inline-block transition-transform group-open:rotate-90">
-                          ▶
-                        </span>
-                        Credential guide
-                      </summary>
-                      <div className="mt-3">
-                        <PackGuide markdown={pack.guide} />
-                      </div>
-                    </details>
-                  ) : (
-                    <p className="text-xs text-text-muted italic">
-                      No guide available yet — see the README for setup instructions.
-                    </p>
-                  )}
-                  {packDef.vars.map((v) => (
-                    <div key={v.key}>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <label className="text-sm font-medium">{v.label}</label>
-                        <code className="text-[11px] text-text-muted">{v.key}</code>
-                        {v.optional && (
-                          <span className="text-[11px] text-text-muted bg-bg-muted px-1.5 py-0.5 rounded">
-                            optional
-                          </span>
-                        )}
-                      </div>
-                      <CredentialInput
-                        v={v}
-                        value={getValue(v.key)}
-                        onChange={(val) => updateEdit(v.key, val)}
-                      />
+              <div className="border-t border-border bg-bg px-3 sm:px-5 py-4 space-y-4">
+                {pack.guide ? (
+                  <details className="group">
+                    <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-text-muted hover:text-text select-none list-none flex items-center gap-1.5">
+                      <span className="inline-block transition-transform group-open:rotate-90">
+                        ▶
+                      </span>
+                      Credential guide
+                    </summary>
+                    <div className="mt-3">
+                      <PackGuide markdown={pack.guide} />
                     </div>
-                  ))}
-                  <div className="flex items-center gap-3 pt-2 flex-wrap">
-                    <button
-                      onClick={() => savePack(pack.id)}
-                      disabled={savingId === pack.id || savesDisabled}
-                      title={
-                        savesDisabled
-                          ? storageMode === "static"
-                            ? "Static mode — saves disabled. Use the env stub helper below."
-                            : "KV unreachable — saves blocked to prevent data loss."
-                          : undefined
-                      }
-                      className="bg-accent text-white text-sm font-medium px-4 py-1.5 rounded-md hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {savingId === pack.id ? "Saving..." : "Save"}
-                    </button>
-                    <button
-                      onClick={() => testPack(pack.id)}
-                      disabled={testing === pack.id}
-                      className="text-sm font-medium px-4 py-1.5 rounded-md bg-bg-muted hover:bg-border-light text-text-dim hover:text-text disabled:opacity-60"
-                    >
-                      {testing === pack.id ? "Testing..." : "Test connection"}
-                    </button>
-                    {test && test.message !== "Testing..." && (
-                      <span
-                        className={`text-xs font-medium px-2 py-1 rounded-full ${test.ok ? "text-green bg-green-bg" : "text-red bg-red-bg"}`}
-                      >
-                        {test.ok ? "✓ " : "✗ "}
-                        {test.message}
-                      </span>
-                    )}
-                    {savesDisabled && (
-                      <span className="text-[11px] text-orange">
-                        {storageMode === "static"
-                          ? "Static mode (env-vars only)"
-                          : `KV unreachable${storageError ? ` — ${storageError}` : ""}`}
-                      </span>
-                    )}
-                  </div>
-                  {storageMode === "static" && (
-                    <EnvStubBlock
-                      packId={pack.id}
-                      packLabel={pack.label}
-                      vars={packDef.vars.map((v) => {
-                        const raw = getValue(v.key);
-                        const masked = typeof raw === "string" && raw.includes("\u2022");
-                        return {
-                          key: v.key,
-                          label: v.label,
-                          value: masked ? "" : raw,
-                          masked,
-                          placeholder: `your-${v.key.toLowerCase().replace(/_/g, "-")}`,
-                        };
-                      })}
-                    />
-                  )}
-                  {saveError[pack.id] &&
-                    (() => {
-                      // Differentiate informational messages (no-op save,
-                      // partial config, custom-active still inactive) from
-                      // hard failures. The post-save effect surfaces benign
-                      // hints through the same channel; rendering them in
-                      // red with "Save failed" headline would mislead the
-                      // user into thinking something broke.
-                      const msg = saveError[pack.id] || "";
-                      const isBenign =
-                        msg.startsWith("No changes to save") ||
-                        msg.startsWith("Fill in at least one") ||
-                        msg.startsWith("Saved, but");
-                      return (
-                        <div
-                          className={
-                            isBenign
-                              ? "bg-bg-muted border border-border rounded-md p-3 text-xs text-text-dim"
-                              : "bg-red-bg border border-red/20 rounded-md p-3 text-xs text-red"
-                          }
-                        >
-                          <p className="font-semibold mb-1">
-                            {isBenign ? "Heads up" : "Save failed"}
-                          </p>
-                          <p className="break-words">{msg}</p>
-                        </div>
-                      );
-                    })()}
-                  {test &&
-                    !test.ok &&
-                    test.message !== "Testing..." &&
-                    (test.detail || test.message) && (
-                      <details className="bg-red-bg border border-red/20 rounded-md p-3 group">
-                        <summary className="cursor-pointer text-xs font-semibold text-red select-none list-none flex items-center gap-1.5">
-                          <span className="inline-block transition-transform group-open:rotate-90">
-                            ▶
-                          </span>
-                          Show error details
-                        </summary>
-                        <pre className="mt-2 text-[11px] font-mono text-red break-all whitespace-pre-wrap">
-                          {test.detail || test.message}
-                        </pre>
-                      </details>
-                    )}
-                  {pack.tools.length > 0 && (
-                    <details className="pt-3 border-t border-border group">
-                      <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-text-muted hover:text-text select-none list-none flex items-center gap-1.5">
-                        <span className="inline-block transition-transform group-open:rotate-90">
-                          ▶
-                        </span>
-                        Tools provided ({pack.tools.length})
-                      </summary>
-                      <ul className="mt-2 space-y-1.5">
-                        {pack.tools.map((t) => (
-                          <li key={t.name} className="text-xs">
-                            <code className="text-[11px] font-mono text-text">{t.name}</code>
-                            {t.deprecated && (
-                              <span className="ml-1.5 text-[10px] text-orange bg-orange-bg px-1 rounded">
-                                deprecated
-                              </span>
-                            )}
-                            {t.destructive && (
-                              <span className="ml-1.5 text-[10px] text-red bg-red-bg px-1 rounded">
-                                write
-                              </span>
-                            )}
-                            <span className="text-text-dim ml-2">{t.description}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
-                </div>
-              ) : (
-                <div className="border-t border-border bg-bg px-3 sm:px-5 py-4">
+                  </details>
+                ) : (
                   <p className="text-xs text-text-muted italic">
-                    No configuration form registered for this connector.
+                    No guide available yet — see the README for setup instructions.
                   </p>
-                </div>
-              )}
+                )}
+                {packDef ? (
+                  <>
+                    {packDef.vars.map((v) => (
+                      <div key={v.key}>
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <label className="text-sm font-medium">{v.label}</label>
+                          <code className="text-[11px] text-text-muted">{v.key}</code>
+                          {v.optional && (
+                            <span className="text-[11px] text-text-muted bg-bg-muted px-1.5 py-0.5 rounded">
+                              optional
+                            </span>
+                          )}
+                        </div>
+                        <CredentialInput
+                          v={v}
+                          value={getValue(v.key)}
+                          onChange={(val) => updateEdit(v.key, val)}
+                        />
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-3 pt-2 flex-wrap">
+                      <button
+                        onClick={() => savePack(pack.id)}
+                        disabled={savingId === pack.id || savesDisabled}
+                        title={
+                          savesDisabled
+                            ? storageMode === "static"
+                              ? "Static mode — saves disabled. Use the env stub helper below."
+                              : "KV unreachable — saves blocked to prevent data loss."
+                            : undefined
+                        }
+                        className="bg-accent text-white text-sm font-medium px-4 py-1.5 rounded-md hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {savingId === pack.id ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        onClick={() => testPack(pack.id)}
+                        disabled={testing === pack.id}
+                        className="text-sm font-medium px-4 py-1.5 rounded-md bg-bg-muted hover:bg-border-light text-text-dim hover:text-text disabled:opacity-60"
+                      >
+                        {testing === pack.id ? "Testing..." : "Test connection"}
+                      </button>
+                      {test && test.message !== "Testing..." && (
+                        <span
+                          className={`text-xs font-medium px-2 py-1 rounded-full ${test.ok ? "text-green bg-green-bg" : "text-red bg-red-bg"}`}
+                        >
+                          {test.ok ? "✓ " : "✗ "}
+                          {test.message}
+                        </span>
+                      )}
+                      {savesDisabled && (
+                        <span className="text-[11px] text-orange">
+                          {storageMode === "static"
+                            ? "Static mode (env-vars only)"
+                            : `KV unreachable${storageError ? ` — ${storageError}` : ""}`}
+                        </span>
+                      )}
+                    </div>
+                    {storageMode === "static" && (
+                      <EnvStubBlock
+                        packId={pack.id}
+                        packLabel={pack.label}
+                        vars={packDef.vars.map((v) => {
+                          const raw = getValue(v.key);
+                          const masked = typeof raw === "string" && raw.includes("\u2022");
+                          return {
+                            key: v.key,
+                            label: v.label,
+                            value: masked ? "" : raw,
+                            masked,
+                            placeholder: `your-${v.key.toLowerCase().replace(/_/g, "-")}`,
+                          };
+                        })}
+                      />
+                    )}
+                    {saveError[pack.id] &&
+                      (() => {
+                        // Differentiate informational messages (no-op save,
+                        // partial config, custom-active still inactive) from
+                        // hard failures. The post-save effect surfaces benign
+                        // hints through the same channel; rendering them in
+                        // red with "Save failed" headline would mislead the
+                        // user into thinking something broke.
+                        const msg = saveError[pack.id] || "";
+                        const isBenign =
+                          msg.startsWith("No changes to save") ||
+                          msg.startsWith("Fill in at least one") ||
+                          msg.startsWith("Saved, but");
+                        return (
+                          <div
+                            className={
+                              isBenign
+                                ? "bg-bg-muted border border-border rounded-md p-3 text-xs text-text-dim"
+                                : "bg-red-bg border border-red/20 rounded-md p-3 text-xs text-red"
+                            }
+                          >
+                            <p className="font-semibold mb-1">
+                              {isBenign ? "Heads up" : "Save failed"}
+                            </p>
+                            <p className="break-words">{msg}</p>
+                          </div>
+                        );
+                      })()}
+                    {test &&
+                      !test.ok &&
+                      test.message !== "Testing..." &&
+                      (test.detail || test.message) && (
+                        <details className="bg-red-bg border border-red/20 rounded-md p-3 group">
+                          <summary className="cursor-pointer text-xs font-semibold text-red select-none list-none flex items-center gap-1.5">
+                            <span className="inline-block transition-transform group-open:rotate-90">
+                              ▶
+                            </span>
+                            Show error details
+                          </summary>
+                          <pre className="mt-2 text-[11px] font-mono text-red break-all whitespace-pre-wrap">
+                            {test.detail || test.message}
+                          </pre>
+                        </details>
+                      )}
+                  </>
+                ) : (
+                  <p className="text-xs text-text-muted italic">
+                    No credential form needed for this connector — the guide above covers all the
+                    setup it needs.
+                  </p>
+                )}
+                {pack.tools.length > 0 && (
+                  <details className="pt-3 border-t border-border group">
+                    <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-text-muted hover:text-text select-none list-none flex items-center gap-1.5">
+                      <span className="inline-block transition-transform group-open:rotate-90">
+                        ▶
+                      </span>
+                      Tools provided ({pack.tools.length})
+                    </summary>
+                    <ul className="mt-2 space-y-1.5">
+                      {pack.tools.map((t) => (
+                        <li key={t.name} className="text-xs">
+                          <code className="text-[11px] font-mono text-text">{t.name}</code>
+                          {t.deprecated && (
+                            <span className="ml-1.5 text-[10px] text-orange bg-orange-bg px-1 rounded">
+                              deprecated
+                            </span>
+                          )}
+                          {t.destructive && (
+                            <span className="ml-1.5 text-[10px] text-red bg-red-bg px-1 rounded">
+                              write
+                            </span>
+                          )}
+                          <span className="text-text-dim ml-2">{t.description}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
             </div>
           </div>
         );
