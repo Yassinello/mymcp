@@ -1,0 +1,14 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="kebab-favicon-grad" x1="16" y1="6" x2="16" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="55%" stop-color="#f97316" />
+      <stop offset="100%" stop-color="#dc2626" />
+    </linearGradient>
+  </defs>
+  <line x1="16" y1="2" x2="16" y2="30" stroke="#475569" stroke-width="1.6" stroke-linecap="round" opacity="0.85" />
+  <circle cx="16" cy="3.2" r="1.4" fill="#475569" />
+  <path d="M8 7 Q16 5 24 7 L17.5 23.5 Q16 24.5 14.5 23.5 Z" fill="url(#kebab-favicon-grad)" />
+  <line x1="16" y1="6.5" x2="16" y2="23.5" stroke="#dc2626" stroke-width="0.5" opacity="0.4" />
+  <path d="M13 27 Q14.5 24 16 26 Q17.5 23 19 26 Q19.5 28.5 16 29.5 Q12.5 28.5 13 27 Z" fill="#f59e0b" opacity="0.9" />
+</svg>
