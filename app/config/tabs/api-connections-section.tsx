@@ -214,13 +214,16 @@ export function ApiConnectionsSection() {
   }
 
   return (
-    <div className="space-y-3 mt-8">
+    <div className="space-y-3 mt-10 pt-6 border-t border-border">
       <div className="flex items-center justify-between mb-3">
         <div>
+          <p className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-1">
+            Bring your own
+          </p>
           <h3 className="font-semibold text-base">API Connections</h3>
           <p className="text-xs text-text-dim mt-0.5">
-            Bring your own HTTP APIs. Configure a base URL + auth, then build tools that call
-            endpoints.
+            Configure any HTTP API with a base URL + auth, then build custom tools that call its
+            endpoints. Your tools appear in every connected MCP client.
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -256,9 +256,16 @@ export function ConnectorsTab({ connectors }: { connectors: ConnectorSummary[] }
     return <p className="text-sm text-text-muted">Loading connectors...</p>;
   }
 
-  // Hide core connectors (skills, admin) — they're not user-configurable
-  // integrations, just framework plumbing that still lives in the registry.
-  const visibleConnectors = connectors.filter((c) => !c.core);
+  // Hide:
+  // - core connectors (skills, admin) — framework plumbing, not user-
+  //   configurable integrations.
+  // - api-connections — technically a pack in the registry, but the only
+  //   way to interact with it is via the dedicated <ApiConnectionsSection />
+  //   below. Showing a placeholder card here too made users wonder which
+  //   surface was authoritative and how the two related. The section below
+  //   is the single source of truth for creating and managing connections.
+  const HIDDEN_PACK_IDS = new Set(["api-connections"]);
+  const visibleConnectors = connectors.filter((c) => !c.core && !HIDDEN_PACK_IDS.has(c.id));
 
   return (
     <div className="space-y-3">
