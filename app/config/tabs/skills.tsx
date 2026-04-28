@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { InfoTooltip } from "./settings/info-tooltip";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ImportSkillModal } from "./skills-import-modal";
 import { SkillComposer } from "./skill-composer";
+import { SkillEditPage } from "./skill-edit-page";
 import { toClaudeSkillFile } from "@/connectors/skills/lib/export-claude";
 
 interface SkillArgument {
@@ -50,34 +51,6 @@ interface SyncTarget {
   path: string;
 }
 
-interface AvailableTool {
-  name: string;
-  connector: string;
-  description: string;
-}
-
-interface DraftState {
-  editingId: string | null; // null = creating new
-  name: string;
-  description: string;
-  mode: "inline" | "remote";
-  content: string;
-  url: string;
-  arguments: SkillArgument[];
-  toolsAllowed: string[];
-}
-
-const emptyDraft = (): DraftState => ({
-  editingId: null,
-  name: "",
-  description: "",
-  mode: "inline",
-  content: "",
-  url: "",
-  arguments: [],
-  toolsAllowed: [],
-});
-
 interface SkillVersionSummary {
   version: number;
   savedAt: string;
@@ -87,11 +60,20 @@ interface SkillVersionSummary {
 }
 
 export function SkillsTab() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+
+  if (editId) {
+    return <SkillEditPage skillId={editId} />;
+  }
+
+  return <SkillsListView router={router} />;
+}
+
+function SkillsListView({ router }: { router: ReturnType<typeof useRouter> }) {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
-  const [draft, setDraft] = useState<DraftState | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -102,7 +84,6 @@ export function SkillsTab() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
   const [syncTargets, setSyncTargets] = useState<SyncTarget[]>([]);
-  const [availableTools, setAvailableTools] = useState<AvailableTool[]>([]);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [syncingAll, setSyncingAll] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -166,128 +147,22 @@ export function SkillsTab() {
   }, [reload]);
 
   useEffect(() => {
-    // Load sync targets + available tool list once on mount.
     fetch("/api/config/skills-sync-targets", { credentials: "include" })
       .then((r) => r.json())
       .then((d) => {
         if (d.ok) setSyncTargets(d.targets || []);
       })
       .catch(() => {
-        /* ignore — non-critical */
-      });
-    fetch("/api/config/available-tools", { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.ok) setAvailableTools(d.tools || []);
-      })
-      .catch(() => {
-        /* ignore — non-critical */
+        /* ignore */
       });
   }, []);
 
   const startCreate = () => {
-    setDraft(emptyDraft());
-    setError(null);
+    router.push("/config?tab=skills&edit=new");
   };
 
   const startEdit = (skill: Skill) => {
-    setDraft({
-      editingId: skill.id,
-      name: skill.name,
-      description: skill.description,
-      mode: skill.source.type,
-      content: skill.content,
-      url: skill.source.type === "remote" ? skill.source.url : "",
-      arguments: skill.arguments.map((a) => ({ ...a })),
-      toolsAllowed: [...(skill.toolsAllowed ?? [])],
-    });
-    setError(null);
-  };
-
-  const cancelDraft = () => {
-    setDraft(null);
-    setError(null);
-  };
-
-  const updateDraftArg = (idx: number, patch: Partial<SkillArgument>) => {
-    setDraft((d) =>
-      d
-        ? {
-            ...d,
-            arguments: d.arguments.map((a, i) => (i === idx ? { ...a, ...patch } : a)),
-          }
-        : d
-    );
-  };
-
-  const addArg = () => {
-    setDraft((d) =>
-      d
-        ? {
-            ...d,
-            arguments: [...d.arguments, { name: "", description: "", required: false }],
-          }
-        : d
-    );
-  };
-
-  const removeArg = (idx: number) => {
-    setDraft((d) => (d ? { ...d, arguments: d.arguments.filter((_, i) => i !== idx) } : d));
-  };
-
-  const saveDraft = async () => {
-    if (!draft) return;
-    setSaving(true);
-    setError(null);
-    const payload = {
-      name: draft.name.trim(),
-      description: draft.description.trim(),
-      content: draft.mode === "inline" ? draft.content : "",
-      arguments: draft.arguments
-        .filter((a) => a.name.trim())
-        .map((a) => ({
-          name: a.name.trim(),
-          description: a.description || "",
-          required: !!a.required,
-        })),
-      toolsAllowed: draft.toolsAllowed.filter((t) => t.trim().length > 0),
-      source:
-        draft.mode === "inline"
-          ? { type: "inline" as const }
-          : { type: "remote" as const, url: draft.url.trim() },
-    };
-    if (!payload.name) {
-      setError("Name is required");
-      setSaving(false);
-      return;
-    }
-    if (draft.mode === "remote" && !payload.source.type) {
-      setError("Remote URL is required");
-      setSaving(false);
-      return;
-    }
-    try {
-      const url = draft.editingId ? `/api/config/skills/${draft.editingId}` : "/api/config/skills";
-      const method = draft.editingId ? "PATCH" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        setError(data.error || "Save failed");
-      } else {
-        setDraft(null);
-        setFlash(draft.editingId ? "Saved" : "Created");
-        setTimeout(() => setFlash(null), 2000);
-        await reload();
-      }
-    } catch {
-      setError("Network error");
-    }
-    setSaving(false);
+    router.push(`/config?tab=skills&edit=${skill.id}`);
   };
 
   const deleteSkill = async (id: string) => {
@@ -382,9 +257,6 @@ export function SkillsTab() {
     await reload();
   };
 
-  /** Compute a simple client-side drift signal: has the skill been updated
-   * after its last sync? We use updatedAt vs lastSyncedAt because the
-   * server-side hash comparison requires extra round-trips. */
   const computeDrift = (skill: Skill): { stale: boolean; targets: string[] } => {
     const state = skill.syncState ?? {};
     const staleTargets: string[] = [];
@@ -397,7 +269,6 @@ export function SkillsTab() {
     return { stale: staleTargets.length > 0, targets: staleTargets };
   };
 
-  /** Client-side export to Claude Desktop .skill format (JSON). */
   const exportClaudeSkill = (skill: Skill) => {
     const payload = toClaudeSkillFile(skill);
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -478,7 +349,7 @@ export function SkillsTab() {
               {flash}
             </span>
           )}
-          {!draft && !composerOpen && (
+          {!composerOpen && (
             <>
               {syncTargets.length > 0 && skills.length > 0 && (
                 <button
@@ -626,21 +497,6 @@ export function SkillsTab() {
         />
       )}
 
-      {draft && (
-        <DraftForm
-          draft={draft}
-          setDraft={setDraft}
-          onCancel={cancelDraft}
-          onSave={saveDraft}
-          saving={saving}
-          error={error}
-          updateArg={updateDraftArg}
-          addArg={addArg}
-          removeArg={removeArg}
-          availableTools={availableTools}
-        />
-      )}
-
       {syncTargets.length === 0 && skills.length > 0 && (
         <div className="border border-border rounded-lg p-3 text-xs text-text-dim bg-bg-muted/30">
           <strong>Tip:</strong> Configure sync targets by setting{" "}
@@ -661,7 +517,7 @@ export function SkillsTab() {
         </div>
       )}
 
-      {skills.length === 0 && !draft && (
+      {skills.length === 0 && (
         <div className="border border-border rounded-lg p-8 text-center">
           <p className="text-sm text-text-dim">
             No skills defined yet. Click <strong>+ New skill</strong> to create your first one.
@@ -986,298 +842,6 @@ function SkillCard({
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function DraftForm({
-  draft,
-  setDraft,
-  onCancel,
-  onSave,
-  saving,
-  error,
-  updateArg,
-  addArg,
-  removeArg,
-  availableTools,
-}: {
-  draft: DraftState;
-  setDraft: (updater: (d: DraftState | null) => DraftState | null) => void;
-  onCancel: () => void;
-  onSave: () => void;
-  saving: boolean;
-  error: string | null;
-  updateArg: (idx: number, patch: Partial<SkillArgument>) => void;
-  addArg: () => void;
-  removeArg: (idx: number) => void;
-  availableTools: AvailableTool[];
-}) {
-  const set = (patch: Partial<DraftState>) => setDraft((d) => (d ? { ...d, ...patch } : d));
-  const toggleTool = (name: string) => {
-    setDraft((d) => {
-      if (!d) return d;
-      const has = d.toolsAllowed.includes(name);
-      return {
-        ...d,
-        toolsAllowed: has ? d.toolsAllowed.filter((t) => t !== name) : [...d.toolsAllowed, name],
-      };
-    });
-  };
-
-  const isEditing = !!draft.editingId;
-  const breadcrumbLabel = isEditing ? draft.name.trim() || "Untitled skill" : "New";
-
-  return (
-    <div className="border border-accent/30 rounded-lg bg-bg p-5 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <nav
-            className="flex items-center gap-1.5 text-[11px] text-text-muted mb-1"
-            aria-label="Breadcrumb"
-          >
-            <button type="button" onClick={onCancel} className="hover:text-text transition-colors">
-              Skills
-            </button>
-            <span className="text-text-muted/60">/</span>
-            <span className="text-text-dim font-medium truncate max-w-[280px]">
-              {breadcrumbLabel}
-            </span>
-            {isEditing && (
-              <>
-                <span className="text-text-muted/60">/</span>
-                <span className="text-text-dim">Edit</span>
-              </>
-            )}
-          </nav>
-          <h2 className="font-semibold text-base text-text">
-            {isEditing ? "Edit skill" : "Create a new skill"}
-          </h2>
-          <p className="text-xs text-text-dim mt-0.5">
-            {isEditing
-              ? "Update the prompt body, arguments, or allowed tools."
-              : "Define a reusable prompt template — exposed as an MCP tool to your clients."}
-          </p>
-        </div>
-        <button
-          onClick={onCancel}
-          className="text-xs text-text-dim hover:text-text shrink-0 px-2 py-1"
-        >
-          Cancel
-        </button>
-      </div>
-
-      <div>
-        <div className="flex items-center gap-2 mb-1.5">
-          <label className="text-sm font-medium">Name</label>
-          <InfoTooltip
-            title="Skill name"
-            body="Short slug used to derive the MCP tool name (lowercase, dashes only). Becomes skill_<name> when exposed to clients. Example: 'weekly-status' → tool 'skill_weekly-status'. Pick something memorable — the LLM picks tools partly by name."
-          />
-        </div>
-        <input
-          type="text"
-          value={draft.name}
-          onChange={(e) => set({ name: e.target.value })}
-          placeholder="weekly-status"
-          className="w-full bg-bg-muted border border-border rounded-md px-3 py-2 text-sm focus:border-accent focus:outline-none"
-        />
-      </div>
-
-      <div>
-        <div className="flex items-center gap-2 mb-1.5">
-          <label className="text-sm font-medium">Description</label>
-          <InfoTooltip
-            title="What the LLM sees"
-            body="One-line summary the LLM reads when picking which tool to call. Be precise — vague descriptions get ignored. Bad: 'helps with status reports'. Good: 'Drafts a Wins/Blockers/Next weekly status report from raw notes; takes a single notes argument'."
-          />
-        </div>
-        <input
-          type="text"
-          value={draft.description}
-          onChange={(e) => set({ description: e.target.value })}
-          placeholder="Drafts a weekly status report from raw notes"
-          className="w-full bg-bg-muted border border-border rounded-md px-3 py-2 text-sm focus:border-accent focus:outline-none"
-        />
-      </div>
-
-      <div>
-        <div className="flex items-center gap-2 mb-1.5">
-          <label className="text-sm font-medium">Source</label>
-          <InfoTooltip
-            title="Inline vs Remote"
-            body="Inline = the prompt body lives in Kebab MCP's KV store; edit it from this form anytime. Remote = Kebab MCP fetches the markdown from a URL on each invocation (with caching). Use Remote for skills shared across deployments; use Inline for personal skills you tweak often."
-          />
-        </div>
-        <div className="flex gap-2">
-          {(["inline", "remote"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => set({ mode: m })}
-              className={`text-xs font-medium px-3 py-1.5 rounded-md border ${
-                draft.mode === m
-                  ? "border-accent bg-accent/10 text-accent"
-                  : "border-border text-text-dim hover:border-border-light"
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {draft.mode === "inline" ? (
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <label className="text-sm font-medium">Content</label>
-            <InfoTooltip
-              title="Skill body"
-              body="The prompt body that gets rendered when the skill is called. Use {{arg_name}} placeholders to inject argument values. Example: 'Summarize the following: {{notes}}'. Keep it short — skills are templates, not full conversations."
-            />
-            <span className="text-text-muted text-xs font-normal">
-              markdown · use {`{{arg}}`} placeholders
-            </span>
-          </div>
-          <textarea
-            value={draft.content}
-            onChange={(e) => set({ content: e.target.value })}
-            rows={10}
-            placeholder="Summarize this article: {{url}}&#10;&#10;Focus on:&#10;- Key claims&#10;- Supporting evidence&#10;- Actionable takeaways"
-            className="w-full bg-bg-muted border border-border rounded-md px-3 py-2 text-sm font-mono focus:border-accent focus:outline-none"
-          />
-        </div>
-      ) : (
-        <div>
-          <label className="text-sm font-medium block mb-1.5">
-            URL{" "}
-            <span className="text-text-muted font-normal">(https, 500KB max, cached 15 min)</span>
-          </label>
-          <input
-            type="url"
-            value={draft.url}
-            onChange={(e) => set({ url: e.target.value })}
-            placeholder="https://raw.githubusercontent.com/user/repo/main/skill.md"
-            className="w-full bg-bg-muted border border-border rounded-md px-3 py-2 text-sm font-mono focus:border-accent focus:outline-none"
-          />
-        </div>
-      )}
-
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Arguments</label>
-            <InfoTooltip
-              title="Typed inputs the skill accepts"
-              body="Each argument has a name (mustache placeholder), a description (shown to the LLM in the tool schema), and a required flag. The LLM picks values for required arguments before invoking. Example: name='notes', description='Raw notes for the week', required=true → the skill body can use {{notes}}."
-            />
-          </div>
-          <button type="button" onClick={addArg} className="text-xs text-accent hover:underline">
-            + Add arg
-          </button>
-        </div>
-        {draft.arguments.length === 0 && (
-          <p className="text-xs text-text-muted">
-            No arguments. Add one to accept input from the caller.
-          </p>
-        )}
-        <div className="space-y-2">
-          {draft.arguments.map((arg, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={arg.name}
-                onChange={(e) => updateArg(i, { name: e.target.value })}
-                placeholder="name"
-                className="w-32 bg-bg-muted border border-border rounded-md px-2 py-1 text-xs font-mono focus:border-accent focus:outline-none"
-              />
-              <input
-                type="text"
-                value={arg.description || ""}
-                onChange={(e) => updateArg(i, { description: e.target.value })}
-                placeholder="description (shown to LLM)"
-                className="flex-1 bg-bg-muted border border-border rounded-md px-2 py-1 text-xs focus:border-accent focus:outline-none"
-              />
-              <label className="text-xs text-text-dim flex items-center gap-1 shrink-0">
-                <input
-                  type="checkbox"
-                  checked={!!arg.required}
-                  onChange={(e) => updateArg(i, { required: e.target.checked })}
-                />
-                required
-              </label>
-              <button
-                type="button"
-                onClick={() => removeArg(i)}
-                className="text-xs text-red hover:underline"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <div className="flex items-center gap-2 mb-1.5">
-          <label className="text-sm font-medium">Allowed tools</label>
-          <InfoTooltip
-            title="Governance — tools this skill is allowed to invoke"
-            body="Declare which MCP tools this skill may call. The list is embedded in the exported frontmatter as `tools_allowed` so Claude Code (and reviewers) can see the skill's surface before invocation. Empty = no explicit restriction — the skill inherits the ambient tool surface at runtime."
-          />
-          <span className="text-text-muted text-xs font-normal">
-            {draft.toolsAllowed.length} selected
-          </span>
-        </div>
-        {availableTools.length === 0 ? (
-          <p className="text-xs text-text-muted">No tools available yet.</p>
-        ) : (
-          <div className="max-h-48 overflow-y-auto border border-border rounded-md p-2 space-y-1 bg-bg-muted/40">
-            {availableTools.map((t) => (
-              <label
-                key={t.name}
-                className="flex items-start gap-2 text-xs px-1.5 py-1 hover:bg-bg-muted rounded cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={draft.toolsAllowed.includes(t.name)}
-                  onChange={() => toggleTool(t.name)}
-                  className="mt-0.5"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <code className="font-mono text-text">{t.name}</code>
-                    <span className="text-[10px] text-text-muted">{t.connector}</span>
-                  </div>
-                  {t.description && <p className="text-text-dim truncate">{t.description}</p>}
-                </div>
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {error && (
-        <div className="bg-red-bg border border-red/20 rounded-md p-3 text-xs text-red">
-          {error}
-        </div>
-      )}
-
-      <div className="flex items-center gap-3 pt-2">
-        <button
-          onClick={onSave}
-          disabled={saving}
-          className="bg-accent text-white text-sm font-medium px-4 py-1.5 rounded-md hover:bg-accent/90 disabled:opacity-60"
-        >
-          {saving ? "Saving..." : draft.editingId ? "Save changes" : "Create skill"}
-        </button>
-        <button
-          onClick={onCancel}
-          className="text-sm font-medium px-4 py-1.5 rounded-md bg-bg-muted hover:bg-border-light text-text-dim"
-        >
-          Cancel
-        </button>
-      </div>
     </div>
   );
 }
