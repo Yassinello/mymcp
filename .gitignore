@@ -19,6 +19,14 @@ coverage/
 .worktrees/
 .claude/worktrees/
 
+# Personal AI-tool scratchpad — see CLAUDE.md (the stub) for rationale.
+# Architecture/contributor docs live in docs/ARCHITECTURE.md, not here.
+CLAUDE.md
+
+# Claude Code session state (locks, local user prefs).
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+
 # Ephemeral probe scripts produced by scripts/measure-cold-start.ts.
 # Cleaned up automatically on run; ignored in case a run is interrupted.
 .cold-start-probe-*.ts

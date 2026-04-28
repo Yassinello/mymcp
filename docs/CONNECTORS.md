@@ -293,7 +293,7 @@ combinations of the 7 steps.
 
 ## See also
 
-- `CLAUDE.md` — project architecture overview
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — project architecture overview
 - `docs/SECURITY-ADVISORIES.md` — advisory index
 - `.planning/research/RISKS-AUDIT.md` — the risk audit that motivated
   SEC-01..06

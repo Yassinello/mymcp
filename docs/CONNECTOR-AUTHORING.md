@@ -352,7 +352,7 @@ Use the `kebab.<tool>.*` convention via `brandSpanAttrs({ "tool.name": "hello_sa
 - [CONNECTORS.md](CONNECTORS.md) — the 14 shipped connectors + 86 tools.
 - [API.md](API.md) — route-by-route API reference.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — full contribution workflow + coverage philosophy.
-- [../CLAUDE.md](../CLAUDE.md) — project conventions for Claude Code agents.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — full project conventions, env-var reference, and durable-bootstrap pattern.
 
 ---
 

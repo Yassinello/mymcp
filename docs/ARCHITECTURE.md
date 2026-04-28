@@ -1,4 +1,8 @@
-# Kebab MCP — Development Guide
+# Architecture & Contributor Guide
+
+Reading this if you want to: add a connector, add a tool, change auth/registry, or understand why the framework looks the way it does. For first-time setup of an instance, see [README.md](../README.md).
+
+> **Note:** this document was previously called `CLAUDE.md` at the repo root. It moved here in 2026-04 because (a) the contents are useful for any contributor regardless of which AI tooling they use, and (b) keeping a personal-AI-context file at the root invited dropping credentials or private workflow notes into a publicly-tracked file. Don't put secrets anywhere in this repo — see [SECURITY.md](SECURITY.md).
 
 ## Project Overview
 
@@ -73,7 +77,7 @@ Every auth-gated API route handler MUST do one of:
    in the first 10 lines of the file. The only legitimate exemptions
    are `/api/health` (public liveness) and the handful of callback
    endpoints (`/api/auth/google/callback`, `/api/webhook/[name]`,
-   `/api/cron/health`) documented under `.planning/phases/37-durability-primitives/`.
+   `/api/cron/health`).
 
 A contract test (`tests/contract/route-rehydrate-coverage.test.ts`)
 fails the build if a new auth-gated route is added without the wrapper
@@ -105,7 +109,7 @@ KV writes in route handlers MUST be awaited. Fire-and-forget
 `void persistBootstrapToKv(...)` is banned — Vercel's reaper can kill
 in-flight promises before they resolve, which was the root cause of
 one of the 2026-04-20 session's shipped bugs (see `BUG-07` in
-[`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)). The contract
+[`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)). The contract
 test `tests/contract/fire-and-forget.test.ts` enforces this via grep.
 
 If you genuinely need fire-and-forget (metrics, logs, recovery
@@ -128,9 +132,9 @@ field exposes the active variant for observability hints.
 ### Reference
 
 Case studies for every bug that motivated this pattern:
-[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md). The durability
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md). The durability
 integration test lives at
-[`tests/integration/welcome-durability.test.ts`](tests/integration/welcome-durability.test.ts).
+`tests/integration/welcome-durability.test.ts`.
 
 ## Adding a Tool
 
@@ -139,6 +143,16 @@ integration test lives at
 3. Done — registry picks it up automatically
 
 ## Adding a Connector
+
+You can scaffold the boilerplate in one command:
+
+```bash
+npm run scaffold:connector mything --label "My Thing" --env MYTHING_API_KEY
+```
+
+This generates `src/connectors/mything/manifest.ts`, a stub `tools/hello.ts`, patches `src/core/registry.ts`, and appends env-var stubs to `.env.example`. Then edit the manifest to add real tools.
+
+Manual route (if you prefer):
 
 1. Create `src/connectors/myconnector/manifest.ts` exporting a `ConnectorManifest`
 2. Add a `ConnectorLoaderEntry` (id + label + description + requiredEnvVars + `toolCount` + `loader: () => import(...)`) to `src/core/registry.ts` `ALL_CONNECTOR_LOADERS` table — v0.11 Phase 43 replaced the static `ALL_CONNECTORS` array with lazy loaders (PERF-01). Keep `toolCount` in sync with `manifest.tools.length`; a contract test enforces this
@@ -191,6 +205,8 @@ PERF-05 (Phase 43) adds a CI gate that fails on first-load JS regressions.
 |----------|----------|-------------|
 | `MCP_AUTH_TOKEN` | Yes | MCP endpoint auth |
 | `ADMIN_AUTH_TOKEN` | No | Dashboard auth (fallback: MCP_AUTH_TOKEN) |
+| `KEBAB_ADMIN_TOKEN_FALLBACK` | No | Set to `1` to opt back into the legacy fallback (MCP token also grants admin) in production. Default: hard-fail in prod when `ADMIN_AUTH_TOKEN` is missing but `MCP_AUTH_TOKEN` is set. |
+| `KEBAB_SKILLS_HMAC_SECRET` | No | If set (>=32 chars), every remote-skill fetch must carry an `x-skill-signature: hex(hmac-sha256(secret, body))` header. Prevents MITM injecting prompt content. |
 | `GOOGLE_CLIENT_ID` | Google connector | OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google connector | OAuth client secret |
 | `GOOGLE_REFRESH_TOKEN` | Google connector | OAuth refresh token |
@@ -219,6 +235,7 @@ PERF-05 (Phase 43) adds a CI gate that fails on first-load JS regressions.
 | `MYMCP_DURABLE_LOGS` | No | Persist logs to KV store (default: false) |
 | `MYMCP_RATE_LIMIT_ENABLED` | No | Enable per-token rate limiting (default: false) |
 | `MYMCP_RATE_LIMIT_RPM` | No | Max requests per token per minute (default: 60) |
+| `KEBAB_API_CONN_ALLOW_LOCAL` | No | Dev-only: allow custom API connections to point at loopback / private networks. Refused at runtime in production (NODE_ENV=production or VERCEL=1) — would defeat SSRF protection on cloud-metadata IPs. |
 | `OTEL_SERVICE_NAME` | No | Enables OTel tracing when set |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | No | OTLP HTTP endpoint (default: localhost:4318) |
 | `UPSTASH_REDIS_REST_URL` | No | Upstash Redis URL for production KV |
@@ -233,3 +250,7 @@ PERF-05 (Phase 43) adds a CI gate that fails on first-load JS regressions.
 - OAuth uses state parameter + PKCE
 - Health endpoint is public but returns minimal info only
 - Dashboard/welcome are auth-gated via middleware
+- Optional HMAC signature on remote skills (`KEBAB_SKILLS_HMAC_SECRET`)
+- Admin token isolation enforced in production (see `KEBAB_ADMIN_TOKEN_FALLBACK`)
+
+For the responsible disclosure process, see [SECURITY.md](SECURITY.md).

@@ -421,8 +421,8 @@ a persistent 503 means KV isn't serving the bootstrap back.
 
 - [`CHANGELOG.md`](CHANGELOG.md) — v0.10.0 release notes and
   per-phase subsections.
-- [`CLAUDE.md`](../CLAUDE.md) — developer guide, durable bootstrap
-  pattern.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — developer guide, durable
+  bootstrap pattern, env-var reference.
 - [`docs/SECURITY-ADVISORIES.md`](SECURITY-ADVISORIES.md) — advisory
   index and disclosure timeline.
 - [`docs/HOSTING.md`](HOSTING.md) — host compatibility matrix.
