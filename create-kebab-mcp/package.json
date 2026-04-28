@@ -20,7 +20,7 @@
     "url": "https://github.com/Yassinello/kebab-mcp",
     "directory": "create-kebab-mcp"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "engines": {
     "node": ">=18"
   },

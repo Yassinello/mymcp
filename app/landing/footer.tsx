@@ -41,8 +41,8 @@ export default function LandingFooter() {
               <p className="font-mono text-white font-semibold">Kebab MCP</p>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
-              One self-hosted backend for every AI client. MIT licensed, open source, built with the
-              community.
+              One self-hosted backend for every AI client. AGPL-3.0 licensed, open source, built
+              with the community.
             </p>
           </div>
 
@@ -71,7 +71,7 @@ export default function LandingFooter() {
 
         <div className="pt-6 border-t border-slate-800/60 flex flex-col sm:flex-row justify-between items-center gap-3">
           <p className="text-xs text-slate-600">
-            © {new Date().getFullYear()} Kebab MCP contributors · MIT License
+            © {new Date().getFullYear()} Kebab MCP contributors · AGPL-3.0 License
           </p>
           <p className="text-xs text-slate-600 font-mono">v{packageJson.version}</p>
         </div>

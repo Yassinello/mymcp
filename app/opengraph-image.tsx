@@ -97,7 +97,7 @@ export default async function OpengraphImage() {
           marginBottom: "auto",
         }}
       >
-        One Vercel deploy. 86+ tools across 15 connectors. Self-hosted, MIT licensed.
+        One Vercel deploy. 86+ tools across 15 connectors. Self-hosted, AGPL-3.0 licensed.
       </div>
 
       {/* Footer row */}

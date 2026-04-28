@@ -1,6 +1,6 @@
 const BADGES = [
   {
-    label: "MIT licensed",
+    label: "AGPL-3.0 licensed",
     description: "Full source on GitHub. Fork it, audit it, make it yours.",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

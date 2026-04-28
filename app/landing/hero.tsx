@@ -19,7 +19,7 @@ export default function Hero() {
               client the same private backend: 86+ built-in tools, custom Skills, and your own APIs.
             </p>
             <p className="text-sm text-slate-500 mb-8 max-w-lg mx-auto lg:mx-0">
-              Your keys, your data, your infra. Open source, MIT licensed, no SaaS middleman.
+              Your keys, your data, your infra. Open source, AGPL-3.0 licensed, no SaaS middleman.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start items-center mb-8">
               <a

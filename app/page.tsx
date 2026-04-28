@@ -9,11 +9,11 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Kebab MCP — One backend. Every AI gets a bite.",
   description:
-    "Deploy Kebab MCP on Vercel and serve Claude, Cursor, Windsurf, and any MCP-compatible client the same private backend: 86+ built-in tools, custom Skills, and your own APIs. MIT licensed, open source.",
+    "Deploy Kebab MCP on Vercel and serve Claude, Cursor, Windsurf, and any MCP-compatible client the same private backend: 86+ built-in tools, custom Skills, and your own APIs. AGPL-3.0 licensed, open source.",
   openGraph: {
     title: "Kebab MCP — One backend. Every AI gets a bite.",
     description:
-      "Connect your tools once. Feed every AI. 86+ built-in tools across 15 connectors, custom Skills, and any HTTP API you want to bring. Self-hosted on Vercel, MIT licensed.",
+      "Connect your tools once. Feed every AI. 86+ built-in tools across 15 connectors, custom Skills, and any HTTP API you want to bring. Self-hosted on Vercel, AGPL-3.0 licensed.",
   },
 };
 
