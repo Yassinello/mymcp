@@ -35,6 +35,13 @@ async function readKvCachedToken(): Promise<CachedToken | null> {
 }
 
 async function writeKvCachedToken(tok: CachedToken): Promise<void> {
+  // Race note: under concurrent cold-start load, two lambdas can both miss the
+  // KV cache and refresh in parallel, then both write here. The second write
+  // overwrites the first with an equivalently-valid token (Google issues
+  // the same access_token to multiple refresh calls within a short window).
+  // The only cost is the extra OAuth roundtrip (~300ms), incurred once per
+  // burst — acceptable. Compare-and-set would require a KV primitive the
+  // FilesystemKV backend doesn't expose; not worth the complexity.
   try {
     const kv = getContextKVStore();
     // TTL = (expiry - now) seconds; leave a 10-min cushion so a slightly

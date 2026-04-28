@@ -181,6 +181,15 @@ export async function fetchWithByteCap(
  * don't validate. Use `.strict()` to fail when the response has
  * unknown fields (rare; useful for security-sensitive responses).
  *
+ * Caveats:
+ * - Empty response bodies are validated against `undefined`. If your
+ *   schema can accept undefined (e.g. `z.object({}).optional()`), this
+ *   passes; otherwise it errors.
+ * - Schemas with `.transform()` that throw at runtime: the throw is
+ *   caught by safeParse and surfaces as FetchValidationError — but if
+ *   you need async transforms, use `parseAsync` directly outside this
+ *   helper. This signature stays sync-parse-only on purpose.
+ *
  * Example:
  *   const SlackOk = z.object({ ok: z.literal(true), ts: z.string() });
  *   const data = await fetchWithValidation(url, init, SlackOk);

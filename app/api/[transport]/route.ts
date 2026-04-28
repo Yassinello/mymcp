@@ -67,6 +67,11 @@ async function primeDynamicCaches(
     return lastPrimePromise;
   }
   lastPrimeAt = now;
+  // The per-connector refresh() is wrapped in .catch() so individual failures
+  // never reject the Promise.all. Outer .catch() is defense-in-depth: if
+  // the whole pipeline somehow throws (e.g. a connector with a bad manifest
+  // shape), invalidate the cache so the next request retries instead of
+  // forever holding a rejected promise.
   lastPrimePromise = Promise.all(
     packs.map((p) =>
       p.manifest.refresh?.().catch(() => {
@@ -74,7 +79,12 @@ async function primeDynamicCaches(
         // will simply expose whatever the cached sync view sees (possibly []).
       })
     )
-  ).then(() => undefined);
+  )
+    .then(() => undefined)
+    .catch(() => {
+      lastPrimeAt = 0;
+      lastPrimePromise = null;
+    });
   return lastPrimePromise;
 }
 

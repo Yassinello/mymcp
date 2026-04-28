@@ -51,9 +51,26 @@ const SIGNATURE_HEADER = "x-skill-signature";
  * composition path. HMAC pins the content to a secret only the operator + the
  * signing producer share.
  */
+const MIN_HMAC_SECRET_LEN = 32;
+let weakSecretWarned = false;
+
 function verifySkillSignature(body: string, headers: Headers): { ok: boolean; error?: string } {
   const secret = getConfig("KEBAB_SKILLS_HMAC_SECRET");
   if (!secret) return { ok: true }; // opt-in; unset = legacy behavior
+  if (secret.length < MIN_HMAC_SECRET_LEN) {
+    // Refuse to use a too-short secret. A 1-byte secret defeats HMAC's
+    // collision resistance and weakens the timing-attack guarantee. We
+    // refuse rather than silently accept, so the operator notices.
+    if (!weakSecretWarned) {
+      console.error(
+        `[Kebab MCP Security] KEBAB_SKILLS_HMAC_SECRET is shorter than ${MIN_HMAC_SECRET_LEN} chars. ` +
+          `Generate a strong secret (e.g. \`openssl rand -hex 32\`) and re-deploy. ` +
+          `Skill fetches are blocked until this is fixed.`
+      );
+      weakSecretWarned = true;
+    }
+    return { ok: false, error: "HMAC secret too short" };
+  }
   const provided = headers.get(SIGNATURE_HEADER);
   if (!provided) return { ok: false, error: "Skill signature missing" };
   const expected = createHmac("sha256", secret).update(body).digest("hex");

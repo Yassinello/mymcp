@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createHmac } from "node:crypto";
 import { fetchRemote } from "./remote-fetcher";
 
-const SECRET = "test-hmac-secret-123";
+const SECRET = "test-hmac-secret-32-bytes-aaaaaaaa"; // >= 32 chars (MIN_HMAC_SECRET_LEN)
 const PAYLOAD = "# Skill\nHello world";
 const URL = "https://example.com/skill.md";
 
@@ -73,5 +73,18 @@ describe("remote-fetcher SEC-A-01 HMAC signature verification", () => {
     const result = await fetchRemote(URL);
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/signature/i);
+  });
+
+  it("refuses to operate with a too-short HMAC secret (< 32 chars)", async () => {
+    process.env.KEBAB_SKILLS_HMAC_SECRET = "short";
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    fetchSpy.mockResolvedValueOnce(
+      mockFetchResponse(PAYLOAD, { "x-skill-signature": sign(PAYLOAD, "short") })
+    );
+    const result = await fetchRemote(URL);
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/secret too short/i);
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("KEBAB_SKILLS_HMAC_SECRET"));
+    errSpy.mockRestore();
   });
 });

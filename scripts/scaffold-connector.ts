@@ -145,19 +145,31 @@ async function main() {
   await fs.writeFile(registryPath, before + LOADER_TPL(args) + after);
 
   // Append env-var stubs to .env.example (de-duped).
+  // Validate env var names first — prevents ReDoS on user input + matches
+  // the POSIX env-var name shape so we don't write garbage to .env.example.
+  const ENV_VAR_RE = /^[A-Z_][A-Z0-9_]*$/;
+  for (const v of args.envVars) {
+    if (!ENV_VAR_RE.test(v)) {
+      throw new Error(
+        `Invalid env var name: ${JSON.stringify(v)}. Must match ${ENV_VAR_RE} (e.g. STRIPE_API_KEY).`
+      );
+    }
+  }
   const envPath = path.join(root, ".env.example");
-  let env = (await exists(envPath)) ? await fs.readFile(envPath, "utf8") : "";
+  const env = (await exists(envPath)) ? await fs.readFile(envPath, "utf8") : "";
+  // String-based dedup: split into lines, check prefix. No RegExp on user input.
+  const existingLines = new Set(env.split(/\r?\n/).map((l) => l.split("=")[0]?.trim() ?? ""));
   const additions: string[] = [];
   for (const v of args.envVars) {
-    if (!new RegExp(`^${v}=`, "m").test(env)) additions.push(`${v}=`);
+    if (!existingLines.has(v)) additions.push(`${v}=`);
   }
   if (additions.length > 0) {
-    env =
+    const updated =
       env.trimEnd() +
       `\n\n# ${args.label} (auto-added by scaffold-connector)\n` +
       additions.join("\n") +
       "\n";
-    await fs.writeFile(envPath, env);
+    await fs.writeFile(envPath, updated);
   }
 
   console.log(`✓ Scaffolded connector: ${args.id}`);
