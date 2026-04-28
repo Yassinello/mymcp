@@ -63,21 +63,15 @@ const SettingsTab = dynamic(
   () => import("./tabs/settings").then((m) => ({ default: m.SettingsTab })),
   { ssr: true, loading: () => <TabLoadingSkeleton label="Settings" /> }
 );
-const StorageTab = dynamic(
-  () => import("./tabs/storage").then((m) => ({ default: m.StorageTab })),
-  // ssr: false — storage status polls /api/storage/status on an interval.
-  { ssr: false, loading: () => <TabLoadingSkeleton label="Storage" /> }
-);
+// Storage and Devices are no longer top-level tabs — they live as
+// sub-tabs of SettingsTab (which imports them directly). The /config?
+// tab=storage and /config?tab=devices URLs still work: they render
+// SettingsTab with forceSub set, so existing bookmarks keep landing
+// on the correct view.
 const HealthTab = dynamic(
   () => import("./tabs/health").then((m) => ({ default: m.HealthTab })),
   // ssr: false — health polls /api/health on an interval.
   { ssr: false, loading: () => <TabLoadingSkeleton label="Health" /> }
-);
-const DevicesTab = dynamic(
-  () => import("./tabs/devices").then((m) => ({ default: m.DevicesTab })),
-  // ssr: false — Devices fetches /api/admin/devices on mount and issues
-  // mutation POST/DELETE on user action; no deterministic SSR value.
-  { ssr: false, loading: () => <TabLoadingSkeleton label="Devices" /> }
 );
 
 // Re-export the DocEntry type for page.tsx. Keeping this under `export
@@ -180,12 +174,42 @@ export function ConfigTabs({
           baseUrl={baseUrl}
           hasAuthToken={hasAuthToken}
           scopeBadge={tenantId ? { mode: "tenant", tenantId } : { mode: "global" }}
+          tenantId={tenantId}
         />
       );
       break;
+    // Storage and Devices were demoted from top-level tabs to Settings
+    // sub-tabs (cleaner sidebar — both are config surfaces, not daily-
+    // driver destinations). Anyone who bookmarked the old URLs still
+    // lands on the right view: we render SettingsTab with the matching
+    // forceSub so the sub-tab is pre-selected.
     case "storage":
-      section = "Storage";
-      tab = <StorageTab />;
+      section = "Settings";
+      tab = (
+        <SettingsTab
+          config={config}
+          vaultEnabled={vaultEnabled}
+          baseUrl={baseUrl}
+          hasAuthToken={hasAuthToken}
+          scopeBadge={tenantId ? { mode: "tenant", tenantId } : { mode: "global" }}
+          tenantId={tenantId}
+          forceSub="storage"
+        />
+      );
+      break;
+    case "devices":
+      section = "Settings";
+      tab = (
+        <SettingsTab
+          config={config}
+          vaultEnabled={vaultEnabled}
+          baseUrl={baseUrl}
+          hasAuthToken={hasAuthToken}
+          scopeBadge={tenantId ? { mode: "tenant", tenantId } : { mode: "global" }}
+          tenantId={tenantId}
+          forceSub="devices"
+        />
+      );
       break;
     case "health":
       section = "Health";
@@ -193,10 +217,6 @@ export function ConfigTabs({
       // tenantIds list populated server-side from MCP_AUTH_TOKEN_*
       // env vars. Scoped admins get rootScope=false and no tenant list.
       tab = <HealthTab rootScope={tenantId == null} tenantIds={tenantIds ?? []} />;
-      break;
-    case "devices":
-      section = "Devices";
-      tab = <DevicesTab tenantId={tenantId} baseUrl={baseUrl} />;
       break;
     case "overview":
     default:

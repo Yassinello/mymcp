@@ -19,9 +19,12 @@ const PRIMARY_NAV = [
 
 const SECONDARY_NAV = [
   { href: "/config?tab=documentation", tab: "documentation", label: "Documentation", icon: "book" },
-  { href: "/config?tab=storage", tab: "storage", label: "Storage", icon: "database" },
   { href: "/config?tab=health", tab: "health", label: "Health", icon: "heart" },
-  { href: "/config?tab=devices", tab: "devices", label: "Devices", icon: "devices" },
+  // Storage and Devices used to live here as top-level tabs. They were
+  // demoted to sub-tabs of Settings (sub=storage, sub=devices) — they
+  // are configuration surfaces, not daily-driver destinations. The
+  // tabs.tsx router still resolves /config?tab=storage and ?tab=devices
+  // to the same components for bookmark compatibility.
   { href: "/config?tab=settings", tab: "settings", label: "Settings", icon: "settings" },
 ];
 
