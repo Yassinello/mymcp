@@ -14,11 +14,16 @@ Yes. Each instance is a separate Vercel project with its own URL, env vars, and 
 
 ## Does Kebab MCP store my credentials?
 
-Credentials live as env vars on Vercel (or in `.env.local` for local dev). Kebab MCP itself never persists credentials anywhere — it reads them at request time. Skill content and personal context live in the KV store (Upstash if configured, filesystem otherwise).
+Two valid storage paths:
+
+- **Vercel project env vars** (or `.env.local` for local dev) — frozen at the deploy boundary, take precedence on conflict, recommended for shared/team deploys where you want creds locked at deploy time.
+- **Upstash KV** (via the dashboard "Save" button) — persists across cold starts without a redeploy, recommended for personal instances where you want to add connectors on the fly. Stored under `cred:<KEY>` keys, surfaced to handlers through an in-process snapshot (SEC-02 prevents tenant-cross-contamination by never mutating `process.env` at request time).
+
+Skill content and personal context always live in KV (Upstash if configured, filesystem otherwise).
 
 ## What happens to my data on Vercel cold starts?
 
-In-memory state (recent logs, runtime caches) is wiped. Persistent state (skills, context, env vars) survives because it lives in the KV store and the Vercel env var system.
+In-memory state (recent logs, runtime caches) is wiped. Persistent state (skills, context, KV-saved credentials, env vars) survives because it lives in Upstash KV and the Vercel env var system. The instance bootstrap token is rehydrated from KV on every cold start so the dashboard never asks you to log in again.
 
 ## Can I run Kebab MCP without Vercel?
 

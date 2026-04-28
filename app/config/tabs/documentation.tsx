@@ -26,9 +26,9 @@ export function DocumentationTab({ docs }: { docs: DocEntry[] }) {
   }
 
   return (
-    <div className="grid grid-cols-[200px_1fr] gap-6">
-      {/* Sidebar TOC */}
-      <aside className="border-r border-border pr-4">
+    <div className="grid grid-cols-1 lg:grid-cols-[200px_minmax(0,1fr)] gap-8 lg:gap-10">
+      {/* TOC — sticky on desktop, inlined on mobile */}
+      <aside className="lg:sticky lg:top-10 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto">
         <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-2">
           On this page
         </p>
@@ -51,9 +51,10 @@ export function DocumentationTab({ docs }: { docs: DocEntry[] }) {
         </ul>
       </aside>
 
-      {/* Content */}
-      <article className="prose-mymcp max-w-none">
-        <h2 className="text-xl font-bold text-text mb-1">{current.title}</h2>
+      {/* Content — capped at a comfortable reading column even when the
+          shell is wide, so long lines stay scannable. */}
+      <article className="prose-mymcp max-w-3xl min-w-0">
+        <h2 className="text-2xl font-bold text-text mb-1">{current.title}</h2>
         <p className="text-sm text-text-muted mb-6">{current.summary}</p>
         <div
           className="text-sm text-text-dim leading-relaxed space-y-3"

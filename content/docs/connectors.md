@@ -6,7 +6,14 @@ order: 20
 
 ## How activation works
 
-Every connector ships with a list of required env vars. When all of them are set on the running server, the connector flips to **active** and its tools register. No restart needed in dev; on Vercel you redeploy after editing env vars (or use the dashboard hot-edit which writes to Vercel via the API).
+Every connector ships with a list of required env vars. When all of them are present, the connector flips to **active** and its tools register at the MCP endpoint immediately — no redeploy required.
+
+There are two places those env vars can live:
+
+- **Vercel project env vars** (or `.env.local` for local dev) — frozen at the deploy boundary, take precedence on conflict.
+- **Upstash KV** (via the dashboard "Save" button) — persists instantly across cold starts, no redeploy. This is the default for credentials saved through `/config → Connectors`.
+
+The dashboard always reflects the merged view: a connector configured via either path shows as **Active**. If you save in the dashboard but the badge doesn't flip, check **Settings → Storage** — if you're in `Filesystem (temporary)` mode, the credential vanishes on the next cold start. The fix is to provision Upstash (Vercel Marketplace one-clicks the integration).
 
 ## Google Workspace
 

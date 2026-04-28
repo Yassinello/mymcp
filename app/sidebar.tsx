@@ -228,6 +228,7 @@ export function AppShell({
   serverName,
   setupMode,
   narrow,
+  wide,
 }: {
   children: React.ReactNode;
   title: string;
@@ -236,14 +237,18 @@ export function AppShell({
   serverName?: string;
   setupMode?: boolean;
   narrow?: boolean;
+  /** Wide content area (e.g. Documentation) — fits TOC + reading column. */
+  wide?: boolean;
 }) {
+  // Width tier: narrow < default < wide. Only one applies.
+  const widthClass = wide ? "max-w-6xl" : narrow ? "max-w-3xl" : "max-w-4xl";
   return (
     // MOBILE-01: vertical stack (top bar + content) on < sm, horizontal
     // sidebar layout on sm+.
     <div className="flex flex-col sm:flex-row min-h-screen">
       <Sidebar displayName={displayName} serverName={serverName} setupMode={setupMode} />
       <main className="flex-1 overflow-auto min-w-0">
-        <div className={`${narrow ? "max-w-3xl" : "max-w-4xl"} mx-auto px-4 sm:px-8 py-6 sm:py-10`}>
+        <div className={`${widthClass} mx-auto px-4 sm:px-8 py-6 sm:py-10`}>
           <div className="mb-6 sm:mb-8">
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight">{title}</h1>
             {subtitle && <p className="text-text-dim mt-1 text-sm sm:text-base">{subtitle}</p>}

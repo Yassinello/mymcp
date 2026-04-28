@@ -61,6 +61,24 @@ Cause: complex pages exceed the 60s Vercel function timeout. Fix: bump `BROWSER_
 
 Likely the connector's underlying API hit a transient error and the handler swallowed it. Check `/config → Logs` for the most recent invocation and look at the error message column. If logs aren't useful, increase `MYMCP_LOG_LEVEL=debug` and reproduce.
 
+## "Test connection" fails right after I save (Missing X)
+
+Symptom: you save a connector's credentials, the green Upstash toast appears, but clicking **Test connection** afterwards reports "Missing PAT/key/etc.".
+
+Cause (fixed in v0.1.16+): the dashboard form serves the saved values masked (`••••`) for security, and the client filters those masks before posting. The server now falls back to the persisted snapshot when the form arrives empty, so this should "just work" — if you see this on a deploy older than v0.1.16, sync your fork and let Vercel redeploy.
+
+If it still fails after that: re-paste the credentials and Test before Save. Genuine credential errors (wrong scope, expired PAT, wrong repo path) will still surface.
+
+## Connector stays "missing env" right after I save it
+
+Symptom: you save credentials in the dashboard, the toast confirms write to Upstash, but the connector card still shows "missing env: X, Y" after the page refreshes.
+
+Cause (fixed in v0.1.16+): the registry was reading `process.env` directly, which doesn't see KV-saved credentials by design (SEC-02 forbids mutating `process.env` at request time to prevent tenant-cross-contamination). The fix merges the in-process credential snapshot with `process.env` at gate time. Sync your fork to v0.1.16+ if you hit this.
+
+## Connectors page goes blank for ~1 second after Save
+
+Same v0.1.16 release: the post-save reload was a hard `window.location.reload()` which unmounted the connector list and showed the loading placeholder. Now uses Next's RSC `router.refresh()` — the existing DOM stays mounted while the server segment re-renders.
+
 ## Where do I file bugs?
 
 [github.com/Yassinello/kebab-mcp/issues](https://github.com/Yassinello/kebab-mcp/issues). Include:

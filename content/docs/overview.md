@@ -26,14 +26,16 @@ The credential surface for every connector Kebab MCP ships. Each one knows its r
 
 ### Tools
 
-A live list of every registered tool, grouped by connector, with per-tool toggles. Use this to disable individual tools without removing the whole connector — useful if you want Gmail read but not Gmail send, or Calendar but not RSVP.
+A live list of every registered tool, grouped under per-connector banners that expand to reveal the tools beneath. Each tool has its own toggle (disable Gmail send while keeping Gmail read), and each connector has a master "Enable all" / "Disable all" if you want to flip a whole pack at once. Click a tool row to expand a JSON-args runner inline — same as Playground, just adjacent to the tool list.
 
 ### Skills
 
-Browse, edit, and create skills (prompt templates exposed as MCP tools and prompts). Two ways to author:
+Browse, edit, and create skills (prompt templates exposed as MCP tools and prompts). Each card has an **Actions** menu (Edit, History, Refresh, Sync, Export as Markdown / Claude skill, Delete) and clicking the body opens the dedicated edit page (`?edit=<id>`). Two ways to author:
 
 - **From scratch** — write the prompt body, declare arguments, save
 - **Compose** — pick an existing tool, pre-fill some arguments, expose the rest as `{{placeholders}}`
+
+The edit page splits into two tabs: **Editor** (Identity / Instructions / Arguments / Allowed tools) and **Settings** (version history with rollback, exports, danger zone).
 
 → See [Authoring skills](#skills).
 
@@ -45,15 +47,18 @@ A mini-chat UI for invoking any registered tool with custom arguments, seeing th
 
 Recent tool calls with timestamp, latency, status, and error. Persists across requests when KV is configured (`MYMCP_DURABLE_LOGS=true`); ephemeral otherwise. Filter by connector, tool, or status.
 
-### Storage
+### Health
 
-Shows which storage mode you're in (`KV`, `File`, `Static`, or one of the warning states), the data directory or KV endpoint, latency, and key counts. This tab is where you upgrade from file → KV, recover from KV-degraded, or react to the `/tmp` ephemeral trap.
-
-→ See [Storage modes & data persistence](#storage).
+Live instance diagnostics — bootstrap state, KV latency, request counts, error heatmap, rate-limit headroom, rehydrate counters. Open this when something feels off and the Logs aren't enough.
 
 ### Settings
 
-Instance-wide settings: timezone, locale, display name, context file path, tool timeout, error webhook URL. Plus backup/restore (export/import skills + settings as JSON).
+Instance-wide configuration. The General tab covers display name, timezone, locale, context file path. Sub-tabs under Settings:
+
+- **Storage** — which mode you're in (`KV`, `File`, `Static`, or a warning state), data directory or KV endpoint, latency, key counts. Upgrade file → KV here, recover from KV-degraded, or react to the `/tmp` ephemeral trap. → See [Storage modes & data persistence](#storage).
+- **Devices** — per-client tokens (add, rename, rotate, revoke). One token per device.
+- **Advanced** — tool timeout, error webhook URL, rate limits, durable logs, cache controls, Updates PAT (see "I want to keep my fork up to date" below).
+- **Backup** — export/import skills + settings as JSON.
 
 ## Where to start
 

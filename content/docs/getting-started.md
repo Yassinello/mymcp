@@ -10,17 +10,23 @@ A single Vercel deploy that exposes 86+ tools across 15 connectors (Gmail, Calen
 
 ## Five-minute deploy
 
-1. Click **Deploy to Vercel** on the [GitHub readme](https://github.com/Yassinello/kebab-mcp). Vercel forks the repo into your account and walks you through env vars.
-2. Skip the env vars at deploy time — you can paste them later.
-3. After the first deploy, open the new Vercel app URL. You will land on `/welcome`.
-4. Click **Initialize this instance**. Kebab MCP mints a permanent `MCP_AUTH_TOKEN`, writes it to your Vercel project, and triggers a redeploy automatically.
-5. When the redeploy lands, copy the install snippet for your client (the welcome page has tabs for Claude Desktop, Claude Code, Cursor, and Other) and paste it into your client config.
+The recommended path is **fork-first** — that way your instance can pull upstream updates from `Yassinello/kebab-mcp` on demand without recreating the deploy.
+
+1. **Fork on GitHub.** Open [Yassinello/kebab-mcp](https://github.com/Yassinello/kebab-mcp) and click **Fork**. Use your own account — this becomes your permanent home for the instance.
+2. **Import to Vercel.** Go to [vercel.com/new](https://vercel.com/new), pick your fork, and click **Deploy**. No env vars required at this stage.
+3. After the first deploy, open the new Vercel URL. You'll land on `/welcome`.
+4. Click **Initialize this instance.** Kebab MCP mints a permanent `MCP_AUTH_TOKEN`, writes it to Upstash KV (provisioned automatically via Vercel Marketplace if you don't have one), and the dashboard becomes live.
+5. Copy the install snippet for your client — the welcome page has tabs for Claude Desktop, Claude Code, Cursor, and Other — and paste it into your client config.
 
 That's it. Your AI assistant now has tools.
 
+> **Why fork-first?** The previous one-click "Deploy with Vercel" button created standalone snapshots that couldn't pull upstream updates without re-deploying from scratch. The fork path is one extra step but means you keep getting fixes and new connectors over time. If you skip the fork, the dashboard surfaces a red "not-a-fork" banner with a one-click "switch to a fork" flow.
+
 ## Adding connectors
 
-By default, none of the heavyweight connectors (Google, Slack, Notion, etc.) are active — they need credentials. Open `/config → Connectors` and follow the per-connector credential guide. Each connector activates automatically when its required env vars are set.
+By default, none of the heavyweight connectors (Google, Slack, Notion, etc.) are active — they need credentials. Open `/config → Connectors`, click any card to expand its credential form, paste the values, hit **Test connection** to verify, then **Save**. Credentials persist to KV instantly and the connector flips to **Active** without a page reload.
+
+If you set up storage credentials directly in Vercel env vars instead, they take precedence over KV writes — useful for shared/team deploys where you want creds frozen at the deploy boundary.
 
 ## Configuring updates (Vercel)
 

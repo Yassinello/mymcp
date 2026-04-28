@@ -121,8 +121,17 @@ export default async function ConfigPage({
   const disabledToolsSet = await getDisabledTools();
   const disabledTools = Array.from(disabledToolsSet);
 
+  // Wide content area for tabs that benefit from it: documentation needs
+  // room for the TOC + reading column; tools is dense with banners.
+  const wide = tab === "documentation" || tab === "tools";
+
   return (
-    <AppShell title={meta.title} subtitle={meta.subtitle} displayName={config.displayName}>
+    <AppShell
+      title={meta.title}
+      subtitle={meta.subtitle}
+      displayName={config.displayName}
+      wide={wide}
+    >
       <DestructiveVarsBanner />
       {dryRunMode && <DryRunBanner />}
       <ConfigTabs

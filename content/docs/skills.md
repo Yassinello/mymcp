@@ -50,8 +50,22 @@ Skills appear under their `skill_<name>` tool name in your MCP client, and as na
 
 The composer is the fastest way to create "shortcut" skills that call a tool with pre-filled defaults while exposing only the fields the user needs to change.
 
+## Editing a skill
+
+Click any skill card body to open the dedicated edit page (URL: `?edit=<id>`). The page splits into two tabs:
+
+- **Editor** — Identity (name + description), Instructions (prompt body or remote URL), Arguments (typed inputs with required flag), Allowed tools (governance list).
+- **Settings** — Version history with one-click rollback, exports (Markdown `.md` or Claude Skill `.skill`), instance metadata, and a danger zone for delete.
+
+Every save creates a new version. Rolling back never destroys history — it writes the old content as a new version, so you can always come back.
+
+## Card actions
+
+The Actions menu on each skill card groups: Edit, History, Refresh (remote skills), Sync to targets (Claude Code/local), Export as Markdown, Export as Claude Skill, and Delete. Click anywhere else on the card body to jump straight to Edit.
+
 ## Tips
 
 - Keep the source short. Skills are templates, not whole conversations.
 - Use clear argument names — they show up in the MCP tool input schema and the LLM has to pick them.
 - Test in your client: invoke `skill_<name>` with sample inputs and watch the rendered output.
+- Bundle a skill with `Allowed tools` to constrain which integrations it touches — useful for governance and review.
