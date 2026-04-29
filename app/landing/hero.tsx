@@ -9,17 +9,21 @@ export default function Hero() {
           {/* Copy column */}
           <div className="text-center lg:text-left">
             <p className="text-xs font-mono text-amber-400 mb-4 tracking-widest uppercase">
-              Connect your tools once. Feed every AI.
+              Private infrastructure for AI
             </p>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-[1.05] tracking-tight mb-6">
-              One backend. Every AI gets a bite.
+              Your AI&apos;s tools.
+              <br />
+              Your tokens.
+              <br />
+              Your infra.
             </h1>
             <p className="text-lg text-slate-400 leading-relaxed mb-6 max-w-xl mx-auto lg:mx-0">
-              Deploy Kebab MCP on Vercel and serve Claude, Cursor, Windsurf, and any MCP-compatible
-              client the same private backend: 86+ built-in tools, custom Skills, and your own APIs.
+              One MCP endpoint that speaks to every AI client — Claude, Cursor, Windsurf, ChatGPT.
+              Self-hosted on your Vercel, with your keys. Not ours.
             </p>
             <p className="text-sm text-slate-500 mb-8 max-w-lg mx-auto lg:mx-0">
-              Your keys, your data, your infra. Open source, AGPL-3.0 licensed, no SaaS middleman.
+              86+ pre-built tools. 5-minute deploy. Open source, AGPL-3.0.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start items-center mb-8">
               <a

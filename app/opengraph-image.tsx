@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "Kebab MCP — Give every AI client the same superpowers";
+export const alt = "Kebab MCP — Your AI's tools. Your tokens. Your infra.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -75,6 +75,7 @@ export default async function OpengraphImage() {
       <div
         style={{
           display: "flex",
+          flexDirection: "column",
           fontSize: 72,
           fontWeight: 800,
           lineHeight: 1.05,
@@ -83,7 +84,9 @@ export default async function OpengraphImage() {
           marginBottom: 28,
         }}
       >
-        Give every AI client the same superpowers.
+        <span>Your AI&apos;s tools.</span>
+        <span>Your tokens.</span>
+        <span>Your infra.</span>
       </div>
 
       {/* Subheadline */}
@@ -97,7 +100,7 @@ export default async function OpengraphImage() {
           marginBottom: "auto",
         }}
       >
-        One Vercel deploy. 86+ tools across 15 connectors. Self-hosted, AGPL-3.0 licensed.
+        One MCP endpoint, every AI client. Self-hosted on your Vercel, with your keys.
       </div>
 
       {/* Footer row */}
