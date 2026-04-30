@@ -276,6 +276,20 @@
     "destructive": false
   },
   {
+    "name": "extract_links",
+    "pack": "browser",
+    "schemaKeys": [
+      "context_name",
+      "href_pattern",
+      "limit",
+      "nav_timeout_ms",
+      "scroll_count",
+      "selector",
+      "url"
+    ],
+    "destructive": false
+  },
+  {
     "name": "github_add_comment",
     "pack": "github",
     "schemaKeys": [
@@ -784,6 +798,19 @@
     "schemaKeys": [
       "actions",
       "context_name",
+      "nav_timeout_ms",
+      "url"
+    ],
+    "destructive": true
+  },
+  {
+    "name": "web_agent",
+    "pack": "browser",
+    "schemaKeys": [
+      "context_name",
+      "instruction",
+      "max_steps",
+      "nav_timeout_ms",
       "url"
     ],
     "destructive": true
@@ -793,6 +820,7 @@
     "pack": "browser",
     "schemaKeys": [
       "context_name",
+      "nav_timeout_ms",
       "scroll_count",
       "url"
     ],
@@ -804,6 +832,20 @@
     "schemaKeys": [
       "context_name",
       "instruction",
+      "nav_timeout_ms",
+      "schema",
+      "scroll_count",
+      "url"
+    ],
+    "destructive": false
+  },
+  {
+    "name": "web_observe",
+    "pack": "browser",
+    "schemaKeys": [
+      "context_name",
+      "instruction",
+      "nav_timeout_ms",
       "scroll_count",
       "url"
     ],

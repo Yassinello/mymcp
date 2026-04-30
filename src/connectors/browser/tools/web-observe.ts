@@ -6,14 +6,24 @@ import {
 } from "../lib/browserbase";
 import { clampNavTimeout, scrollPage } from "../lib/page-helpers";
 
-type WebBrowseParams = {
+type WebObserveParams = {
   url: string;
+  instruction: string;
   scroll_count?: number | "auto" | undefined;
   nav_timeout_ms?: number | undefined;
   context_name?: string | undefined;
 };
 
-export async function handleWebBrowse(params: WebBrowseParams) {
+/**
+ * Stagehand `observe` — surface candidate actions matching an instruction
+ * (e.g. "all clickable product cards"). Returns CSS selectors + textual
+ * descriptions. Useful when:
+ *
+ * - `web_extract` is too slow/expensive (no LLM extraction round)
+ * - the caller wants to discover selectors before calling `web_act`
+ * - extracting raw `href`s is the goal but selectors aren't known up front
+ */
+export async function handleWebObserve(params: WebObserveParams) {
   validatePublicUrl(params.url);
   const contextName = validateContextName(params.context_name || "default");
   const stagehand = await createBrowserSession(contextName);
@@ -29,30 +39,32 @@ export async function handleWebBrowse(params: WebBrowseParams) {
 
     await scrollPage(page, params.scroll_count);
 
-    const content = await page.evaluate(() => {
-      const remove = document.querySelectorAll(
-        "script, style, nav, footer, header, [role='banner']"
-      );
-      remove.forEach((el) => el.remove());
-      const text = document.body?.innerText || "";
-      return text.slice(0, 5000);
-    });
-
-    const title = await page.title();
-    const finalUrl = page.url();
+    const candidates = await stagehand.observe(params.instruction);
 
     return {
       content: [
         {
           type: "text" as const,
-          text: `**${title}**\n${finalUrl}\n\n${content}`,
+          text: JSON.stringify(
+            {
+              count: candidates.length,
+              candidates: candidates.map((c) => ({
+                selector: c.selector,
+                description: c.description,
+                method: c.method,
+                arguments: c.arguments,
+              })),
+            },
+            null,
+            2
+          ),
         },
       ],
     };
   } catch (err: unknown) {
     return {
       content: [
-        { type: "text" as const, text: `Error browsing ${params.url}: ${sanitizeError(err)}` },
+        { type: "text" as const, text: `Error observing ${params.url}: ${sanitizeError(err)}` },
       ],
       isError: true,
     };

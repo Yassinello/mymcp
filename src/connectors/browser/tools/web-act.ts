@@ -1,27 +1,15 @@
-import { z } from "zod";
 import {
   createBrowserSession,
   validatePublicUrl,
   validateContextName,
   sanitizeError,
 } from "../lib/browserbase";
-
-export const webActSchema = {
-  url: z.string().describe("URL to navigate to before performing actions"),
-  actions: z
-    .array(z.string())
-    .describe(
-      'List of actions in natural language, executed in order. Example: ["click on \'Start a post\'", "type \'Hello world\' in the editor", "click Post"]'
-    ),
-  context_name: z
-    .string()
-    .optional()
-    .describe("Browser context for session persistence (default: 'default')"),
-};
+import { clampNavTimeout } from "../lib/page-helpers";
 
 type WebActParams = {
   url: string;
   actions: string[];
+  nav_timeout_ms?: number | undefined;
   context_name?: string | undefined;
 };
 
@@ -36,7 +24,7 @@ export async function handleWebAct(params: WebActParams) {
 
     await page.goto(params.url, {
       waitUntil: "domcontentloaded",
-      timeoutMs: 30000,
+      timeoutMs: clampNavTimeout(params.nav_timeout_ms),
     });
 
     const results: { action: string; status: string }[] = [];

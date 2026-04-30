@@ -79,7 +79,7 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     label: "Browser Automation",
     description: "Headless browser navigation + extraction via Browserbase + Stagehand.",
     requiredEnvVars: ["BROWSERBASE_API_KEY", "BROWSERBASE_PROJECT_ID", "OPENROUTER_API_KEY"],
-    toolCount: 4,
+    toolCount: 7,
     loader: () => import("@/connectors/browser/manifest").then((m) => m.browserConnector),
   },
   {
@@ -144,7 +144,7 @@ export const ALL_CONNECTOR_LOADERS: ConnectorLoaderEntry[] = [
     description:
       "Run Apify actors for LinkedIn scraping, Twitter, and other structured-data extraction.",
     requiredEnvVars: ["APIFY_TOKEN"],
-    toolCount: 8,
+    toolCount: 10,
     loader: () => import("@/connectors/apify/manifest").then((m) => m.apifyConnector),
   },
   {

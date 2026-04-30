@@ -221,10 +221,10 @@ Self-hosted by design. Timing-safe token comparison, multi-tenant auth, per-toke
 | ---------------------- | ----- | ----------------------------------- | ----- |
 | **Google Workspace**   | 18    | OAuth                               | 5 min |
 | **Obsidian Vault**     | 14    | GitHub PAT                          | 2 min |
-| **Browser Automation** | 4     | Browserbase + OpenRouter            | 3 min |
+| **Browser Automation** | 7     | Browserbase + OpenRouter            | 3 min |
 | **Slack**              | 6     | Bot token                           | 2 min |
 | **Notion**             | 5     | Integration token                   | 2 min |
-| **Apify (LinkedIn)**   | 8     | API token                           | 1 min |
+| **Apify (LinkedIn)**   | 10    | API token                           | 1 min |
 | **GitHub Issues**      | 6     | PAT                                 | 1 min |
 | **Linear**             | 6     | API key                             | 1 min |
 | **Airtable**           | 7     | PAT                                 | 1 min |

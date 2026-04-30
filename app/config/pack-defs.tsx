@@ -146,8 +146,8 @@ export const PACKS: ConnectorDef[] = [
   {
     id: "browser",
     name: "Browser Automation",
-    description: "Web browse, extract, act, LinkedIn feed",
-    toolCount: 4,
+    description: "Web browse, extract, act, observe, agent, link extraction, LinkedIn feed",
+    toolCount: 7,
     icon: "B",
     setupGuide: [
       "Create a Browserbase account for cloud browser sessions",
@@ -210,7 +210,7 @@ export const PACKS: ConnectorDef[] = [
     id: "apify",
     name: "Apify",
     description: "LinkedIn scrapers + any Apify actor on demand",
-    toolCount: 8,
+    toolCount: 10,
     icon: "A",
     setupGuide: [
       "Create an Apify account at apify.com",

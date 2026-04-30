@@ -25,7 +25,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 type GotoOpts = { waitUntil?: string; timeoutMs?: number };
 type ActArg = string;
-type ExtractArg = string;
+type ObserveArg = string;
+type AgentExecuteArg = { instruction: string; maxSteps?: number };
 
 /** Fake Page (the object stagehand.context.pages()[0] returns). */
 interface FakePage {
@@ -40,7 +41,9 @@ interface FakeStagehandInstance {
   init: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
   act: ReturnType<typeof vi.fn<(arg: ActArg) => Promise<void>>>;
-  extract: ReturnType<typeof vi.fn<(arg: ExtractArg) => Promise<unknown>>>;
+  extract: ReturnType<typeof vi.fn<(...args: unknown[]) => Promise<unknown>>>;
+  observe: ReturnType<typeof vi.fn<(arg: ObserveArg) => Promise<unknown[]>>>;
+  agent: ReturnType<typeof vi.fn<() => { execute: (arg: AgentExecuteArg) => Promise<unknown> }>>;
   context: { pages: () => FakePage[] };
 }
 
@@ -48,12 +51,20 @@ let stagehandConstructorArgs: unknown[] = [];
 let lastStagehand: FakeStagehandInstance | null = null;
 let lastPage: FakePage | null = null;
 
+// Per-test override for page.evaluate's return value. Default ("visible
+// text content") is a string — fine for web-browse but inadequate for
+// extract-links which wants an array. Tests can swap it via
+// `evaluateReturnOverride = [...]` before calling the handler.
+let evaluateReturnOverride: unknown = null;
+
 function makeFakePage(): FakePage {
   const page: FakePage = {
     goto: vi.fn(async (_url: string, _opts?: GotoOpts) => undefined),
     title: vi.fn(async () => "Fake Page Title"),
     url: vi.fn(() => "https://example.com/final"),
-    evaluate: vi.fn(async (_fn: unknown) => "visible text content"),
+    evaluate: vi.fn(async (_fn: unknown) =>
+      evaluateReturnOverride !== null ? evaluateReturnOverride : "visible text content"
+    ),
   };
   lastPage = page;
   return page;
@@ -65,7 +76,20 @@ function makeFakeStagehand(args: unknown): FakeStagehandInstance {
     init: vi.fn(async () => undefined),
     close: vi.fn(async () => undefined),
     act: vi.fn(async (_arg: ActArg) => undefined),
-    extract: vi.fn(async (_arg: ExtractArg) => ({ posts: [{ author: "A", content: "B" }] })),
+    extract: vi.fn(async (..._args: unknown[]) => ({ posts: [{ author: "A", content: "B" }] })),
+    observe: vi.fn(async (_arg: ObserveArg) => [
+      { selector: "a.product", description: "product card 1" },
+      { selector: "a.product:nth-child(2)", description: "product card 2" },
+    ]),
+    agent: vi.fn(() => ({
+      execute: vi.fn(async (_arg: AgentExecuteArg) => ({
+        success: true,
+        completed: true,
+        message: "done",
+        actions: [{ type: "act", action: "click search", taskCompleted: false }],
+        usage: { input_tokens: 10, output_tokens: 20, inference_time_ms: 100 },
+      })),
+    })),
     context: { pages: () => [page] },
   };
   stagehandConstructorArgs.push(args);
@@ -121,6 +145,7 @@ describe("browser connector regression — 4 tools × 2 scenarios (happy path + 
     stagehandConstructorArgs = [];
     lastStagehand = null;
     lastPage = null;
+    evaluateReturnOverride = null;
     setBrowserEnv();
     vi.resetModules();
   });
@@ -267,5 +292,231 @@ describe("browser connector regression — 4 tools × 2 scenarios (happy path + 
       expect(stagehandConstructorArgs.length).toBe(0);
       vi.doUnmock("@/connectors/browser/lib/browserbase");
     });
+  });
+
+  // --- web_extract — schema-driven path ----------------------------------
+
+  describe("handleWebExtract — schema arg", () => {
+    it("compiles JSON Schema and forwards it to stagehand.extract as a Zod schema", async () => {
+      const { handleWebExtract } = await import("@/connectors/browser/tools/web-extract");
+      const schema = {
+        type: "object",
+        properties: {
+          items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { title: { type: "string" }, price: { type: "string" } },
+            },
+          },
+        },
+      };
+      await handleWebExtract({
+        url: "https://example.com/",
+        instruction: "Extract products",
+        schema,
+      });
+      // Stagehand.extract must have been called with (instruction, schema)
+      const calls = lastStagehand?.extract.mock.calls ?? [];
+      expect(calls.length).toBe(1);
+      expect(calls[0]?.[0]).toBe("Extract products");
+      // Second arg should be a Zod-shaped object (has _def or _zod marker)
+      const arg2 = calls[0]?.[1] as { _def?: unknown; _zod?: unknown } | undefined;
+      expect(arg2).toBeTruthy();
+      expect(arg2?._def !== undefined || arg2?._zod !== undefined).toBe(true);
+    });
+
+    it("returns a sanitized error payload when the schema is invalid (no Stagehand spin-up)", async () => {
+      const { handleWebExtract } = await import("@/connectors/browser/tools/web-extract");
+      // `null` is invalid as a JSON Schema root — the converter throws.
+      const result = await handleWebExtract({
+        url: "https://example.com/",
+        instruction: "anything",
+        schema: { type: "not-a-real-type" } as unknown as Record<string, unknown>,
+      });
+      // Either compilation throws (errorResult before session) or Stagehand
+      // is asked. Either way the user-facing payload signals an error.
+      // The crucial invariant: invalid schema must not crash hard.
+      expect(result.content[0]?.type).toBe("text");
+    });
+
+    it("rejects a non-object root schema with an actionable message (no session)", async () => {
+      const { handleWebExtract } = await import("@/connectors/browser/tools/web-extract");
+      const result = await handleWebExtract({
+        url: "https://example.com/",
+        instruction: "x",
+        schema: { type: "string" },
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toMatch(/must describe an object/);
+      expect(stagehandConstructorArgs.length).toBe(0);
+    });
+  });
+
+  // --- web_observe --------------------------------------------------------
+
+  describe("handleWebObserve", () => {
+    it("happy path: returns candidates with selectors", async () => {
+      const { handleWebObserve } = await import("@/connectors/browser/tools/web-observe");
+      const result = await handleWebObserve({
+        url: "https://example.com/",
+        instruction: "all product cards",
+      });
+      expect(result.content[0]?.type).toBe("text");
+      expect(result.content[0]?.text).toContain("a.product");
+      expect(lastStagehand?.observe).toHaveBeenCalledWith("all product cards");
+      expect(lastStagehand?.close).toHaveBeenCalled();
+    });
+
+    it("SSRF guard: rejects private IP", async () => {
+      const { handleWebObserve } = await import("@/connectors/browser/tools/web-observe");
+      await expect(handleWebObserve({ url: "http://10.0.0.1/", instruction: "x" })).rejects.toThrow(
+        /private networks/
+      );
+      expect(stagehandConstructorArgs.length).toBe(0);
+    });
+  });
+
+  // --- web_agent ----------------------------------------------------------
+
+  describe("handleWebAgent", () => {
+    it("happy path: invokes agent.execute and serializes result", async () => {
+      const { handleWebAgent } = await import("@/connectors/browser/tools/web-agent");
+      const result = await handleWebAgent({
+        url: "https://example.com/",
+        instruction: "find cheapest item",
+        max_steps: 5,
+      });
+      expect(result.content[0]?.type).toBe("text");
+      expect(result.content[0]?.text).toContain('"success": true');
+      expect(lastStagehand?.agent).toHaveBeenCalled();
+      expect(lastStagehand?.close).toHaveBeenCalled();
+    });
+
+    it("clamps max_steps to the hard ceiling", async () => {
+      const { handleWebAgent } = await import("@/connectors/browser/tools/web-agent");
+      await handleWebAgent({
+        url: "https://example.com/",
+        instruction: "x",
+        max_steps: 999, // above HARD_MAX_STEPS=30
+      });
+      // The fake agent() returns a fresh { execute: vi.fn(...) } each call —
+      // grab it from mock.results to read the args passed to execute().
+      const agentReturn = lastStagehand?.agent.mock.results[0]?.value as {
+        execute: ReturnType<typeof vi.fn>;
+      };
+      const executeArg = agentReturn.execute.mock.calls[0]?.[0] as AgentExecuteArg | undefined;
+      expect(executeArg?.maxSteps).toBe(30);
+    });
+
+    it("SSRF guard: rejects loopback", async () => {
+      const { handleWebAgent } = await import("@/connectors/browser/tools/web-agent");
+      await expect(handleWebAgent({ url: "http://127.0.0.1/", instruction: "x" })).rejects.toThrow(
+        /loopback/
+      );
+      expect(stagehandConstructorArgs.length).toBe(0);
+    });
+  });
+
+  // --- extract_links ------------------------------------------------------
+
+  describe("handleExtractLinks", () => {
+    it("happy path: returns anchors when page.evaluate returns an array", async () => {
+      // Override the default page.evaluate return value (default is a
+      // string, used by web-browse). Filter `/items/` and dedup.
+      evaluateReturnOverride = [
+        { href: "https://example.com/items/abc-123", text: "Item A", title: undefined },
+        { href: "https://example.com/items/def-456", text: "Item B", title: undefined },
+        { href: "https://example.com/items/abc-123", text: "Dup", title: undefined },
+      ];
+      const { handleExtractLinks } = await import("@/connectors/browser/tools/extract-links");
+      const result = await handleExtractLinks({
+        url: "https://example.com/",
+        href_pattern: "/items/",
+      });
+      const payload = JSON.parse(result.content[0]?.text ?? "{}");
+      expect(payload.links).toHaveLength(2); // dedup removed the third
+      expect(payload.links[0].href).toBe("https://example.com/items/abc-123");
+    });
+
+    it("returns a clean error when page.evaluate does not return an array", async () => {
+      // The default fake page.evaluate returns "visible text content"
+      // (a string) — the handler must surface a clear error rather than
+      // silently report an empty link list.
+      const { handleExtractLinks } = await import("@/connectors/browser/tools/extract-links");
+      const result = await handleExtractLinks({
+        url: "https://example.com/",
+        selector: "a[href]",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("did not return an array");
+    });
+
+    it("rejects an over-long selector before opening a session", async () => {
+      const { handleExtractLinks } = await import("@/connectors/browser/tools/extract-links");
+      const result = await handleExtractLinks({
+        url: "https://example.com/",
+        selector: "a".repeat(300),
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toMatch(/selector too long/);
+      expect(stagehandConstructorArgs.length).toBe(0);
+    });
+
+    it("rejects an over-long href_pattern", async () => {
+      const { handleExtractLinks } = await import("@/connectors/browser/tools/extract-links");
+      const result = await handleExtractLinks({
+        url: "https://example.com/",
+        href_pattern: "x".repeat(300),
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toMatch(/href_pattern too long/);
+    });
+
+    it("rejects an invalid regex href_pattern with a clean error (no session)", async () => {
+      const { handleExtractLinks } = await import("@/connectors/browser/tools/extract-links");
+      const result = await handleExtractLinks({
+        url: "https://example.com/",
+        href_pattern: "/[unclosed/",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toMatch(/Invalid regex/);
+      expect(stagehandConstructorArgs.length).toBe(0);
+    });
+
+    it("SSRF guard: rejects RFC1918 URL", async () => {
+      const { handleExtractLinks } = await import("@/connectors/browser/tools/extract-links");
+      await expect(handleExtractLinks({ url: "http://192.168.1.1/" })).rejects.toThrow(
+        /private networks/
+      );
+      expect(stagehandConstructorArgs.length).toBe(0);
+    });
+  });
+});
+
+// --- Pure helper unit tests (no mocking needed) -----------------------------
+
+describe("page-helpers — clampNavTimeout", () => {
+  it("returns the default when undefined", async () => {
+    const { clampNavTimeout, PAGE_HELPER_DEFAULTS } =
+      await import("@/connectors/browser/lib/page-helpers");
+    expect(clampNavTimeout(undefined)).toBe(PAGE_HELPER_DEFAULTS.navTimeoutMs);
+  });
+
+  it("clamps below 5000 up to 5000", async () => {
+    const { clampNavTimeout } = await import("@/connectors/browser/lib/page-helpers");
+    expect(clampNavTimeout(100)).toBe(5_000);
+  });
+
+  it("clamps above 90000 down to 90000", async () => {
+    const { clampNavTimeout } = await import("@/connectors/browser/lib/page-helpers");
+    expect(clampNavTimeout(120_000)).toBe(90_000);
+  });
+
+  it("returns the default when the input is non-finite", async () => {
+    const { clampNavTimeout, PAGE_HELPER_DEFAULTS } =
+      await import("@/connectors/browser/lib/page-helpers");
+    expect(clampNavTimeout(NaN)).toBe(PAGE_HELPER_DEFAULTS.navTimeoutMs);
+    expect(clampNavTimeout(Infinity)).toBe(PAGE_HELPER_DEFAULTS.navTimeoutMs);
   });
 });

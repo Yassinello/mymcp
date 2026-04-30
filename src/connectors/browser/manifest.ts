@@ -1,5 +1,13 @@
 import { defineTool, type ConnectorManifest } from "@/core/types";
-import { webBrowseSchema, webExtractSchema, webActSchema, linkedinFeedSchema } from "./schemas";
+import {
+  webBrowseSchema,
+  webExtractSchema,
+  webActSchema,
+  webObserveSchema,
+  webAgentSchema,
+  extractLinksSchema,
+  linkedinFeedSchema,
+} from "./schemas";
 
 export const browserConnector: ConnectorManifest = {
   id: "browser",
@@ -54,7 +62,7 @@ Two accounts:
     defineTool({
       name: "web_extract",
       description:
-        "Open a URL and extract structured data using AI. Provide a natural language instruction describing what to extract. Returns JSON data. Great for: feed posts, competitor pricing, changelogs, news headlines, product features, job listings.",
+        "Open a URL and extract structured data using AI. Provide a natural language instruction AND (strongly recommended) a JSON Schema constraining the shape — without a schema the LLM may hallucinate fields, especially URLs. Use scroll_count='auto' to wait for infinite-scroll feeds.",
       schema: webExtractSchema,
       handler: async (args) => {
         const { handleWebExtract } = await import("./tools/web-extract");
@@ -72,6 +80,39 @@ Two accounts:
         return handleWebAct(args);
       },
       destructive: true,
+    }),
+    defineTool({
+      name: "web_observe",
+      description:
+        "Surface candidate UI elements matching a natural-language description. Returns CSS selectors plus textual descriptions — useful for discovering selectors before web_act, or for low-cost element discovery without a full extract round.",
+      schema: webObserveSchema,
+      handler: async (args) => {
+        const { handleWebObserve } = await import("./tools/web-observe");
+        return handleWebObserve(args);
+      },
+      destructive: false,
+    }),
+    defineTool({
+      name: "web_agent",
+      description:
+        "Run an autonomous browser agent toward a goal. The agent plans multi-step tool calls (act, extract, observe, navigate) until the instruction is satisfied or max_steps is hit. Use for tasks like 'find the cheapest 2BR in Vincennes and return its title, price, and link'. DANGEROUS: can take real actions on the page.",
+      schema: webAgentSchema,
+      handler: async (args) => {
+        const { handleWebAgent } = await import("./tools/web-agent");
+        return handleWebAgent(args);
+      },
+      destructive: true,
+    }),
+    defineTool({
+      name: "extract_links",
+      description:
+        "Pull anchor hrefs directly from the DOM — no LLM, so hrefs are guaranteed real (not hallucinated). Optionally filter by CSS selector or href substring/regex. Use this for marketplace listing pages (Vinted, eBay, Le Bon Coin) where you need the actual item URLs.",
+      schema: extractLinksSchema,
+      handler: async (args) => {
+        const { handleExtractLinks } = await import("./tools/extract-links");
+        return handleExtractLinks(args);
+      },
+      destructive: false,
     }),
     defineTool({
       name: "linkedin_feed",
